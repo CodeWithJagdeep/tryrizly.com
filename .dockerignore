@@ -1,0 +1,15 @@
+.git
+.next
+.turbo
+node_modules
+npm-debug.log
+Dockerfile
+docker-compose*.yml
+.env
+.env.*
+/web/.env.local
+!.env.example
+coverage
+dist
+dist-server
+**/tsconfig.tsbuildinfo

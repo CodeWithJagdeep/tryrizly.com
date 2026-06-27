@@ -1,0 +1,206 @@
+/* Hero Animation Module CSS */
+
+.hero-box-animation-module__HhV3jW__root {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(var(--hero-anim-scale, 1)) translateY(var(--hero-anim-offset-y, 0));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.hero-box-animation-module__HhV3jW__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.hero-box-animation-module__HhV3jW__iconsRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  animation: fadeInDown 0.8s ease-out forwards;
+}
+
+.hero-box-animation-module__HhV3jW__teammateIcon img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: white;
+  animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  opacity: 0;
+}
+.hero-box-animation-module__HhV3jW__teammateIcon:nth-child(1) img { animation-delay: 0.1s; }
+.hero-box-animation-module__HhV3jW__teammateIcon:nth-child(2) img { animation-delay: 0.2s; }
+.hero-box-animation-module__HhV3jW__teammateIcon:nth-child(3) img { animation-delay: 0.3s; }
+
+.hero-box-animation-module__HhV3jW__logoSlot {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.4s forwards;
+  opacity: 0;
+}
+
+.hero-box-animation-module__HhV3jW__drawnMark {
+  position: absolute;
+  inset: -10px;
+  stroke: #3278e8;
+  stroke-width: 4;
+  animation: drawStroke 2s ease-in-out forwards;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+}
+
+.hero-box-animation-module__HhV3jW__logoTileInner {
+  background: white;
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.hero-box-animation-module__HhV3jW__dashedLine {
+  height: 40px;
+  width: 2px;
+  background-image: linear-gradient(to bottom, #d1d5db 50%, transparent 50%);
+  background-size: 2px 8px;
+  animation: growLine 0.6s ease-out 0.8s forwards;
+  transform-origin: top;
+  transform: scaleY(0);
+}
+
+.hero-box-animation-module__HhV3jW__heyText {
+  font-family: var(--font-sans, system-ui);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #1f2937;
+  background: white;
+  padding: 8px 20px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  animation: slideUpFade 0.5s ease-out 1.2s forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.hero-box-animation-module__HhV3jW__bubble {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+  width: 320px;
+  animation: slideUpFade 0.6s ease-out 1.6s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.hero-box-animation-module__HhV3jW__bubbleHeader {
+  margin-bottom: 16px;
+}
+
+.hero-box-animation-module__HhV3jW__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.hero-box-animation-module__HhV3jW__eyebrowDot {
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 50%;
+}
+
+.hero-box-animation-module__HhV3jW__bubbleTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.hero-box-animation-module__HhV3jW__bubbleBodyPad {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hero-box-animation-module__HhV3jW__resultRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: #4b5563;
+  opacity: 0;
+  transform: translateX(-10px);
+  animation: slideRightFade 0.4s ease-out forwards;
+}
+
+.hero-box-animation-module__HhV3jW__resultRow[data-row="1"] { animation-delay: 2.2s; }
+.hero-box-animation-module__HhV3jW__resultRow[data-row="2"] { animation-delay: 2.6s; }
+.hero-box-animation-module__HhV3jW__resultRow[data-row="3"] { animation-delay: 3.0s; }
+
+.hero-box-animation-module__HhV3jW__greenCheck {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2310b981'%3E%3Cpath fill-rule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+.hero-box-animation-module__HhV3jW__bubbleFooter {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
+  opacity: 0;
+  animation: slideUpFade 0.4s ease-out 3.4s forwards;
+}
+
+.hero-box-animation-module__HhV3jW__footerLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #10b981;
+}
+
+/* Animations */
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes drawStroke {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes growLine {
+  to { transform: scaleY(1); }
+}
+
+@keyframes slideUpFade {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideRightFade {
+  to { opacity: 1; transform: translateX(0); }
+}

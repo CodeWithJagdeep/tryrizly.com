@@ -1,0 +1,424 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import api from "@/lib/api";
+import {
+  getErrorMessage,
+  getRequestedPlan,
+  GoogleIcon,
+  LinkedInIcon,
+  Spinner,
+} from "@/app/components/auth/AuthShared";
+
+type AuthResponse = {
+  isNew?: boolean;
+  next?: string;
+  needsVerification?: boolean;
+  email?: string;
+  user?: { name?: string };
+};
+
+function AuthOption({
+  icon,
+  label,
+  onClick,
+  disabled,
+  className = "",
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`grid h-12 w-full grid-cols-[56px_1fr_56px] items-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+    >
+      <span className="flex items-center justify-center">{icon}</span>
+      <span className="text-center text-sm font-semibold leading-none text-slate-950">
+        {label}
+      </span>
+      <span aria-hidden="true" />
+    </button>
+  );
+}
+
+export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const requestedPlan = getRequestedPlan(params.get("plan"));
+
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(params.get("error"));
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const mode = initialMode;
+
+  useEffect(() => {
+    const next = sanitizeReturnPath(params.get("next"));
+    api
+      .get("/auth/me")
+      .then(() =>
+        router.replace(
+          next || (requestedPlan ? `/dashboard?plan=${requestedPlan}` : "/dashboard"),
+        ),
+      )
+      .catch(() => null);
+  }, [router, params, requestedPlan]);
+
+  function navigateToMode(next: "login" | "signup", keepError = false) {
+    const qs = new URLSearchParams(params.toString());
+    if (!keepError) setError(null);
+    setShowPassword(false);
+    setPassword("");
+    router.push(`/${next === "signup" ? "signup" : "login"}${qs.toString() ? `?${qs.toString()}` : ""}`);
+  }
+
+  function getPostAuthDestination(data: AuthResponse) {
+    const next = sanitizeReturnPath(params.get("next"));
+    if (data?.isNew) return "/onboarding";
+    return next || (requestedPlan ? `/dashboard?plan=${requestedPlan}` : sanitizeReturnPath(data?.next) || "/dashboard");
+  }
+
+  const handleLinkedInLogin = () => {
+    const next = sanitizeReturnPath(params.get("next"));
+    const returnTo = next || (requestedPlan ? `/dashboard?plan=${requestedPlan}` : "/dashboard");
+    setLoading("linkedin");
+    window.location.href = `/api/auth/oauth/linkedin?return_to=${encodeURIComponent(returnTo)}`;
+  };
+
+  const handleGoogleLogin = () => {
+    const next = sanitizeReturnPath(params.get("next"));
+    const returnTo = next || (requestedPlan ? `/dashboard?plan=${requestedPlan}` : "/dashboard");
+    setLoading("google");
+    window.location.href = `/api/auth/google?return_to=${encodeURIComponent(returnTo)}`;
+  };
+
+  const handleEmailLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    if (!showPassword) {
+      setShowPassword(true);
+      return;
+    }
+
+    setLoading("email");
+    try {
+      if (mode === "signup") {
+        const { data } = await api.post<AuthResponse>("/auth/password/register", { name, email, password });
+        setPendingVerifyEmail(data.email ?? email);
+        return;
+      }
+      const { data } = await api.post<AuthResponse>("/auth/password/login", { email, password });
+      if (data.needsVerification) {
+        setPendingVerifyEmail(data.email ?? email);
+        return;
+      }
+      router.push(getPostAuthDestination(data));
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (mode === "signup" && status === 409) {
+        setError("That email is already registered. Switching you to sign in.");
+        navigateToMode("login", true);
+        return;
+      }
+      setError(getErrorMessage(err, mode === "signup" ? "Could not create your account" : "Could not sign in"));
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleVerified = (data: { next?: string }) => {
+    router.push(sanitizeReturnPath(data.next));
+  };
+
+  const handleVerifyOtp = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingVerifyEmail) return;
+    setError(null);
+    setLoading("email");
+    try {
+      const { data } = await api.post<AuthResponse>("/auth/email/verify", { email: pendingVerifyEmail, otp });
+      handleVerified(data);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Invalid or expired code"));
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingVerifyEmail) return;
+    setResending(true);
+    setError(null);
+    setResent(false);
+    try {
+      await api.post("/auth/email/send-verification", { email: pendingVerifyEmail });
+      setResent(true);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Could not resend code"));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <main
+      className="relative flex min-h-screen overflow-hidden bg-white px-4 py-8 text-slate-950 antialiased sm:px-6 lg:px-10"
+      style={{
+        fontFamily:
+          'var(--font-rethink-sans), var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,rgba(55,132,255,0.10),rgba(255,255,255,0))]"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(15,23,42,0.07),transparent_34rem)]"
+        aria-hidden="true"
+      />
+
+      <Link
+        href="/"
+        className="absolute left-5 top-5 z-10 flex h-9 items-center sm:left-8 sm:top-7"
+        aria-label="HeyRiz home"
+      >
+        <img src="/heyriz.png" alt="HeyRiz" className="h-8 w-auto object-contain" />
+      </Link>
+
+      <button
+        type="button"
+        aria-label="Help"
+        className="fixed right-5 bottom-5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-500 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
+      >
+        ?
+      </button>
+
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[980px] items-center pt-16">
+        <div className="grid w-full overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.35)] backdrop-blur lg:grid-cols-[0.92fr_1.08fr]">
+          <aside className="hidden border-r border-slate-200 bg-slate-50 p-8 lg:block">
+            <div className="flex h-full flex-col justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Riz Control Center</p>
+                <h1 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.01em] text-slate-950">
+                  Your business context, ready before the day starts.
+                </h1>
+                <p className="mt-4 text-sm leading-6 text-slate-500">
+                  Connect the tools you already use. Riz watches for email, calendar, and business signals, then asks before important actions.
+                </p>
+              </div>
+
+            </div>
+          </aside>
+
+          <section className="p-5 sm:p-8 lg:p-10">
+            <div className="mb-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                {mode === "login" ? "Welcome back" : "Start with HeyRiz"}
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-3xl">
+                {mode === "login" ? "Sign in to your workspace" : "Create your workspace"}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {mode === "login"
+                  ? "Continue to your operator dashboard."
+                  : "Set up your operator and connect your work tools."}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+          <AuthOption
+            icon={loading === "google" ? <Spinner dark /> : <GoogleIcon />}
+            label="Continue with Google"
+            onClick={handleGoogleLogin}
+            disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
+          />
+          <AuthOption
+            icon={loading === "linkedin" ? <Spinner dark /> : <LinkedInIcon />}
+            label="Continue with LinkedIn"
+            onClick={handleLinkedInLogin}
+            disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
+          />
+            </div>
+
+            <div className="mt-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">or</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            {error && (
+              <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                {error}
+              </div>
+            )}
+
+        {pendingVerifyEmail ? (
+          <>
+            <form onSubmit={handleVerifyOtp} className="mt-6">
+              <label className="block text-sm font-medium text-slate-600">
+                6-digit code sent to {pendingVerifyEmail}
+              </label>
+              <input
+                value={otp}
+                onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Enter 6-digit code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                autoFocus
+                className="mt-2 h-14 w-full rounded-lg border border-slate-200 bg-white px-5 text-center text-base font-medium tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+              />
+
+              <button
+                type="submit"
+                disabled={Boolean(loading) || otp.length !== 6}
+                className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading === "email" && <Spinner />}
+                Verify and continue
+              </button>
+            </form>
+
+            <p className="mt-5 text-center text-sm font-medium text-slate-500">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={resending}
+                className="font-semibold text-slate-950 underline-offset-2 hover:underline disabled:opacity-50"
+              >
+                {resent ? "Code resent - check your inbox" : resending ? "Sending..." : "Resend code"}
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
+            <form onSubmit={handleEmailLogin} className="mt-6">
+              {mode === "signup" && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-600">Full name</label>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Enter your full name"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-600">Email address</label>
+                <input
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    if (showPassword) setShowPassword(false);
+                  }}
+                  placeholder="Enter email address"
+                  type="email"
+                  autoComplete="username"
+                  required
+                  className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                />
+              </div>
+
+              {showPassword && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-600">Password</label>
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Enter your password"
+                    type="password"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    minLength={8}
+                    required
+                    autoFocus
+                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={Boolean(loading)}
+                className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading === "email" && <Spinner />}
+                {showPassword ? (mode === "signup" ? "Create account" : "Sign in") : "Continue"}
+              </button>
+            </form>
+
+            <p className="mt-5 text-center text-sm font-medium text-slate-500">
+              {mode === "login" ? (
+                <>
+                  Don&apos;t have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigateToMode("signup")}
+                    className="font-semibold text-slate-950 underline-offset-2 hover:underline"
+                  >
+                    Create one
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigateToMode("login")}
+                    className="font-semibold text-slate-950 underline-offset-2 hover:underline"
+                  >
+                    Log in
+                  </button>
+                </>
+              )}
+            </p>
+
+            <p className="mx-auto mt-7 max-w-[420px] text-center text-xs font-medium leading-5 text-slate-400">
+              By continuing, you acknowledge that you understand and agree to the{" "}
+              <Link href="/terms" className="text-slate-600 underline underline-offset-2 hover:text-slate-950">
+                Terms & Conditions
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-slate-600 underline underline-offset-2 hover:text-slate-950">
+                Privacy Policy
+              </Link>
+            </p>
+          </>
+        )}
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function sanitizeReturnPath(value: string | null | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    return "";
+  }
+  try {
+    const parsed = new URL(value, "https://heyriz.local");
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "";
+  }
+}

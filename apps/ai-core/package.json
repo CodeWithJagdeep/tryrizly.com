@@ -1,0 +1,47 @@
+{
+  "name": "ai-core",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
+    "smoke:boot": "tsx src/dev/boot-check.ts",
+    "smoke:agent": "tsx src/dev/agent-check.ts",
+    "smoke:memory": "tsx src/dev/memory-check.ts",
+    "smoke:automemory": "tsx src/dev/auto-memory-check.ts",
+    "smoke:sqlguard": "tsx src/dev/sql-guard-check.ts",
+    "smoke:gmailthreading": "tsx src/dev/gmail-threading-check.ts",
+    "smoke:businesssnapshot": "tsx src/dev/business-snapshot-check.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@heyriz/shared": "*",
+    "@nestjs/common": "^11.1.27",
+    "@nestjs/core": "^11.1.27",
+    "@nestjs/microservices": "^11.1.27",
+    "mongodb": "^7.3.0",
+    "pg": "^8.22.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@nestjs/cli": "^11.0.23",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.2",
+    "globals": "^17.0.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.22.4",
+    "typescript": "^5",
+    "typescript-eslint": "^8.20.0"
+  }
+}

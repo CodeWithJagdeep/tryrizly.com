@@ -1,0 +1,744 @@
+import { Inject, Injectable } from "@nestjs/common";
+import { AgentService, type ConversationTurn } from "./agent/agent.service";
+import { BudgetGateService } from "./billing/budget-gate.service";
+import { ConnectorService } from "./connectors/connector.service";
+import type {
+  CompleteOAuthInput,
+  ConnectorProvider,
+  DeleteConnectorInput,
+  SaveConnectorInput,
+  StartOAuthInput,
+} from "./connectors/connector.types";
+import { ContextService } from "./context/context.service";
+import type {
+  HeyRizContextRequest,
+  HeyRizEventSource,
+} from "./context/context.types";
+import { EmailPipelineService } from "./email/email-pipeline.service";
+import type { EmailCategory, ExtractedEmailFacts } from "./email/email.types";
+import { GoogleService } from "./google/google.service";
+import { primaryUpdatesInboxQuery } from "./google/gmail-search";
+import { AutoMemoryService } from "./memory/auto-memory.service";
+import { VectorMemoryService } from "./memory/vector-memory.service";
+import type { MemoryWriteInput } from "./memory/memory.types";
+import { LlmRouterService } from "./llm/llm-router.service";
+import { ProactiveService } from "./proactive/proactive.service";
+import { DigestService } from "./proactive/digest.service";
+import { UserPreferencesRepository } from "./preferences/user-preferences.repository";
+import { NotificationLogRepository } from "./notifications/notification-log.repository";
+import { EntityResolverService, parseHeader } from "./spine/entity-resolver.service";
+import { EventRepository } from "./spine/event.repository";
+import { EventIngestService } from "./spine/event-ingest.service";
+import { DecisionService } from "./spine/decision.service";
+import { TaskRepository } from "./tasks/task.repository";
+import { ToolRegistryService } from "./tools/tool-registry.service";
+import { env } from "@heyriz/shared/env";
+import { logger } from "@heyriz/shared/logger";
+import { cancelReminder, listReminders } from "@heyriz/shared/queue/queues";
+import { enqueueOutboundEmail } from "@heyriz/shared/queue/outbound-email";
+import type {
+  EmailEventJobData,
+  ReminderRequest,
+  SpineJobData,
+} from "@heyriz/shared/queue/types";
+
+export type ChatPayload = {
+  userId?: string;
+  message?: string;
+  /** Set true together with `pendingApproval` to approve a previously-proposed action. */
+  approve?: boolean;
+  pendingApproval?: { tool: string; payload: unknown };
+  /** Recent turns from the same Telegram chat, oldest first. */
+  history?: ConversationTurn[];
+};
+
+type ToolExecutePayload = {
+  userId?: string;
+  name: string;
+  payload?: unknown;
+  source?: HeyRizEventSource;
+};
+
+type CheckThreadReplyPayload = {
+  userId?: string;
+  threadId?: string;
+  baselineMessageCount?: number;
+};
+
+@Injectable()
+export class AiCoreService {
+  constructor(
+    @Inject(ContextService)
+    private readonly contextService: ContextService,
+    @Inject(ToolRegistryService)
+    private readonly toolRegistry: ToolRegistryService,
+    @Inject(VectorMemoryService)
+    private readonly vectorMemory: VectorMemoryService,
+    @Inject(LlmRouterService)
+    private readonly llmRouter: LlmRouterService,
+    @Inject(AgentService)
+    private readonly agent: AgentService,
+    @Inject(AutoMemoryService)
+    private readonly autoMemory: AutoMemoryService,
+    @Inject(ProactiveService)
+    private readonly proactive: ProactiveService,
+    @Inject(DigestService)
+    private readonly digest: DigestService,
+    @Inject(ConnectorService)
+    private readonly connectorService: ConnectorService,
+    @Inject(GoogleService)
+    private readonly google: GoogleService,
+    @Inject(EmailPipelineService)
+    private readonly emailPipeline: EmailPipelineService,
+    @Inject(UserPreferencesRepository)
+    private readonly preferences: UserPreferencesRepository,
+    @Inject(EntityResolverService)
+    private readonly entityResolver: EntityResolverService,
+    @Inject(EventIngestService)
+    private readonly eventIngest: EventIngestService,
+    @Inject(EventRepository)
+    private readonly eventRepo: EventRepository,
+    @Inject(DecisionService)
+    private readonly decisions: DecisionService,
+    @Inject(TaskRepository)
+    private readonly taskRepository: TaskRepository,
+    @Inject(BudgetGateService)
+    private readonly budgetGate: BudgetGateService,
+    @Inject(NotificationLogRepository)
+    private readonly notificationLog: NotificationLogRepository,
+  ) {}
+
+  /** Spine: active (non-superseded) decisions, optionally filtered by topic. */
+  recallDecisions(body: { userId?: string; topic?: string }) {
+    return this.decisions.recall(body.userId ?? env.DEFAULT_USER_ID, body.topic);
+  }
+
+  /** Current-cycle AI spend vs. plan budget + per-task breakdown, for the dashboard's Usage view. */
+  getUsage(body: { userId?: string }) {
+    return this.budgetGate.summary(body.userId ?? env.DEFAULT_USER_ID);
+  }
+
+  /** Open follow-up tasks + pending BullMQ reminders, for the dashboard's Scheduled view. */
+  async listScheduled(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const [tasks, reminders] = await Promise.all([
+      this.taskRepository.listAll(userId),
+      listReminders(userId).catch(() => []),
+    ]);
+    return { tasks, reminders };
+  }
+
+  async markTaskDone(body: { id: string }) {
+    await this.taskRepository.markDone(body.id);
+    return { ok: true };
+  }
+
+  async cancelScheduledReminder(body: { id: string }) {
+    await cancelReminder(body.id);
+    return { ok: true };
+  }
+
+  /** Spine: resolve a person/company reference to a canonical entity id. */
+  resolveEntity(body: { userId?: string; from?: string; name?: string; email?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    if (body.from) {
+      return this.entityResolver.resolveFromHeader(userId, body.from, "api");
+    }
+    return this.entityResolver.resolve(userId, {
+      name: body.name,
+      email: body.email,
+      source: "api",
+    });
+  }
+
+  listPeople(body: { userId?: string; limit?: number }) {
+    return this.entityResolver.listPeople(body.userId ?? env.DEFAULT_USER_ID, body.limit ?? 50);
+  }
+
+  /** Spine: seed the timeline from the last/next N days of calendar + inbox. */
+  async backfillSpine(body: { userId?: string; days?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const days = Math.min(Math.max(body.days ?? 14, 1), 60);
+    const now = Date.now();
+    let meetings = 0;
+    let emails = 0;
+
+    const cal = await this.google.listEvents(userId, {
+      timeMin: new Date(now - days * 86_400_000),
+      timeMax: new Date(now + days * 86_400_000),
+      maxResults: 100,
+    });
+    if (cal.connected) {
+      for (const e of cal.events) {
+        if (!e.start) continue;
+        await this.eventIngest
+          .recordEvent(userId, {
+            type: "meeting",
+            source: "calendar",
+            sourceId: e.id,
+            timestamp: new Date(e.start),
+            content: e.title,
+            metadata: { start: e.start, end: e.end },
+            participants: [
+              ...(e.organizer ? [{ email: e.organizer, role: "organizer" }] : []),
+              ...e.attendees.map((a) => ({ email: a, role: "attendee" })),
+            ],
+          })
+          .then(() => {
+            meetings += 1;
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    const mail = await this.google.listThreads(userId, {
+      q: primaryUpdatesInboxQuery(`newer_than:${days}d`),
+      maxResults: 50,
+    });
+    if (mail.connected) {
+      for (const m of mail.messages) {
+        await this.eventIngest
+          .recordEvent(userId, {
+            type: "email",
+            source: "gmail",
+            sourceId: m.id,
+            threadId: m.threadId,
+            timestamp: m.date ? new Date(m.date) : new Date(),
+            content: m.subject,
+            metadata: { from: m.from },
+            participants: [{ ...parseHeader(m.from), role: "sender" }],
+          })
+          .then(() => {
+            emails += 1;
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    return { ok: true, meetings, emails, days };
+  }
+
+  /** Spine: recent timeline with linked entity names (verification/inspection). */
+  timeline(body: { userId?: string; limit?: number }) {
+    return this.eventRepo.recentTimeline(
+      body.userId ?? env.DEFAULT_USER_ID,
+      Math.min(body.limit ?? 20, 100),
+    );
+  }
+
+  async getUserPreferences(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const [timezone, honorific, language, avatarUrl] = await Promise.all([
+      this.preferences.getTimezone(userId),
+      this.preferences.getHonorific(userId),
+      this.preferences.getLanguage(userId),
+      this.preferences.getAvatarUrl(userId),
+    ]);
+    return { timezone, honorific, language, avatarUrl };
+  }
+
+  async setUserAvatar(body: { userId?: string; avatarUrl: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    await this.preferences.setAvatarUrl(userId, body.avatarUrl);
+    return { ok: true };
+  }
+
+  async syncUser(body: { userId?: string; name?: string; timezone?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    let didSomething = false;
+
+    if (body.name) {
+      await this.preferences.syncDisplayNameFromSignup(userId, body.name);
+      didSomething = true;
+    }
+
+    if (body.timezone) {
+      try {
+        await this.preferences.setTimezone(userId, body.timezone);
+        didSomething = true;
+      } catch {
+        return { ok: false };
+      }
+    }
+
+    return { ok: didSomething };
+  }
+
+  proactiveBrief(body: { userId?: string }) {
+    return this.proactive.morningBrief(body.userId ?? env.DEFAULT_USER_ID);
+  }
+
+  proactiveSync(body: { userId?: string }) {
+    return this.proactive.syncMeetingReminders(body.userId ?? env.DEFAULT_USER_ID);
+  }
+
+  /**
+   * Durable spine ingest (called from the spine BullMQ worker). Does the timeline
+   * write + entity link for every email, and decision extraction for substantive
+   * ones. Throws on failure so BullMQ retries — the opposite of the old
+   * fire-and-forget. The body is fetched live here, never carried on the queue.
+   */
+  async ingestEmailSpine(data: SpineJobData) {
+    // Parse CC header into extra participants
+    const ccParticipants = parseCcHeader(data.cc ?? "").map((p) => ({
+      ...p,
+      role: "cc",
+    }));
+
+    await this.eventIngest.recordEvent(data.userId, {
+      type: "email",
+      source: "gmail",
+      sourceId: data.messageId,
+      threadId: data.threadId,
+      timestamp: new Date(),
+      content: data.subject,
+      metadata: { from: data.from },
+      participants: [
+        { ...parseHeader(data.from), role: "sender" },
+        ...ccParticipants,
+      ],
+    });
+
+    if (data.extractDecisions) {
+      const msg = await this.google.getMessage(data.userId, data.messageId, "full");
+      const body = msg.connected ? msg.message.body : "";
+      if (body) {
+        await this.decisions.extractFromEmail(data.userId, {
+          from: data.from,
+          subject: data.subject,
+          body,
+        });
+
+        // Mine signature contacts (emails, phones, LinkedIn URLs) from body
+        await enrichContactsFromBody(data.userId, body, this.entityResolver);
+      }
+    }
+
+    return { ok: true as const };
+  }
+
+  weeklyDigest(body: { userId?: string }) {
+    return this.digest.weeklyDigest(body.userId ?? env.DEFAULT_USER_ID);
+  }
+
+  dailyAnomalyCheck(body: { userId?: string }) {
+    return this.digest.dailyAnomalyCheck(body.userId ?? env.DEFAULT_USER_ID);
+  }
+
+  async checkThreadReply(body: CheckThreadReplyPayload) {
+    if (!body.threadId) {
+      throw new Error("threadId_required");
+    }
+
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.getThreadMessages(userId, body.threadId);
+    if (!res.connected) {
+      return {
+        connected: false,
+        hasReply: false,
+        messageCount: 0,
+      };
+    }
+
+    const messageCount = res.messages.length;
+    const baseline = body.baselineMessageCount ?? 1;
+    return {
+      connected: true,
+      hasReply: messageCount > baseline,
+      messageCount,
+    };
+  }
+
+  healthCheck() {
+    return {
+      ok: true,
+      service: "ai-core",
+      framework: "nestjs",
+      transport: "tcp",
+      aiProvider: this.llmRouter.getActiveProviderName(),
+    };
+  }
+
+  listTools() {
+    return {
+      tools: this.toolRegistry.list(),
+    };
+  }
+
+  async chat(body: ChatPayload) {
+    const message = body.message?.trim();
+
+    if (!message) {
+      throw new Error("message_required");
+    }
+
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const context = await this.contextService.build({
+      userId,
+      source: "telegram",
+      message,
+    });
+
+    const approval =
+      body.approve && body.pendingApproval
+        ? {
+            tool: body.pendingApproval.tool,
+            payload: body.pendingApproval.payload,
+          }
+        : undefined;
+
+    const result = await this.agent.run({
+      userId,
+      message,
+      context,
+      approval,
+      history: body.history,
+    });
+
+    if (env.BACKGROUND_AI_ENABLED && (await this.budgetGate.check(userId)).state !== "exceeded") {
+      // Let long-term memory build itself, without blocking the reply.
+      void this.autoMemory
+        .captureTurn({ userId, message, toolResults: result.toolResults })
+        .catch((error: unknown) =>
+          logger.warn("auto-memory capture failed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+
+      // Store every conversation turn in vector memory so RAG can surface it as
+      // context on follow-up questions — even when no tool was called.
+      void this.vectorMemory
+        .remember({
+          userId,
+          source: "telegram",
+          summary: `User: ${message.slice(0, 200)} | Assistant: ${result.reply.slice(0, 300)}`,
+          metadata: { kind: "turn" },
+        })
+        .catch((error: unknown) =>
+          logger.warn("turn vector-store failed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+
+      // Spine: capture explicit decisions the principal made this turn (gated,
+      // best-effort, off the hot path).
+      void this.decisions
+        .extractFromChat(userId, message)
+        .catch((error: unknown) =>
+          logger.warn("decision extract failed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+    }
+
+    return {
+      reply: result.reply,
+      userId,
+      intent: "chat",
+      aiProvider: result.provider,
+      pendingApproval: result.pendingApproval,
+      steps: result.steps,
+      toolResults: result.toolResults,
+    };
+  }
+
+  async ingestEvent(body: HeyRizContextRequest) {
+    const context = await this.contextService.build({
+      ...body,
+      userId: body.userId ?? "default",
+    });
+    const toolName = this.selectToolForEvent(body.source);
+
+    if (!toolName) {
+      return {
+        action: "log_only",
+        message: "No tool selected for event source.",
+        context,
+      };
+    }
+
+    const result = await this.toolRegistry.execute({
+      name: toolName,
+      userId: context.userId,
+      payload: body,
+      context,
+    });
+
+    if (env.BACKGROUND_AI_ENABLED && (await this.budgetGate.check(context.userId)).state !== "exceeded") {
+      void this.autoMemory
+        .captureEvent({
+          userId: context.userId,
+          source: body.source,
+          result,
+          message: body.message,
+        })
+        .catch((error: unknown) =>
+          logger.warn("auto-memory event capture failed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+    }
+
+    return {
+      action:
+        result.priority === "HIGH"
+          ? "notify"
+          : result.priority === "MEDIUM"
+            ? "digest"
+            : "silent",
+      result,
+      context,
+    };
+  }
+
+  async executeTool(body: ToolExecutePayload) {
+    const userId = body.userId ?? "default";
+    const context = await this.contextService.build({
+      userId,
+      source: body.source ?? "telegram",
+      message: JSON.stringify(body.payload ?? {}),
+    });
+
+    return this.toolRegistry.execute({
+      name: body.name,
+      userId,
+      payload: body.payload ?? {},
+      context,
+    });
+  }
+
+  remember(body: MemoryWriteInput) {
+    return this.vectorMemory.remember(body);
+  }
+
+  listEmailMemories(body: { userId?: string; limit?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    return this.vectorMemory.listBySource(userId, "gmail", body.limit ?? 50);
+  }
+
+  async scheduleReminder(body: ReminderRequest) {
+    if (!body.message || !body.runAt) {
+      throw new Error("message_and_runAt_required");
+    }
+
+    const context = await this.contextService.build({
+      userId: body.userId ?? "default",
+      source: "telegram",
+      message: body.message,
+    });
+
+    return this.toolRegistry.execute({
+      name: "schedule_reminder",
+      userId: body.userId ?? "default",
+      payload: body,
+      context,
+    });
+  }
+
+  listConnectors(body: { userId?: string }) {
+    return this.connectorService.list(body.userId ?? "default");
+  }
+
+  async activeUsers(body: { provider?: string }) {
+    const provider = parseConnectorProvider(body.provider);
+    // "gmail"/"calendar" rows are the new split connections; "google" is the
+    // legacy combined row from before the split — match either until users
+    // reconnect.
+    const providers =
+      provider === "gmail" || provider === "calendar"
+        ? ([provider, "google"] as ConnectorProvider[])
+        : provider;
+    const users = await this.connectorService.listActiveUserIds(providers);
+    return { users };
+  }
+
+  saveConnector(body: SaveConnectorInput) {
+    return this.connectorService.saveManual(body);
+  }
+
+  deleteConnector(body: DeleteConnectorInput) {
+    return this.connectorService.delete(body.userId ?? "default", body.provider);
+  }
+
+  deleteConnectorById(body: { userId?: string; id: string }) {
+    return this.connectorService.deleteById(body.userId ?? "default", body.id);
+  }
+
+  updateConnectorMetadata(body: { userId?: string; id: string; metadata: Record<string, unknown> }) {
+    return this.connectorService.updateMetadata(body.userId ?? "default", body.id, body.metadata);
+  }
+
+  async checkConnectorNotification(body: { userId: string; provider: string }) {
+    const provider = parseConnectorProvider(body.provider);
+    if (!provider) return { enabled: true };
+    const enabled = await this.connectorService.isNotificationsEnabled(body.userId, provider);
+    return { enabled };
+  }
+
+  async logNotification(body: { userId: string; message: string; source?: string; sentAt?: string }) {
+    await this.notificationLog.append({
+      userId: body.userId,
+      message: body.message,
+      source: body.source ?? "system",
+      sentAt: body.sentAt ?? new Date().toISOString(),
+    });
+    return { ok: true };
+  }
+
+  async listNotifications(body: { userId: string; limit?: number }) {
+    const entries = await this.notificationLog.list(body.userId, body.limit ?? 50);
+    return { entries };
+  }
+
+  startConnectorOAuth(body: StartOAuthInput) {
+    return this.connectorService.startOAuth(body);
+  }
+
+  completeConnectorOAuth(body: CompleteOAuthInput) {
+    return this.connectorService.completeOAuth(body);
+  }
+
+  async listRecentEmails(body: { userId?: string; maxResults?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.listThreads(userId, {
+      q: primaryUpdatesInboxQuery("is:unread newer_than:1h"),
+      maxResults: body.maxResults ?? 10,
+    });
+    if (!res.connected) {
+      return { connected: false, messages: [] };
+    }
+    return { connected: true, messages: res.messages };
+  }
+
+  processEmail(body: EmailEventJobData) {
+    return this.emailPipeline.process({
+      userId: body.userId ?? env.DEFAULT_USER_ID,
+      messageId: body.messageId,
+      threadId: body.threadId,
+      from: body.from,
+      subject: body.subject,
+      snippet: body.snippet,
+    });
+  }
+
+  confirmEmailAction(body: {
+    userId?: string;
+    messageId?: string;
+    threadId?: string;
+    category?: EmailCategory;
+    facts?: ExtractedEmailFacts;
+    action?: "remind" | "schedule" | "draft" | "watch";
+    learnPreference?: boolean;
+  }) {
+    if (!body.messageId || !body.threadId || !body.category || !body.facts || !body.action) {
+      throw new Error("email_confirm_missing_fields");
+    }
+    return this.emailPipeline.confirmAction({
+      userId: body.userId ?? env.DEFAULT_USER_ID,
+      messageId: body.messageId,
+      threadId: body.threadId,
+      category: body.category,
+      facts: body.facts,
+      action: body.action,
+      learnPreference: body.learnPreference,
+    });
+  }
+
+  async scheduleOutboundEmail(payload: {
+    userId?: string;
+    to: string;
+    subject: string;
+    body: string;
+    sendAt: string;
+  }) {
+    const userId = payload.userId ?? env.DEFAULT_USER_ID;
+    const sendAt = new Date(payload.sendAt);
+    if (isNaN(sendAt.getTime())) throw new Error("invalid_sendAt");
+
+    await enqueueOutboundEmail(
+      { userId, to: payload.to, subject: payload.subject, body: payload.body },
+      sendAt,
+    );
+    return { ok: true, sendAt: sendAt.toISOString() };
+  }
+
+  private selectToolForEvent(source: HeyRizEventSource) {
+    if (source === "gmail") {
+      return "gmail_triage";
+    }
+
+    if (source === "calendar") {
+      return "calendar_briefing";
+    }
+
+    if (source === "database" || source === "razorpay") {
+      return "business_snapshot";
+    }
+
+    return undefined;
+  }
+}
+
+function parseConnectorProvider(provider: string | undefined): ConnectorProvider | undefined {
+  const allowed = new Set(["google", "gmail", "calendar", "telegram", "postgres", "mongodb", "razorpay"]);
+  return provider && allowed.has(provider) ? (provider as ConnectorProvider) : undefined;
+}
+
+/** Split a raw CC header like "Name <email>, Name2 <email2>" into participants. */
+function parseCcHeader(cc: string): { name?: string; email?: string }[] {
+  if (!cc.trim()) return [];
+  return cc
+    .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    .map((part) => parseHeader(part.trim()))
+    .filter((p) => p.email || p.name);
+}
+
+const PHONE_RE = /(?:\+?\d[\d\s\-().]{7,}\d)/g;
+const LINKEDIN_RE = /https?:\/\/(?:www\.)?linkedin\.com\/in\/[\w-]+\/?/gi;
+const EMAIL_IN_BODY_RE = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
+
+/**
+ * Extracts email addresses, phone numbers, and LinkedIn URLs from the email
+ * body (typically from signature blocks) and upserts them as enrichment aliases
+ * on already-known entities. Only attaches to existing entities — never creates
+ * new ones from body content alone, which would produce noise from quoted text.
+ */
+async function enrichContactsFromBody(
+  userId: string,
+  body: string,
+  resolver: EntityResolverService,
+): Promise<void> {
+  // Work only on the last 800 chars — signatures live at the bottom.
+  const tail = body.slice(-800);
+
+  const phones = [...new Set((tail.match(PHONE_RE) ?? []).map((p) => p.trim()))].slice(0, 3);
+  const linkedins = [...new Set((tail.match(LINKEDIN_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
+  const bodyEmails = [...new Set((tail.match(EMAIL_IN_BODY_RE) ?? []).map((e) => e.toLowerCase()))].slice(0, 5);
+
+  // For each email found in the signature: if it matches an existing entity,
+  // attach any phone/LinkedIn found in the same tail to that entity.
+  for (const email of bodyEmails) {
+    const entityId = await resolver.lookup(userId, { email }).catch(() => undefined);
+    if (!entityId) continue;
+
+    for (const phone of phones) {
+      await resolver.attachAlias(userId, entityId, {
+        alias: phone,
+        normalized: phone.replace(/\D/g, ""),
+        kind: "phone",
+        source: "email_body",
+        confidence: 0.7,
+      }).catch(() => undefined);
+    }
+
+    for (const url of linkedins) {
+      await resolver.attachAlias(userId, entityId, {
+        alias: url,
+        normalized: url,
+        kind: "url",
+        source: "email_body",
+        confidence: 0.9,
+      }).catch(() => undefined);
+    }
+  }
+}

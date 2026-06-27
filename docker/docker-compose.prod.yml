@@ -1,0 +1,142 @@
+name: heyriz-prod
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: apps/gateway/Dockerfile
+    env_file:
+      - path: ../.env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: 4000
+      AI_CORE_TCP_HOST: ai-core
+      AI_CORE_TCP_PORT: 4100
+      BILLING_TCP_HOST: billing
+      BILLING_TCP_PORT: 4200
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:-change-me}@mongodb:27017/heyriz?authSource=admin
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:4000/api/connectors/google/callback}
+    ports:
+      - "${GATEWAY_PORT:-4000}:4000"
+    restart: unless-stopped
+    depends_on:
+      - ai-core
+      - billing
+      - mongodb
+
+  billing:
+    build:
+      context: ..
+      dockerfile: apps/billing/Dockerfile
+    env_file:
+      - path: ../.env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      BILLING_TCP_HOST: 0.0.0.0
+      BILLING_TCP_PORT: 4200
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+    expose:
+      - "4200"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  ai-core:
+    build:
+      context: ..
+      dockerfile: apps/ai-core/Dockerfile
+    env_file:
+      - path: ../.env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      AI_CORE_TCP_HOST: 0.0.0.0
+      AI_CORE_TCP_PORT: 4100
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:-change-me}@mongodb:27017/heyriz?authSource=admin
+    expose:
+      - "4100"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    env_file:
+      - path: ../.env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      AI_CORE_TCP_HOST: ai-core
+      AI_CORE_TCP_PORT: 4100
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - ai-core
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --save 60 1
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 300m
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: heyriz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: heyriz
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=512MB
+      -c max_connections=50
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: heyriz
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-change-me}
+      MONGO_INITDB_DATABASE: heyriz
+    # Caps WiredTiger cache to 300MB — default is 50% of RAM (2GB on 4GB VM)
+    command: mongod --wiredTigerCacheSizeGB 0.3
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 600m
+
+volumes:
+  redis_data:
+  postgres_data:
+  mongodb_data:

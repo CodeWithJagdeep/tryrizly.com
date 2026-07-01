@@ -28,7 +28,7 @@ const plans: Plan[] = [
     annualPrice: '$0',
     monthlyCadence: '14 days',
     annualCadence: '14 days',
-    description: 'Experience Rizly's full capabilities risk-free.',
+    description: "Experience Rizly's full capabilities risk-free.",
     users: '1 user',
     features: ['All Pro features included', 'Full integrations access', 'Email & calendar automation', 'Priority support'],
   },

@@ -1,0 +1,20 @@
+{
+  "dsn": "https://SENTRY_DSN@sentry.io/PROJECT_ID",
+  "environment": "production",
+  "tracesSampleRate": 0.1,
+  "release": "1.0.0",
+  "beforeSend(event, hint) {
+    if (event.exception) {
+      const error = hint.originalException;
+      if (error && error.message && error.message.includes('INTERNAL')) {
+        return null;
+      }
+    }
+    return event;
+  }",
+  "ignoreErrors": [
+    "ResizeObserver loop limit exceeded",
+    "Non-Error promise rejection captured",
+    "Script error"
+  ]
+}

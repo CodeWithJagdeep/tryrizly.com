@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState, Fragment } from "react";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { Reveal } from "../components/Reveal";
-import { Faq } from "../components/sections/Faq";
-import { FinalCta } from "../components/sections/FinalCta";
+import { useState, Fragment } from 'react';
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Reveal } from '../components/Reveal';
+import { Faq } from '../components/sections/Faq';
+import { FinalCta } from '../components/sections/FinalCta';
 
 type Plan = {
   id: string;
@@ -15,56 +15,56 @@ type Plan = {
   monthlyCadence: string;
   annualCadence: string;
   description: string;
-  seats: string;
+  users: string;
   features: string[];
   highlighted?: boolean;
 };
 
 const plans: Plan[] = [
   {
-    id: "trial",
-    name: "Trial",
-    monthlyPrice: "$0",
-    annualPrice: "$0",
-    monthlyCadence: "14 days",
-    annualCadence: "14 days",
-    description: "Experience Rizly's full capabilities risk-free to evaluate team fit.",
-    seats: "1 user",
-    features: ["All Pro features", "Full integrations access", "Email & calendar automation", "14-day access"],
+    id: 'trial',
+    name: 'Trial',
+    monthlyPrice: '$0',
+    annualPrice: '$0',
+    monthlyCadence: '14 days',
+    annualCadence: '14 days',
+    description: 'Experience Rizly's full capabilities risk-free.',
+    users: '1 user',
+    features: ['All Pro features included', 'Full integrations access', 'Email & calendar automation', 'Priority support'],
   },
   {
-    id: "professional",
-    name: "Professional",
-    monthlyPrice: "$59",
-    annualPrice: "$47",
-    monthlyCadence: "/ month",
-    annualCadence: "/ month",
-    description: "Ideal for individual professionals managing complex workflows.",
-    seats: "1 user",
-    features: ["Email triage & drafting", "Calendar sync & reminders", "Context memory", "Standard support"],
+    id: 'professional',
+    name: 'Professional',
+    monthlyPrice: '$59',
+    annualPrice: '$47',
+    monthlyCadence: '/month',
+    annualCadence: '/month',
+    description: 'For individuals managing complex workflows.',
+    users: '1 user',
+    features: ['Email triage & drafting', 'Calendar synchronization', 'Cross-channel memory', 'Telegram integration'],
   },
   {
-    id: "business",
-    name: "Business",
-    monthlyPrice: "$119",
-    annualPrice: "$95",
-    monthlyCadence: "/ month",
-    annualCadence: "/ month",
-    description: "For power users with high-volume operations and critical integrations.",
-    seats: "1 user",
-    features: ["Priority agent execution", "Advanced automation", "Business integrations", "Priority support"],
+    id: 'business',
+    name: 'Business',
+    monthlyPrice: '$119',
+    annualPrice: '$95',
+    monthlyCadence: '/month',
+    annualCadence: '/month',
+    description: 'For power users and small teams.',
+    users: 'Up to 3 users',
+    features: ['Priority execution queues', 'Advanced automation', 'Business integrations', 'Email support 24/7'],
     highlighted: true,
   },
   {
-    id: "enterprise",
-    name: "Enterprise",
-    monthlyPrice: "$249",
-    annualPrice: "$199",
-    monthlyCadence: "/ month",
-    annualCadence: "/ month",
-    description: "Custom solutions for organizations with dedicated support requirements.",
-    seats: "Unlimited users",
-    features: ["Dedicated account manager", "Custom integrations", "SLA guarantee", "Advanced security"],
+    id: 'enterprise',
+    name: 'Enterprise',
+    monthlyPrice: 'Custom',
+    annualPrice: 'Custom',
+    monthlyCadence: 'Contact us',
+    annualCadence: 'Contact us',
+    description: 'Custom solutions for large organizations.',
+    users: 'Unlimited users',
+    features: ['Dedicated account team', 'Custom integrations', '99.9% SLA guarantee', 'Advanced compliance'],
   },
 ];
 
@@ -81,122 +81,108 @@ type FeatureCategory = {
 
 const comparisonCategories: FeatureCategory[] = [
   {
-    categoryName: "Core AI Capabilities",
+    categoryName: 'Core Capabilities',
     rows: [
       {
-        label: "Email management",
-        description: "Intelligent inbox triage with automatic draft generation and context preservation.",
-        values: ["Full", "Full", "Full", "Full"],
+        label: 'Email Management',
+        description: 'Intelligent inbox triage with automatic draft generation.',
+        values: ['Full', 'Full', 'Full', 'Full'],
       },
       {
-        label: "Calendar intelligence",
-        description: "Meeting sync, preparation packets, and automated scheduling.",
-        values: ["Full", "Full", "Full", "Full"],
+        label: 'Calendar Intelligence',
+        description: 'Meeting sync, preparation packets, and scheduling.',
+        values: ['Full', 'Full', 'Full', 'Full'],
       },
       {
-        label: "Contextual memory",
-        description: "Cross-channel context retention and entity relationship mapping.",
-        values: ["Limited", "Full", "Full", "Full"],
+        label: 'Contextual Memory',
+        description: 'Cross-channel context and entity relationship mapping.',
+        values: ['Limited', 'Full', 'Full', 'Full'],
       },
       {
-        label: "Priority processing",
-        description: "Expedited agent task execution with optimized processing queues.",
-        values: ["—", "—", "Yes", "Yes"],
+        label: 'Priority Processing',
+        description: 'Expedited task execution with optimized queues.',
+        values: ['—', '—', 'Yes', 'Yes'],
       },
       {
-        label: "Digest & insights",
-        description: "Scheduled executive briefings with decision summaries.",
-        values: ["—", "—", "Yes", "Yes"],
+        label: 'Decision Tracking',
+        description: 'Automated tracking of agreements and commitments.',
+        values: ['—', '—', 'Yes', 'Yes'],
       },
     ],
   },
   {
-    categoryName: "Integrations & Data Access",
+    categoryName: 'Integrations',
     rows: [
       {
-        label: "Core connectors",
-        description: "Gmail, Google Calendar, Telegram, and messaging platforms.",
-        values: ["Yes", "Yes", "Yes", "Yes"],
+        label: 'Standard Connectors',
+        description: 'Gmail, Calendar, Telegram, and messaging platforms.',
+        values: ['Yes', 'Yes', 'Yes', 'Yes'],
       },
       {
-        label: "Business system connectors",
-        description: "Stripe, Razorpay, PostgreSQL, MongoDB, and enterprise integrations.",
-        values: ["—", "—", "Yes", "Yes"],
+        label: 'Business Systems',
+        description: 'Stripe, Razorpay, PostgreSQL, and enterprise tools.',
+        values: ['—', '—', 'Yes', 'Yes'],
       },
       {
-        label: "Custom data sources",
-        description: "Connect proprietary systems and internal databases.",
-        values: ["—", "—", "—", "Yes"],
+        label: 'Custom Integrations',
+        description: 'Connect proprietary systems and internal databases.',
+        values: ['—', '—', '—', 'Yes'],
       },
     ],
   },
   {
-    categoryName: "Support & Reliability",
+    categoryName: 'Support & Reliability',
     rows: [
       {
-        label: "Support tier",
-        description: "Access level for setup, troubleshooting, and optimization.",
-        values: ["Email", "Email (24h)", "Priority email", "Dedicated manager"],
+        label: 'Support Channel',
+        description: 'Access level for setup and troubleshooting.',
+        values: ['Email', 'Email (24h)', 'Email (24h)', 'Dedicated Team'],
       },
       {
-        label: "Guaranteed uptime",
-        description: "Service level agreement with overage cost protection.",
-        values: ["99%", "99%", "99.5%", "99.9%"],
+        label: 'Uptime Guarantee',
+        description: 'Service level agreement and cost protection.',
+        values: ['99%', '99%', '99.5%', '99.9%'],
       },
       {
-        label: "API rate limits",
-        description: "Monthly agent execution quota and concurrent operation limits.",
-        values: ["Limited", "Standard", "High", "Custom"],
+        label: 'API Rate Limits',
+        description: 'Monthly execution quota and concurrent operations.',
+        values: ['Limited', 'Standard', 'High', 'Custom'],
       },
     ],
   },
 ];
 
-function AnimatedCheck({ delay }: { delay: number }) {
+function CheckIcon() {
   return (
-    <svg
-      className="mt-0.5 h-4 w-4 shrink-0 text-blue-500"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={3}
-    >
-      <motion.path
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{
-          duration: 0.4,
-          delay: delay,
-          ease: "easeInOut",
-        }}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M5 13l4 4L19 7"
+    <svg className='h-5 w-5 text-[#FE7F2D]' fill='currentColor' viewBox='0 0 20 20'>
+      <path
+        fillRule='evenodd'
+        d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z'
+        clipRule='evenodd'
       />
     </svg>
   );
 }
 
-// Parent animation settings for staggered fade-in of cards
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.08,
+      staggerChildren: 0.1,
     },
   },
 } as const;
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 35 },
+  hidden: { opacity: 0, y: 30 },
   show: {
     opacity: 1,
     y: 0,
     transition: {
-      type: "spring",
+      type: 'spring',
       stiffness: 90,
-      damping: 14,
+      damping: 15,
     },
   },
 } as const;
@@ -206,163 +192,138 @@ export function PricingClient() {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-1 flex-col relative overflow-hidden bg-slate-50/20">
-      {/* Visual Accents - Dot Matrix and Glow Blobs */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_60%,transparent_100%)] opacity-70" />
-      
-      <div className="absolute top-[-10%] left-[10%] -z-10 h-[500px] w-[500px] rounded-full bg-blue-400/5 blur-[120px] pointer-events-none" />
-      <div className="absolute top-[20%] right-[5%] -z-10 h-[600px] w-[600px] rounded-full bg-teal-300/5 blur-[130px] pointer-events-none" />
-
+    <div className='flex flex-1 flex-col relative bg-white overflow-hidden'>
       {/* Header Section */}
-      <section className="pt-24 pb-12 md:pt-32 md:pb-16 relative">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+      <section className='pt-24 pb-16 md:pt-32 md:pb-24 relative'>
+        <div className='mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8'>
           <Reveal>
-            <h1 className="font-neue-haas mx-auto max-w-2xl text-4xl font-normal tracking-tight text-[#0f172a] sm:text-5xl md:text-6xl">
-              Transparent pricing. No hidden costs.
+            <div className='inline-block mb-6'>
+              <span className='inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold bg-[#EAECF0] text-[#233D4D]'>
+                Flexible Plans for Every Business
+              </span>
+            </div>
+            <h1 className='text-5xl md:text-6xl font-bold text-[#000000] tracking-tight mb-6'>
+              Simple, Transparent Pricing
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#475569] md:text-lg">
-              Simple, predictable plans that scale with your needs. Start with a free trial, upgrade anytime.
+            <p className='text-xl text-[#233D4D] max-w-2xl mx-auto leading-relaxed mb-8'>
+              Start with a 14-day free trial. No credit card required. Scale as you grow.
             </p>
           </Reveal>
 
-          {/* Monthly / Annual Billing Toggle Switcher */}
-          <div className="mt-10 flex justify-center items-center">
-            <Reveal delay={0.1}>
-              <div className="relative flex items-center gap-3">
-                <span className={`text-sm font-medium transition-colors duration-200 ${!isAnnual ? "text-slate-900" : "text-slate-400"}`}>
-                  Monthly
-                </span>
-                
-                <div className="relative flex rounded-full bg-slate-200/60 p-1 border border-slate-200/80 w-16 h-8 items-center cursor-pointer" onClick={() => setIsAnnual(!isAnnual)}>
-                  <motion.div
-                    className="h-6 w-6 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center"
-                    layout
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    style={{ x: isAnnual ? 30 : 0 }}
-                  />
-                </div>
+          {/* Billing Toggle */}
+          <Reveal delay={0.1}>
+            <div className='flex justify-center items-center gap-8 mt-12'>
+              <span className={`text-sm font-semibold transition-colors ${!isAnnual ? 'text-[#000000]' : 'text-[#666666]'}`}>
+                Monthly
+              </span>
 
-                <div className="relative flex items-center">
-                  <span className={`text-sm font-medium transition-colors duration-200 ${isAnnual ? "text-slate-900 font-semibold" : "text-slate-400"}`}>
-                    Annually
+              <button
+                onClick={() => setIsAnnual(!isAnnual)}
+                className='relative flex items-center h-8 w-16 rounded-full bg-[#233D4D] transition-all hover:opacity-90'
+              >
+                <motion.div
+                  className='h-7 w-7 rounded-full bg-[#FE7F2D] absolute'
+                  layout
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  style={{ left: isAnnual ? 'calc(100% - 28px)' : '2px' }}
+                />
+              </button>
+
+              <div className='flex items-center gap-2'>
+                <span className={`text-sm font-semibold transition-colors ${isAnnual ? 'text-[#000000]' : 'text-[#666666]'}`}>
+                  Annually
+                </span>
+                {isAnnual && (
+                  <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-[#FE7F2D] text-white'>
+                    Save 20%
                   </span>
-                  
-                  {/* Floating Discount Badge */}
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute left-full ml-3 whitespace-nowrap bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm"
-                    style={{ originX: 0 }}
-                  >
-                    <motion.span
-                      className="inline-block"
-                      animate={{ y: [0, -4, 0] }}
-                      transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                    >
-                      Save 20%
-                    </motion.span>
-                  </motion.div>
-                </div>
+                )}
               </div>
-            </Reveal>
-          </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* Plans Section */}
-      <section className="pb-20 md:pb-28 relative" id="plans">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* Pricing Cards */}
+      <section className='pb-24 relative px-4 sm:px-6 lg:px-8'>
+        <div className='max-w-7xl mx-auto'>
           <motion.div
             variants={containerVariants}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.15 }}
-            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 items-stretch"
+            initial='hidden'
+            whileInView='show'
+            viewport={{ once: true, amount: 0.2 }}
+            className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'
           >
-            {plans.map((plan, index) => {
+            {plans.map((plan) => {
               const isPopular = plan.highlighted;
               return (
-                <motion.div
-                  key={plan.id}
-                  variants={cardVariants}
-                  whileHover={{ 
-                    y: -8, 
-                    scale: 1.015,
-                    transition: { duration: 0.25, ease: "easeOut" } 
-                  }}
-                  className="relative flex h-full"
-                >
+                <motion.div key={plan.id} variants={cardVariants}>
                   <div
-                    className={`flex h-full w-full flex-col rounded-2xl border p-6 transition-all duration-300 relative overflow-hidden group ${
+                    className={`relative flex flex-col h-full rounded-2xl border-2 p-8 transition-all duration-300 ${
                       isPopular
-                        ? "border-blue-500/80 bg-white shadow-[0_20px_40px_-15px_rgba(55,132,255,0.18)]"
-                        : "border-slate-200/90 bg-white hover:border-slate-300 shadow-sm"
+                        ? 'border-[#FE7F2D] bg-[#FFF9F5] shadow-lg shadow-[#FE7F2D]/10'
+                        : 'border-[#EAECF0] bg-white hover:border-[#233D4D]'
                     }`}
                   >
-                    {/* Visual glowing aura for popular plan */}
+                    {/* Popular Badge */}
                     {isPopular && (
-                      <div className="absolute top-0 right-0 -mr-20 -mt-20 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none group-hover:bg-blue-500/20 transition-colors duration-300" />
-                    )}
-
-                    {isPopular && (
-                      <div className="mb-4">
-                        <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-3 py-1 text-[11px] font-bold tracking-wider uppercase text-white shadow-sm">
-                          Most popular
+                      <div className='absolute -top-4 left-8'>
+                        <span className='inline-flex items-center px-4 py-1 rounded-full text-xs font-bold bg-[#FE7F2D] text-white uppercase tracking-wider'>
+                          Most Popular
                         </span>
                       </div>
                     )}
-                    
-                    <h2 className="text-xl font-bold text-slate-900">{plan.name}</h2>
-                    
-                    {/* Animated Price display */}
-                    <div className="mt-4 flex items-baseline gap-1.5 h-12 overflow-hidden">
-                      <AnimatePresence mode="wait">
-                        <motion.span
-                          key={isAnnual ? "annual" : "monthly"}
-                          initial={{ y: 24, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          exit={{ y: -24, opacity: 0 }}
-                          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                          className="text-4xl font-extrabold text-slate-900 tracking-tight"
-                        >
-                          {isAnnual ? plan.annualPrice : plan.monthlyPrice}
-                        </motion.span>
-                      </AnimatePresence>
-                      <span className="text-sm font-medium text-slate-400">
-                        {isAnnual ? plan.annualCadence : plan.monthlyCadence}
-                      </span>
+
+                    {/* Plan Name & Description */}
+                    <div className='mb-6'>
+                      <h3 className='text-2xl font-bold text-[#000000] mb-2'>{plan.name}</h3>
+                      <p className='text-sm text-[#666666]'>{plan.description}</p>
                     </div>
 
-                    <p className="mt-3 text-sm leading-relaxed text-slate-500 flex-grow min-h-[48px]">
-                      {plan.description}
-                    </p>
-                    
-                    <div className="border-t border-slate-100 my-5 pt-4">
-                      <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
-                        {plan.seats}
-                      </p>
-                      
-                      <ul className="mt-4 flex flex-col gap-3 text-sm text-slate-600">
-                        {plan.features.map((feature, fIndex) => (
-                          <li key={feature} className="flex items-start gap-2.5">
-                            <AnimatedCheck delay={(index * 0.1) + (fIndex * 0.05) + 0.3} />
-                            <span className="leading-tight">{feature}</span>
+                    {/* Pricing */}
+                    <div className='mb-6'>
+                      <div className='flex items-baseline gap-1.5 h-16'>
+                        <AnimatePresence mode='wait'>
+                          <motion.span
+                            key={isAnnual ? 'annual' : 'monthly'}
+                            initial={{ y: 24, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -24, opacity: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className='text-5xl font-bold text-[#000000]'
+                          >
+                            {isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                          </motion.span>
+                        </AnimatePresence>
+                        {plan.id !== 'enterprise' && (
+                          <span className='text-sm font-medium text-[#666666]'>{isAnnual ? plan.annualCadence : plan.monthlyCadence}</span>
+                        )}
+                      </div>
+                      <p className='text-xs text-[#999999] font-medium uppercase tracking-wide mt-2'>{plan.users}</p>
+                    </div>
+
+                    {/* CTA Button */}
+                    <button
+                      className={`w-full py-3 px-4 rounded-lg font-semibold transition-all mb-8 ${
+                        isPopular
+                          ? 'bg-[#FE7F2D] text-white hover:bg-[#E56F1F] shadow-lg shadow-[#FE7F2D]/20'
+                          : 'bg-[#EAECF0] text-[#000000] hover:bg-[#D0D4DB] border-2 border-[#EAECF0]'
+                      }`}
+                    >
+                      {plan.id === 'enterprise' ? 'Contact Sales' : 'Start Free Trial'}
+                    </button>
+
+                    {/* Features */}
+                    <div className='border-t border-[#EAECF0] pt-8'>
+                      <ul className='space-y-4'>
+                        {plan.features.map((feature) => (
+                          <li key={feature} className='flex items-start gap-3'>
+                            <CheckIcon />
+                            <span className='text-sm text-[#233D4D] font-medium'>{feature}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
-
-                    <Link
-                      href="/signup"
-                      className={`mt-6 flex h-11 w-full items-center justify-center rounded-full text-sm font-semibold transition-all duration-200 ${
-                        isPopular
-                          ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 hover:brightness-105"
-                          : "border border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300"
-                      }`}
-                    >
-                      Start free trial
-                    </Link>
                   </div>
                 </motion.div>
               );
@@ -371,120 +332,77 @@ export function PricingClient() {
         </div>
       </section>
 
-      {/* Comparison Section */}
-      <section className="bg-slate-50/30 border-t border-b border-slate-100 py-20 md:py-28 relative">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center md:text-left">
-            <Reveal>
-              <h2 className="font-neue-haas text-3xl font-normal tracking-tight text-slate-900 md:text-4xl">
-                Feature comparison.
-              </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Detailed breakdown of capabilities and support across all plans.
-              </p>
-            </Reveal>
-          </div>
+      {/* Comparison Table */}
+      <section className='bg-[#EAECF0] py-24 relative'>
+        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
+          <Reveal>
+            <div className='mb-16 text-center'>
+              <h2 className='text-4xl font-bold text-[#000000] mb-4'>Detailed Feature Comparison</h2>
+              <p className='text-[#666666] text-lg'>Compare capabilities across all plans</p>
+            </div>
+          </Reveal>
 
           <Reveal delay={0.1}>
-            <div className="mt-10 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-md">
-              <table className="w-full min-w-[768px] text-left text-sm border-collapse">
+            <div className='overflow-x-auto rounded-xl border-2 border-white bg-white'>
+              <table className='w-full'>
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <th className="px-6 py-6 font-semibold text-slate-900 text-sm md:text-base w-[32%]">
-                      Feature Breakdown
-                    </th>
-                    {plans.map((plan) => {
-                      const isPopular = plan.highlighted;
-                      return (
-                        <th 
-                          key={plan.id} 
-                          className={`px-6 py-6 text-left relative transition-colors duration-150 w-[17%] ${
-                            isPopular ? "bg-blue-50/20 border-x border-blue-500/10" : ""
-                          }`}
-                        >
-                          {isPopular && (
-                            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
-                          )}
-                          <div className="font-bold text-slate-900 text-sm md:text-base flex items-center gap-1.5">
-                            {plan.name}
-                            {isPopular && (
-                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-ping" />
-                            )}
-                          </div>
-                          <div className="text-xs font-semibold text-slate-500 mt-1">
-                            {isAnnual ? plan.annualPrice : plan.monthlyPrice}
-                            <span className="text-[10px] font-normal text-slate-400">
-                              {plan.id === "free" ? "" : isAnnual ? "/mo" : "/mo"}
-                            </span>
-                          </div>
-                        </th>
-                      );
-                    })}
+                  <tr className='border-b-2 border-[#EAECF0]'>
+                    <th className='px-6 py-6 text-left font-bold text-[#000000] bg-[#EAECF0]'>Features</th>
+                    {plans.map((plan) => (
+                      <th
+                        key={plan.id}
+                        className={`px-6 py-6 text-left font-bold text-center ${
+                          plan.highlighted ? 'bg-[#FFF9F5] border-x-2 border-[#FE7F2D]' : 'bg-white'
+                        }`}
+                      >
+                        <div className='text-[#000000] text-sm font-bold'>{plan.name}</div>
+                        <div className='text-xs text-[#666666] mt-1'>
+                          {plan.monthlyPrice === 'Custom' ? 'Custom' : `${isAnnual ? plan.annualPrice : plan.monthlyPrice}`}
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {comparisonCategories.map((category) => (
                     <Fragment key={category.categoryName}>
-                      {/* Category Header Row */}
-                      <tr className="bg-slate-50/40 border-y border-slate-100">
-                        <td 
-                          colSpan={5} 
-                          className="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100/40"
-                        >
-                          {category.categoryName}
+                      <tr className='bg-[#EAECF0] border-b-2 border-[#EAECF0]'>
+                        <td colSpan={5} className='px-6 py-4'>
+                          <h4 className='font-bold text-[#233D4D] text-sm uppercase tracking-wider'>{category.categoryName}</h4>
                         </td>
                       </tr>
                       {category.rows.map((row) => (
-                        <motion.tr 
+                        <motion.tr
                           key={row.label}
                           onHoverStart={() => setHoveredRow(row.label)}
                           onHoverEnd={() => setHoveredRow(null)}
-                          className="transition-colors duration-150"
+                          className='border-b border-[#EAECF0]'
                           animate={{
-                            backgroundColor: hoveredRow === row.label ? "rgba(59, 130, 246, 0.03)" : "rgba(255,255,255,0)"
+                            backgroundColor: hoveredRow === row.label ? '#FFF9F5' : 'transparent',
                           }}
                         >
-                          <td className="px-6 py-4.5">
-                            <div className="font-semibold text-slate-800 leading-snug">{row.label}</div>
-                            <div className="text-xs text-slate-400 font-normal mt-0.5 max-w-[280px] leading-normal">
-                              {row.description}
-                            </div>
+                          <td className='px-6 py-5'>
+                            <div className='font-semibold text-[#000000] text-sm'>{row.label}</div>
+                            <div className='text-xs text-[#666666] mt-1.5'>{row.description}</div>
                           </td>
-                          {row.values.map((value, i) => {
-                            const plan = plans[i];
-                            const isPopular = plan.highlighted;
-                            const isCheck = value === "Yes";
-                            const isDash = value === "—";
-                            
-                            return (
-                              <td 
-                                key={plan.id} 
-                                className={`px-6 py-4.5 transition-colors duration-150 ${
-                                  isPopular ? "bg-blue-50/10 border-x border-blue-500/5" : ""
-                                }`}
-                              >
-                                {isCheck ? (
-                                  <div className="flex items-center gap-1.5 text-emerald-600 font-semibold">
-                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </span>
-                                  </div>
-                                ) : isDash ? (
-                                  <span className="text-slate-300 font-light">—</span>
-                                ) : (
-                                  <span className={`font-semibold ${
-                                    value === "Full" || value.includes("Slack") || value.includes("Priority")
-                                      ? "text-slate-800" 
-                                      : "text-slate-500 font-medium"
-                                  }`}>
-                                    {value}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })}
+                          {row.values.map((value, i) => (
+                            <td
+                              key={i}
+                              className={`px-6 py-5 text-center text-sm font-medium ${
+                                plans[i].highlighted ? 'bg-[#FFF9F5]' : ''
+                              }`}
+                            >
+                              {value === 'Yes' ? (
+                                <span className='inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#EAECF0]'>
+                                  <CheckIcon />
+                                </span>
+                              ) : value === '—' ? (
+                                <span className='text-[#CCCCCC]'>—</span>
+                              ) : (
+                                <span className='text-[#233D4D]'>{value}</span>
+                              )}
+                            </td>
+                          ))}
                         </motion.tr>
                       ))}
                     </Fragment>
@@ -496,7 +414,7 @@ export function PricingClient() {
         </div>
       </section>
 
-      {/* FAQ and Final CTA Sections */}
+      {/* FAQ and CTA */}
       <Faq />
       <FinalCta />
     </div>

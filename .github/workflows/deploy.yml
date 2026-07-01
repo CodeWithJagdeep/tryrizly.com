@@ -27,13 +27,21 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Deploy backend to GCP VM
+      - name: Backend build complete
         if: success()
         run: |
-          echo "::info::Backend build successful. Manual deployment to GCP VM via: make prod"
-          echo "::notice::To deploy: ssh heyriz-vm && cd ~/heyriz && make prod"
+          echo "::info::Backend build successful"
+          echo "::notice::Frontend (web/) is auto-deployed to Vercel (getrizly.com)"
+          echo "::notice::Backend (gateway/ai-core/worker) ready for manual GCP VM deploy"
+          echo ""
+          echo "To deploy backend:"
+          echo "  ssh heyriz-vm"
+          echo "  cd ~/heyriz && git pull origin main"
+          echo "  make prod"
+          echo ""
+          echo "Docs: https://github.com/YOUR_REPO/blob/main/docs/devops.md"
 
-      - name: Notify deployment
+      - name: Status notification
         if: success()
         uses: actions/github-script@v7
         with:
@@ -42,7 +50,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '✅ Build successful. Backend ready for deployment to GCP VM.\n\nFrontend deployed automatically to Vercel.'
+              body: '✅ **Build successful!**\n\n**Frontend:** Auto-deployed to Vercel (getrizly.com)\n**Backend:** Ready for deployment to GCP VM via:\n```bash\nssh heyriz-vm && cd ~/heyriz && git pull origin main && make prod\n```\n\nSee [docs/devops.md](../docs/devops.md) for details.'
             })
 
       - name: Alert on failure

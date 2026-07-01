@@ -44,11 +44,12 @@
 - [x] Monitoring setup guide
 
 ### Deployment
-- [x] Web deployment target (Vercel)
-- [x] Backend deployment target (GCP VM)
+- [x] Web deployment target (Vercel) — automatic on push
+- [x] Backend deployment target (GCP VM) — manual via `make prod`
+- [x] Database & Redis on GCP VM
 - [x] Environment configuration (.env.production)
 - [x] Production Makefile commands
-- [x] Database schema & migrations
+- [x] Docker Compose prod config (backend only, no web files)
 
 ---
 
@@ -135,38 +136,39 @@ Before clicking "launch":
 
 ## 🎯 LAUNCH SEQUENCE
 
-### T-30 minutes
+### T-30 minutes (Backend Test)
 ```bash
-# Final test of full stack
-make prod-restart
-sleep 10
+# SSH to VM and test backend services
+ssh heyriz-vm
+cd ~/heyriz && make prod-status
 make prod-logs  # Verify no startup errors
 ```
 
-### T-15 minutes
+### T-15 minutes (Vercel + Frontend Verify)
 ```bash
-# Announce in Slack
-# Post in Discord/Twitter (if public)
-# Monitor error rates (should be 0 for first hours)
+# Frontend is auto-deployed (just verify it loads)
+# Visit: https://getrizly.com (staging/preview)
+# Test: Sign up, email triage, calendar
 ```
 
-### T-0 minutes
+### T-0 minutes (Go Live)
 ```bash
-# Enable monitoring alerts
-# Go live with DNS swap to production
+# Enable monitoring alerts (Sentry)
+# Finalize DNS if not done yet
 # Post launch announcement
 ```
 
-### T+1 hour
+### T+1 hour (Post-Launch Monitoring)
 ```bash
 # Check Sentry for any errors
-# Monitor make prod-logs
-# Be available for emergency rollback
+# Monitor: make prod-logs
+# Frontend: check browser console
+# Be ready for rollback
 ```
 
-### T+24 hours
+### T+24 hours (Follow-Up)
 ```bash
-# Review all errors captured
+# Review all errors in Sentry
 # Check usage metrics
 # Gather early user feedback
 ```
@@ -216,14 +218,18 @@ make prod  # Redeploy
 
 ## 🎉 Launch Status
 
-| Component | Status | Owner | ETA |
-|-----------|--------|-------|-----|
-| Frontend | ✅ Ready | Deploy to Vercel auto | Immediate |
-| Backend | ✅ Ready | Redeploy via `make prod` | 2 min |
-| Database | ✅ Ready | Already running | Now |
-| DNS | 🟡 **TODO** | Hostinger | ASAP |
-| Monitoring | 🟡 **TODO** | Sentry config | 10 min |
-| Smoke tests | ✅ Ready | CI/CD | Auto |
+| Component | Where | Status | Action |
+|-----------|-------|--------|--------|
+| **Frontend** | Vercel (getrizly.com) | ✅ Auto-deploy | Push to main → live in 60s |
+| **Backend Gateway** | GCP VM (api.getrizly.com) | ✅ Ready | `ssh heyriz-vm && make prod` |
+| **AI Core** | GCP VM :4100 | ✅ Ready | Included in `make prod` |
+| **Worker** | GCP VM | ✅ Ready | Included in `make prod` |
+| **PostgreSQL** | GCP VM :5432 | ✅ Ready | Pre-configured |
+| **Redis** | GCP VM :6379 | ✅ Ready | Pre-configured |
+| **MongoDB** | GCP VM :27017 | ✅ Ready | Pre-configured |
+| **DNS** | Hostinger | 🟡 TODO | Add Vercel CNAME records |
+| **Sentry** | SaaS | 🟡 TODO | Create account + get DSN |
+| **CI/CD** | GitHub Actions | ✅ Ready | Auto-test on every push |
 
 **Overall: 90% ready. 2 manual tasks remain (DNS + Sentry).**
 

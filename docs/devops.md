@@ -3,36 +3,45 @@
 ## Architecture Overview
 
 ```
-┌─────────────────────┐
-│  GitHub Repository  │
-│  (main branch)      │
-└──────────┬──────────┘
+┌──────────────────────────────────────┐
+│    GitHub Repository (main)          │
+│    ↓ Every push triggers CI/CD       │
+└──────────────────────────────────────┘
            │
-           ├─→ GitHub Actions (test.yml)
-           │   └─→ Run tests, lint, smoke tests
+           ├─→ Frontend (web/)
+           │   └─→ Vercel (auto-deploy)
+           │       ↓
+           │   https://getrizly.com
            │
-           └─→ GitHub Actions (deploy.yml)
-               ├─→ Build backend services
-               ├─→ Web (auto-deployed to Vercel)
-               └─→ Backend (manual SSH to GCP VM)
+           └─→ Backend (apps/gateway, ai-core, worker)
+               └─→ GCP VM (manual deployment)
+                   ↓
+               https://api.getrizly.com
 
 ┌──────────────────────────────────────┐
-│        Deployment Targets             │
+│     GCP VM Services Only              │
+│     (NO web files here)               │
 ├──────────────────────────────────────┤
-│ Web: Vercel (Next.js)                │
-│ API: GCP VM (Docker Compose)         │
-│ Queue: Redis on GCP VM               │
-│ Database: PostgreSQL on GCP VM       │
+│ gateway:4000   — HTTP API/Telegram   │
+│ ai-core:4100   — LLM agent engine    │
+│ worker         — BullMQ async jobs   │
+│ billing:4200   — Billing service     │
+│ postgres:5432  — Main database       │
+│ redis:6379     — Cache & queues      │
+│ mongodb:27017  — Document store      │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
-│        Monitoring & Errors            │
+│   Vercel (Separate Hosting)          │
+│   (NO backend here)                  │
 ├──────────────────────────────────────┤
-│ Error Tracking: Sentry               │
-│ Logs: Docker container logs (VM)     │
-│ Metrics: Custom dashboards (TBD)     │
+│ Next.js web app (getrizly.com)       │
+│ Static assets & edge functions       │
+│ → calls api.getrizly.com for data    │
 └──────────────────────────────────────┘
 ```
+
+**Key:** Web and backend are completely separated. Never SSH backend code to Vercel. Never push web code to the VM.
 
 ## Continuous Integration
 
@@ -65,34 +74,54 @@ Runs on **merge to main**:
 ## Deployment Workflow
 
 ### Frontend (Automatic - Vercel)
+
 ```bash
-# Push to main → Vercel auto-deploys to getrizly.com
-# No manual steps required
+# Push changes to web/ folder to main
+# → Vercel automatically builds and deploys
+# → Live at https://getrizly.com in ~60 seconds
+# No manual SSH or Docker commands needed
 ```
 
-### Backend (Manual - GCP VM)
+**Important:** Web files NEVER go to the GCP VM. Vercel handles all frontend deployment.
 
-After merging to main:
+### Backend (Manual - GCP VM Only)
+
+Only `apps/gateway`, `apps/ai-core`, `apps/worker`, `apps/billing` + databases run on VM.
+
+After merging backend changes to main:
 
 ```bash
-# SSH to VM
+# SSH to GCP VM
 ssh heyriz-vm
 
 # Pull latest code
 cd ~/heyriz && git pull origin main
 
-# Deploy using make
+# Deploy backend services only
 make prod
 
-# Verify
+# Verify services running
 make prod-status
 make prod-logs
 ```
 
-**Or with Docker directly:**
+**Manual Docker deploy:**
 ```bash
+cd ~/heyriz
 docker compose -f docker/docker-compose.prod.yml --env-file .env.production build
 docker compose -f docker/docker-compose.prod.yml --env-file .env.production up -d
+```
+
+**Verify services:**
+```bash
+# All running?
+docker ps
+
+# Health check
+curl http://localhost:4000/health
+
+# Logs
+docker compose -f docker/docker-compose.prod.yml logs -f
 ```
 
 ## Monitoring & Error Tracking

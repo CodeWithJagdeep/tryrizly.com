@@ -22,49 +22,49 @@ type Plan = {
 
 const plans: Plan[] = [
   {
-    id: "free",
-    name: "Free",
+    id: "trial",
+    name: "Trial",
     monthlyPrice: "$0",
     annualPrice: "$0",
-    monthlyCadence: "7-day trial",
-    annualCadence: "7-day trial",
-    description: "Full features for a week, then choose a plan.",
-    seats: "1 seat",
-    features: ["Limited chat", "Basic memory", "Manual connector setup"],
+    monthlyCadence: "14 days",
+    annualCadence: "14 days",
+    description: "Experience Rizly's full capabilities risk-free to evaluate team fit.",
+    seats: "1 user",
+    features: ["All Pro features", "Full integrations access", "Email & calendar automation", "14-day access"],
   },
   {
-    id: "starter",
-    name: "Starter",
-    monthlyPrice: "$49",
-    annualPrice: "$39",
+    id: "professional",
+    name: "Professional",
+    monthlyPrice: "$59",
+    annualPrice: "$47",
     monthlyCadence: "/ month",
     annualCadence: "/ month",
-    description: "A founder-grade daily assistant with controlled background AI.",
-    seats: "1 seat",
-    features: ["Recurring subscription", "7-day trial", "Email triage", "Connector memory"],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    monthlyPrice: "$99",
-    annualPrice: "$79",
-    monthlyCadence: "/ month",
-    annualCadence: "/ month",
-    description: "For a heavier inbox, more meetings, and proactive workflows.",
-    seats: "1 seat",
-    features: ["Recurring subscription", "7-day trial", "Priority agent runs", "Digest automation"],
-    highlighted: true,
+    description: "Ideal for individual professionals managing complex workflows.",
+    seats: "1 user",
+    features: ["Email triage & drafting", "Calendar sync & reminders", "Context memory", "Standard support"],
   },
   {
     id: "business",
     name: "Business",
-    monthlyPrice: "$199",
-    annualPrice: "$159",
+    monthlyPrice: "$119",
+    annualPrice: "$95",
     monthlyCadence: "/ month",
     annualCadence: "/ month",
-    description: "Deeper support for background work.",
-    seats: "1 seat",
-    features: ["Recurring subscription", "7-day trial", "Priority support", "Higher usage limits"],
+    description: "For power users with high-volume operations and critical integrations.",
+    seats: "1 user",
+    features: ["Priority agent execution", "Advanced automation", "Business integrations", "Priority support"],
+    highlighted: true,
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    monthlyPrice: "$249",
+    annualPrice: "$199",
+    monthlyCadence: "/ month",
+    annualCadence: "/ month",
+    description: "Custom solutions for organizations with dedicated support requirements.",
+    seats: "Unlimited users",
+    features: ["Dedicated account manager", "Custom integrations", "SLA guarantee", "Advanced security"],
   },
 ];
 
@@ -81,62 +81,72 @@ type FeatureCategory = {
 
 const comparisonCategories: FeatureCategory[] = [
   {
-    categoryName: "Core Capabilities",
+    categoryName: "Core AI Capabilities",
     rows: [
       {
-        label: "AI agent seats",
-        description: "Active slots for operators running inside your workspace.",
-        values: ["1 seat", "1 seat", "1 seat", "1 seat"],
+        label: "Email management",
+        description: "Intelligent inbox triage with automatic draft generation and context preservation.",
+        values: ["Full", "Full", "Full", "Full"],
       },
       {
-        label: "Email triage & drafts",
-        description: "Reads incoming mail and prepares suggested drafts automatically.",
+        label: "Calendar intelligence",
+        description: "Meeting sync, preparation packets, and automated scheduling.",
+        values: ["Full", "Full", "Full", "Full"],
+      },
+      {
+        label: "Contextual memory",
+        description: "Cross-channel context retention and entity relationship mapping.",
         values: ["Limited", "Full", "Full", "Full"],
       },
       {
-        label: "Connector memory",
-        description: "Retains context across channels, matching contacts to signals.",
-        values: ["—", "Yes", "Yes", "Yes"],
-      },
-      {
-        label: "Priority agent runs",
-        description: "High-frequency task execution with fast agent processing queues.",
+        label: "Priority processing",
+        description: "Expedited agent task execution with optimized processing queues.",
         values: ["—", "—", "Yes", "Yes"],
       },
       {
-        label: "Digest automation",
-        description: "Scheduled custom brief containing high-priority insights.",
+        label: "Digest & insights",
+        description: "Scheduled executive briefings with decision summaries.",
         values: ["—", "—", "Yes", "Yes"],
       },
     ],
   },
   {
-    categoryName: "Integrations & Connectors",
+    categoryName: "Integrations & Data Access",
     rows: [
       {
-        label: "Standard connectors",
-        description: "Seamless connection to Gmail, Google Calendar, and Telegram.",
+        label: "Core connectors",
+        description: "Gmail, Google Calendar, Telegram, and messaging platforms.",
         values: ["Yes", "Yes", "Yes", "Yes"],
       },
       {
-        label: "Business connectors",
-        description: "Integration with Stripe, Razorpay, PostgreSQL, and MongoDB channels.",
+        label: "Business system connectors",
+        description: "Stripe, Razorpay, PostgreSQL, MongoDB, and enterprise integrations.",
         values: ["—", "—", "Yes", "Yes"],
+      },
+      {
+        label: "Custom data sources",
+        description: "Connect proprietary systems and internal databases.",
+        values: ["—", "—", "—", "Yes"],
       },
     ],
   },
   {
-    categoryName: "Support & SLA",
+    categoryName: "Support & Reliability",
     rows: [
       {
-        label: "Support channel",
-        description: "Access level to support agents for setup and troubleshooting.",
-        values: ["Community", "Email (24h)", "Priority email", "Dedicated Slack"],
+        label: "Support tier",
+        description: "Access level for setup, troubleshooting, and optimization.",
+        values: ["Email", "Email (24h)", "Priority email", "Dedicated manager"],
       },
       {
-        label: "Budget overage protection",
-        description: "Background activities pause at 100% usage to guarantee no extra fees.",
-        values: ["Yes", "Yes", "Yes", "Yes"],
+        label: "Guaranteed uptime",
+        description: "Service level agreement with overage cost protection.",
+        values: ["99%", "99%", "99.5%", "99.9%"],
+      },
+      {
+        label: "API rate limits",
+        description: "Monthly agent execution quota and concurrent operation limits.",
+        values: ["Limited", "Standard", "High", "Custom"],
       },
     ],
   },
@@ -208,10 +218,10 @@ export function PricingClient() {
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <Reveal>
             <h1 className="font-neue-haas mx-auto max-w-2xl text-4xl font-normal tracking-tight text-[#0f172a] sm:text-5xl md:text-6xl">
-              One price, no surprise overage.
+              Transparent pricing. No hidden costs.
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#475569] md:text-lg">
-              Pick a plan and know exactly what you'll pay every month.
+              Simple, predictable plans that scale with your needs. Start with a free trial, upgrade anytime.
             </p>
           </Reveal>
 
@@ -367,10 +377,10 @@ export function PricingClient() {
           <div className="text-center md:text-left">
             <Reveal>
               <h2 className="font-neue-haas text-3xl font-normal tracking-tight text-slate-900 md:text-4xl">
-                Compare plans side by side.
+                Feature comparison.
               </h2>
               <p className="mt-2 text-sm text-slate-500">
-                Detailed breakdowns of features for each tier.
+                Detailed breakdown of capabilities and support across all plans.
               </p>
             </Reveal>
           </div>

@@ -3,11 +3,9 @@ import { notFound } from "next/navigation";
 import { BlogPostClient } from "./BlogPostClient";
 import { findPost, posts } from "../data";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://heyriz.co";
+export const dynamic = 'force-dynamic';
 
-export function generateStaticParams() {
-  return posts.map((post) => ({ slug: post.slug }));
-}
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export async function generateMetadata({
   params,
@@ -32,7 +30,7 @@ export async function generateMetadata({
       type: "article",
       publishedTime: post.date,
       authors: [post.authorName],
-      siteName: "HeyRiz",
+      siteName: "Rizly",
       tags: [post.category],
     },
     twitter: {
@@ -69,9 +67,9 @@ export default async function BlogPostPage({
     },
     publisher: {
       "@type": "Organization",
-      name: "HeyRiz",
+      name: "Rizly",
       url: SITE_URL,
-      logo: { "@type": "ImageObject", url: `${SITE_URL}/heyriz.png` },
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/rizly.png` },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
     articleSection: post.category,

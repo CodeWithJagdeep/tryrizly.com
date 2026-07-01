@@ -26,6 +26,7 @@ const schema = z.object({
   BILLING_TCP_HOST: z.string().default("127.0.0.1"),
   BILLING_TCP_PORT: z.coerce.number().int().positive().default(4200),
   WEB_APP_URL: z.string().url().default("http://localhost:3000"),
+  EXTRA_ORIGINS: z.string().optional(),
   NEXT_PUBLIC_GATEWAY_URL: z.string().url().default("http://localhost:4000"),
   AUTH_PORT: z.coerce.number().int().positive().optional(),
   AUTH_TCP_HOST: z.string().optional(),

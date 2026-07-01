@@ -11,12 +11,21 @@ type PersonRow = {
   urls: string[];
 };
 
+type ConnectorRow = {
+  provider: string;
+};
+
 export async function GET() {
   const session = await requireSession();
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
 
   const params = new URLSearchParams({ userId: session.userId, limit: "60" });
-  const people = await callGateway<PersonRow[]>(`/api/people?${params.toString()}`).catch(() => []);
+  const [people, connectorsRaw] = await Promise.all([
+    callGateway<PersonRow[]>(`/api/people?${params.toString()}`).catch(() => []),
+    callGateway<ConnectorRow[]>(`/api/connectors?userId=${encodeURIComponent(session.userId)}`).catch(() => null),
+  ]);
 
-  return Response.json({ people: people ?? [] });
+  const gmailConnected = (connectorsRaw ?? []).some((c) => c.provider === "google");
+
+  return Response.json({ people: people ?? [], gmailConnected });
 }

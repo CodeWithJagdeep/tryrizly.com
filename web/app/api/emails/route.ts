@@ -26,6 +26,11 @@ type ScheduledResult = {
   tasks?: TaskRow[];
 };
 
+type ConnectorRow = {
+  provider: string;
+};
+
+
 export type ProcessedEmail = {
   id: string;
   summary: string;
@@ -80,10 +85,13 @@ export async function GET() {
 
   const params = new URLSearchParams({ userId: session.userId, limit: "60" });
 
-  const [memoriesRaw, scheduledResult] = await Promise.all([
+  const [memoriesRaw, scheduledResult, connectorsRaw] = await Promise.all([
     callGateway<MemoryRow[]>(`/api/emails/processed?${params.toString()}`).catch(() => null),
     callGateway<ScheduledResult>(`/api/scheduled?userId=${encodeURIComponent(session.userId)}`).catch(() => null),
+    callGateway<ConnectorRow[]>(`/api/connectors?userId=${encodeURIComponent(session.userId)}`).catch(() => null),
   ]);
+
+  const gmailConnected = (connectorsRaw ?? []).some((c) => c.provider === "google");
 
   const emails: ProcessedEmail[] = (memoriesRaw ?? []).map((m) => {
     const category = m.metadata.category ?? "general_medium";
@@ -103,5 +111,5 @@ export async function GET() {
     (t) => t.source === "gmail" || t.source === "email",
   );
 
-  return Response.json({ emails, emailTasks, categoryLabels: CATEGORY_LABELS });
+  return Response.json({ emails, emailTasks, categoryLabels: CATEGORY_LABELS, gmailConnected });
 }

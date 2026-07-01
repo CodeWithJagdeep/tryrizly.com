@@ -116,6 +116,7 @@ function avatarColor(id: string) {
 
 export function PeopleClient() {
   const [people, setPeople] = useState<Person[]>([]);
+  const [gmailConnected, setGmailConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -126,8 +127,9 @@ export function PeopleClient() {
       try {
         const res = await fetch("/api/people");
         if (!res.ok) throw new Error(`Error ${res.status}`);
-        const data = (await res.json()) as { people?: Person[] };
+        const data = (await res.json()) as { people?: Person[]; gmailConnected?: boolean };
         setPeople(data.people ?? []);
+        setGmailConnected(data.gmailConnected ?? false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -136,7 +138,7 @@ export function PeopleClient() {
     })();
   }, []);
 
-  const displayPeople = people.length > 0 ? people : SAMPLE_PEOPLE;
+  const displayPeople = !gmailConnected && people.length === 0 ? SAMPLE_PEOPLE : people;
 
   const tabbedPeople =
     activeTab === "all" ? displayPeople : displayPeople.filter((person) => person.type === activeTab);

@@ -1,25 +1,25 @@
 import type { Metadata } from "next";
 import { PricingClient } from "./PricingClient";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://heyriz.co";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Pricing",
+  title: "Pricing | Rizly",
   description:
-    "Simple, predictable pricing for HeyRiz. Start free, upgrade when you need more AI usage, calendar coverage, or integrations. No surprise overage charges.",
+    "Transparent AI automation pricing for professionals. Start your 14-day free trial. Simple plans with no hidden fees.",
   alternates: { canonical: `${SITE_URL}/pricing` },
   openGraph: {
-    title: "Pricing | HeyRiz",
+    title: "Pricing | Rizly",
     description:
-      "Simple, predictable pricing for HeyRiz. Start free, upgrade when you need more.",
+      "Transparent AI automation pricing. Start free, upgrade when you're ready.",
     url: `${SITE_URL}/pricing`,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pricing | HeyRiz",
+    title: "Pricing | Rizly",
     description:
-      "Simple, predictable pricing for HeyRiz. Start free, upgrade when you need more.",
+      "Transparent AI automation pricing for professionals and teams.",
   },
 };
 

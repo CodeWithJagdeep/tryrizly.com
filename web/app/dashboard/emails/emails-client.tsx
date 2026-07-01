@@ -37,6 +37,7 @@ type EmailsData = {
   emails?: ProcessedEmail[];
   emailTasks?: EmailTask[];
   categoryLabels?: Record<string, string>;
+  gmailConnected?: boolean;
 };
 
 type Tab = "all" | "followups" | "sent" | "business" | "updates";
@@ -232,8 +233,9 @@ export function EmailsClient() {
 
   const realEmails = data.emails ?? [];
   const realEmailTasks = data.emailTasks ?? [];
-  const emails = realEmails.length > 0 ? realEmails : SAMPLE_EMAILS;
-  const emailTasks = realEmailTasks.length > 0 ? realEmailTasks : SAMPLE_TASKS;
+  const gmailConnected = data.gmailConnected ?? false;
+  const emails = !gmailConnected && realEmails.length === 0 ? SAMPLE_EMAILS : realEmails;
+  const emailTasks = !gmailConnected && realEmailTasks.length === 0 ? SAMPLE_TASKS : realEmailTasks;
   const sentEmails = SAMPLE_SENT;
   const labels = data.categoryLabels ?? {};
 

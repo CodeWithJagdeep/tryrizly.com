@@ -97,8 +97,7 @@ export function ScheduledClient() {
     void load();
   }, []);
 
-  const realRows = useMemo(() => buildRows(reminders, tasks), [reminders, tasks]);
-  const rows = useMemo(() => (realRows.length > 0 ? realRows : buildSampleRows()), [realRows]);
+  const rows = useMemo(() => buildRows(reminders, tasks), [reminders, tasks]);
   const counts = useMemo(() => buildCounts(rows), [rows]);
 
   const displayedRows = useMemo(() => {
@@ -348,68 +347,6 @@ function buildRows(reminders: ScheduledReminder[], tasks: PrincipalTask[]): Sche
   return [...reminderRows, ...taskRows].sort((a, b) => sortDate(a).getTime() - sortDate(b).getTime());
 }
 
-function buildSampleRows(): ScheduleRow[] {
-  const today = startOfToday();
-  const tomorrow = addDays(today, 1);
-  const friday = addDays(today, 4);
-  const nextWeek = addDays(today, 8);
-
-  return [
-    {
-      id: "sample-reminder-1", rawId: "sample-reminder-1",
-      type: "Reminder",
-      title: "Review investor update draft",
-      detail: "Will remind today at 5:30 PM",
-      priority: "High",
-      dueAt: setTime(today, 17, 30),
-      createdAt: setTime(today, 9, 10),
-      source: "Sample reminder",
-      status: "Scheduled",
-      state: "active",
-      sample: true,
-    },
-    {
-      id: "sample-followup-1", rawId: "sample-followup-1",
-      type: "Follow-up",
-      title: "Follow up with Arjun about the pricing proposal",
-      detail: "Open follow-up Riz is tracking for you",
-      priority: "Medium",
-      dueAt: setTime(tomorrow, 11, 0),
-      createdAt: setTime(addDays(today, -1), 16, 20),
-      source: "Sample email",
-      status: "Open",
-      state: "active",
-      sample: true,
-    },
-    {
-      id: "sample-reminder-2", rawId: "sample-reminder-2",
-      type: "Reminder",
-      title: "Send payment receipt to finance",
-      detail: `Sent ${formatDateTime(setTime(addDays(today, -1), 10, 0))}`,
-      priority: "High",
-      dueAt: setTime(addDays(today, -1), 10, 0),
-      createdAt: setTime(addDays(today, -2), 14, 5),
-      source: "Sample reminder",
-      status: "Sent",
-      state: "fired",
-      sample: true,
-    },
-    {
-      id: "sample-followup-2", rawId: "sample-followup-2",
-      type: "Follow-up",
-      title: "Check whether the onboarding call was booked",
-      detail: "Marked done",
-      priority: "Low",
-      dueAt: setTime(nextWeek, 12, 0),
-      createdAt: setTime(addDays(today, -3), 12, 45),
-      source: "Sample calendar",
-      status: "Done",
-      state: "done",
-      sample: true,
-    },
-  ];
-}
-
 function isHistoric(row: ScheduleRow) {
   return row.state === "done" || row.state === "fired" || row.state === "failed";
 }
@@ -488,17 +425,6 @@ function startOfToday() {
   return today;
 }
 
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function setTime(date: Date, hours: number, minutes: number) {
-  const next = new Date(date);
-  next.setHours(hours, minutes, 0, 0);
-  return next.toISOString();
-}
 
 function formatDateTime(iso?: string) {
   if (!iso) return "Not set";

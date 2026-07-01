@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+      },
+    ],
+  },
   env: {
     NEXT_PUBLIC_GATEWAY_URL: "https://api.getrizly.com",
     NEXT_PUBLIC_SITE_URL: "https://getrizly.com",

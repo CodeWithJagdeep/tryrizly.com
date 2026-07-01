@@ -7,6 +7,12 @@ import { logger } from "@heyriz/shared/logger";
 function allowedOrigins(): Set<string> {
   const origins = new Set<string>();
   origins.add(env.WEB_APP_URL);
+  if (env.EXTRA_ORIGINS) {
+    for (const o of env.EXTRA_ORIGINS.split(",")) {
+      const trimmed = o.trim();
+      if (trimmed) origins.add(trimmed);
+    }
+  }
   if (env.NODE_ENV !== "production") {
     origins.add("http://localhost:3000");
     origins.add("http://127.0.0.1:3000");

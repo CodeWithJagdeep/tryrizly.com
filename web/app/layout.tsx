@@ -3,6 +3,8 @@ import { Outfit, Instrument_Serif, Geist_Mono, Rethink_Sans, Inter_Tight, Geist,
 import "./globals.css";
 import { AppShell } from "./components/AppShell";
 
+export const dynamic = 'force-dynamic';
+
 const outfit = Outfit({
   variable: "--font-outfit",
   subsets: ["latin"],

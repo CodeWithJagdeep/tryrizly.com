@@ -1,7 +1,10 @@
 import { callGateway } from "../../_lib/gateway";
 import { jsonError, normalizeEmail, setAuthCookie, signAuthToken } from "../../_lib/auth-store";
 
-type VerifyResult = { identity?: { email: string; name?: string }; error?: string };
+type VerifyResult = {
+  identity?: { email: string; name?: string; needsOnboarding?: boolean; tokenVersion?: number };
+  error?: string;
+};
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { email?: string; otp?: string };
@@ -25,6 +28,6 @@ export async function POST(request: Request) {
   return Response.json({
     email: result.identity.email,
     user: { name: result.identity.name },
-    isNew: false,
+    isNew: Boolean(result.identity.needsOnboarding),
   });
 }

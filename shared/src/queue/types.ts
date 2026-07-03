@@ -7,6 +7,12 @@ export type NotificationJobData = {
   taskId?: string;
   meetingId?: string;
   metadata?: Record<string, string | number | boolean | null>;
+  /**
+   * When the user has no linked Telegram chat, the notification worker falls
+   * back to email. Set false when the producer already emailed the user
+   * separately, so they don't hear the same thing twice.
+   */
+  emailFallback?: boolean;
 };
 
 export type ReminderRequest = {

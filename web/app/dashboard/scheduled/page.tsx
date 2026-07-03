@@ -1,7 +1,7 @@
 import { ScheduledClient } from "./scheduled-client";
 
 export const metadata = {
-  title: "Scheduled | HeyRiz",
+  title: "Scheduled | rizly",
 };
 
 export default function ScheduledPage() {

@@ -61,16 +61,16 @@ const neueHaas = Inter({
   display: "swap",
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://heyriz.co";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "HeyRiz - Proactive AI Operator for Founders",
-    template: "%s | HeyRiz",
+    default: "rizly - Proactive AI Operator for Founders",
+    template: "%s | rizly",
   },
   description:
-    "HeyRiz is a proactive AI operator that lives in Telegram, monitors your inbox, calendar, and business tools, and triggers actions with your consent. Built for founders who need less noise and more clarity.",
+    "rizly is a proactive AI operator that lives in Telegram, monitors your inbox, calendar, and business tools, and triggers actions with your consent. Built for founders who need less noise and more clarity.",
   keywords: [
     "AI assistant for founders",
     "proactive AI operator",
@@ -82,40 +82,40 @@ export const metadata: Metadata = {
     "calendar AI",
   ],
   authors: [{ name: "Jagdeep Singh", url: SITE_URL }],
-  creator: "HeyRiz",
-  publisher: "HeyRiz",
+  creator: "rizly",
+  publisher: "rizly",
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
     googleBot: {
-      index: false,
-      follow: false,
+      index: true,
+      follow: true,
     },
   },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: SITE_URL,
-    siteName: "HeyRiz",
-    title: "HeyRiz - Proactive AI Operator for Founders",
+    siteName: "rizly",
+    title: "rizly - Proactive AI Operator for Founders",
     description:
-      "HeyRiz monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
+      "rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "HeyRiz - Proactive AI Operator for Founders",
+        alt: "rizly - Proactive AI Operator for Founders",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "HeyRiz - Proactive AI Operator for Founders",
+    title: "rizly - Proactive AI Operator for Founders",
     description:
-      "HeyRiz monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
+      "rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
     images: ["/opengraph-image"],
-    creator: "@heyriz",
+    creator: "@rizly",
   },
   alternates: {
     canonical: SITE_URL,

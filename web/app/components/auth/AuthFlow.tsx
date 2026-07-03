@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -141,8 +142,8 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
     }
   };
 
-  const handleVerified = (data: { next?: string }) => {
-    router.push(sanitizeReturnPath(data.next));
+  const handleVerified = (data: AuthResponse) => {
+    router.push(getPostAuthDestination(data));
   };
 
   const handleVerifyOtp = async (event: FormEvent<HTMLFormElement>) => {
@@ -180,11 +181,11 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
       className="relative flex min-h-screen overflow-hidden bg-white px-4 py-8 text-slate-950 antialiased sm:px-6 lg:px-10"
       style={{
         fontFamily:
-          'var(--font-rethink-sans), var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          'var(--font-rethink-sans), var(--font-inter-tight), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,rgba(55,132,255,0.10),rgba(255,255,255,0))]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,rgba(254,127,45,0.10),rgba(255,255,255,0))]"
         aria-hidden="true"
       />
       <div
@@ -194,10 +195,10 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
 
       <Link
         href="/"
-        className="absolute left-5 top-5 z-10 flex h-9 items-center sm:left-8 sm:top-7"
-        aria-label="HeyRiz home"
+        className="fixed left-5 top-5 z-20 flex h-9 items-center sm:left-8 sm:top-7"
+        aria-label="rizly home"
       >
-        <img src="/heyriz.png" alt="HeyRiz" className="h-8 w-auto object-contain" />
+        <Image src="/rizly_white.png" alt="rizly" width={112} height={26} className="h-8 w-auto object-contain" priority />
       </Link>
 
       <button
@@ -208,27 +209,12 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
         ?
       </button>
 
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[980px] items-center pt-16">
-        <div className="grid w-full overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.35)] backdrop-blur lg:grid-cols-[0.92fr_1.08fr]">
-          <aside className="hidden border-r border-slate-200 bg-slate-50 p-8 lg:block">
-            <div className="flex h-full flex-col justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Riz Control Center</p>
-                <h1 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.01em] text-slate-950">
-                  Your business context, ready before the day starts.
-                </h1>
-                <p className="mt-4 text-sm leading-6 text-slate-500">
-                  Connect the tools you already use. Riz watches for email, calendar, and business signals, then asks before important actions.
-                </p>
-              </div>
-
-            </div>
-          </aside>
-
-          <section className="p-5 sm:p-8 lg:p-10">
-            <div className="mb-8">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[460px] items-center justify-center pt-16">
+        <div className="w-full">
+          <section className="p-6 sm:p-8">
+            <div className="mb-8 text-center">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                {mode === "login" ? "Welcome back" : "Start with HeyRiz"}
+                {mode === "login" ? "Welcome back" : "Start with rizly"}
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-3xl">
                 {mode === "login" ? "Sign in to your workspace" : "Create your workspace"}
@@ -282,7 +268,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                 maxLength={6}
                 required
                 autoFocus
-                className="mt-2 h-14 w-full rounded-lg border border-slate-200 bg-white px-5 text-center text-base font-medium tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                className="mt-2 h-14 w-full rounded-lg border border-slate-200 bg-white px-5 text-center text-base font-medium tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
               />
 
               <button
@@ -319,7 +305,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                     type="text"
                     autoComplete="name"
                     required
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
                   />
                 </div>
               )}
@@ -335,7 +321,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                   type="email"
                   autoComplete="username"
                   required
-                  className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                  className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
                 />
               </div>
 
@@ -351,7 +337,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                     minLength={8}
                     required
                     autoFocus
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#3784ff] focus:shadow-[0_0_0_3px_rgba(55,132,255,0.12)]"
+                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
                   />
                 </div>
               )}
@@ -416,7 +402,7 @@ function sanitizeReturnPath(value: string | null | undefined) {
     return "";
   }
   try {
-    const parsed = new URL(value, "https://heyriz.local");
+    const parsed = new URL(value, "https://rizly.local");
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return "";

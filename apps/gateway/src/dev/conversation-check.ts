@@ -11,9 +11,11 @@ import { env } from "@heyriz/shared/env";
 (env as { TELEGRAM_BOT_TOKEN?: string; TELEGRAM_CHAT_ID?: string }).TELEGRAM_CHAT_ID =
   undefined;
 
+// isOwner() fails closed and requires a real telegram link, so the mock resolves
+// a userId for the test chat (it represents a linked owner).
 const fakeAuthRepo = {
-  countTelegramLinks: async () => 0,
-  findUserIdByTelegramChat: async () => null,
+  countTelegramLinks: async () => 1,
+  findUserIdByTelegramChat: async () => "owner@example.com",
 } as unknown as AuthRepository;
 
 type Call = { pattern: string; payload: Record<string, unknown> };

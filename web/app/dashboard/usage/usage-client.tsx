@@ -61,46 +61,46 @@ export function UsageClient() {
   const unlimited = usage ? !Number.isFinite(usage.budgetUsd) : false;
   const pct = usage ? Math.min(100, Math.round(usage.ratio * 100)) : 0;
   const barColor =
-    usage?.state === "exceeded" ? "bg-[#dc2626]" : usage?.state === "warn" ? "bg-[#d97706]" : "bg-[#16a34a]";
+    usage?.state === "exceeded" ? "bg-red-600" : usage?.state === "warn" ? "bg-amber-600" : "bg-emerald-600";
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
+    <main className="min-h-screen bg-white text-slate-900">
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 py-8 sm:px-8">
-        <header className="flex flex-col gap-3 border-b border-[#2e2e2c] pb-6">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6b63]">heyriz</p>
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-6">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">rizly</p>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[#f2f1ec] sm:text-3xl">Usage</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a8a399]">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Usage</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
               Your AI spend for this billing cycle, against your plan&apos;s budget.
             </p>
           </div>
         </header>
 
         {loadError ? (
-          <p className="rounded-lg border border-[#5c2626] bg-[#241616] px-4 py-3 text-sm text-[#f87171]">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-500">
             {loadError}
           </p>
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-[#a8a399]">Loading…</p>
+          <p className="text-sm text-slate-400">Loading…</p>
         ) : usage ? (
           <>
-            <div className="overflow-hidden rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] p-5">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-5">
               <div className="flex items-baseline justify-between gap-4">
-                <p className="text-sm font-medium text-[#a8a399]">This cycle (since {formatDate(usage.cycleStart)})</p>
-                <p className="text-sm font-medium text-[#6b6b63]">
+                <p className="text-sm font-medium text-slate-400">This cycle (since {formatDate(usage.cycleStart)})</p>
+                <p className="text-sm font-medium text-slate-500">
                   {unlimited ? "No budget cap" : `$${usage.budgetUsd.toFixed(2)} budget`}
                 </p>
               </div>
-              <p className="mt-2 text-2xl font-semibold text-[#f2f1ec]">${usage.spendUsd.toFixed(2)}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">${usage.spendUsd.toFixed(2)}</p>
 
               {!unlimited ? (
                 <>
-                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#2e2e2c]">
+                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                     <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
                   </div>
-                  <p className="mt-2 text-xs text-[#a8a399]">
+                  <p className="mt-2 text-xs text-slate-400">
                     {usage.state === "exceeded"
                       ? "Budget used up — background features (decisions, memory, morning brief) are paused, and chat has switched to a lighter model until next cycle."
                       : usage.state === "warn"
@@ -116,16 +116,16 @@ export function UsageClient() {
                 <EmptyRow text="No AI usage recorded yet this cycle." />
               ) : (
                 usage.breakdown.map((row) => (
-                  <article key={row.task} className="flex items-center justify-between px-5 py-4 transition hover:bg-[#232321]/60">
+                  <article key={row.task} className="flex items-center justify-between px-5 py-4 transition hover:bg-white/60">
                     <div>
-                      <p className="text-sm leading-6 text-[#f2f1ec]">
+                      <p className="text-sm leading-6 text-slate-900">
                         {TASK_LABELS[row.task] ?? row.task}
                       </p>
-                      <p className="mt-1 text-xs text-[#a8a399]">
+                      <p className="mt-1 text-xs text-slate-400">
                         {row.calls} call{row.calls === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <p className="text-sm font-medium text-[#f2f1ec]">${row.costUsd.toFixed(2)}</p>
+                    <p className="text-sm font-medium text-slate-900">${row.costUsd.toFixed(2)}</p>
                   </article>
                 ))
               )}
@@ -140,16 +140,16 @@ export function UsageClient() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[#6b6b63]">{title}</p>
-      <div className="overflow-hidden rounded-xl border border-[#2e2e2c] bg-[#1f1f1e]">
-        <div className="divide-y divide-[#2e2e2c]">{children}</div>
+      <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">{title}</p>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="divide-y divide-slate-200">{children}</div>
       </div>
     </div>
   );
 }
 
 function EmptyRow({ text }: { text: string }) {
-  return <p className="px-5 py-8 text-center text-sm text-[#a8a399]">{text}</p>;
+  return <p className="px-5 py-8 text-center text-sm text-slate-400">{text}</p>;
 }
 
 function formatDate(iso: string): string {

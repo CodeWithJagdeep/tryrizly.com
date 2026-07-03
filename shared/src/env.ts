@@ -130,4 +130,20 @@ const schema = z.object({
   RESEND_FROM: z.string().optional(),
 });
 
-export const env = schema.parse(process.env);
+const parsed = schema.parse(process.env);
+
+// Fail fast at boot rather than silently running open: in production the
+// gateway's entire tenant isolation rests on these secrets, so a missing one
+// must stop the process, not degrade to an unauthenticated/unsigned mode.
+if (parsed.NODE_ENV === "production") {
+  const missing = (["AUTH_INTERNAL_SECRET", "AUTH_JWT_SECRET"] as const).filter(
+    (key) => !parsed[key],
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Refusing to start in production without required secrets: ${missing.join(", ")}`,
+    );
+  }
+}
+
+export const env = parsed;

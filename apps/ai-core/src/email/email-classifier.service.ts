@@ -3,7 +3,15 @@ import { LlmRouterService } from "../llm/llm-router.service";
 import { extractJson } from "../llm/llm-router.service";
 import { describeNow, localDateTimeToUtc, parseNaiveDateTime } from "../lib/timezone";
 import { logger } from "@heyriz/shared/logger";
-import type { EmailCategory, ExtractedEmailFacts } from "./email.types";
+import type {
+  EmailCategory,
+  EmailReplyIntent,
+  EmailRiskLevel,
+  EmailSenderType,
+  EmailSuggestedAction,
+  EmailUrgency,
+  ExtractedEmailFacts,
+} from "./email.types";
 
 const OTP_PATTERNS = [
   /\botp\b/i,
@@ -34,10 +42,23 @@ export class EmailClassifierService {
     userId?: string;
   }): Promise<ExtractedEmailFacts> {
     if (this.isOtp(input.subject, input.body.slice(0, 300))) {
-      return { category: "otp", summary: "OTP / verification code — ignored.", confidence: "high" };
+      return {
+        category: "otp",
+        summary: "OTP / verification code - ignored.",
+        requiresReply: false,
+        urgency: "low",
+        senderType: "automated",
+        suggestedAction: "ignore",
+        reason: "Matches one-time code or verification pattern.",
+        riskLevel: "low",
+        isAutomated: true,
+        isMarketing: false,
+        replyIntent: "ignore",
+        confidence: "high",
+      };
     }
 
-    if (!this.llm.hasProvider()) {
+    if (!this.llm.hasProvider("extract")) {
       return this.rulesClassify(input);
     }
 
@@ -75,12 +96,22 @@ export class EmailClassifierService {
               "  meetingEndTime - proposed meeting end time, only if the email states a duration or end time",
               "  meetingTitle - meeting/interview title",
               "  action       - what the founder needs to do (short phrase)",
+              "  requiresReply - true when a human reply is expected or useful",
+              "  urgency      - urgent|soon|normal|low",
+              "  senderType   - human|automated|customer|investor|vendor|internal|unknown",
+              "  suggestedAction - ignore|notify|remind|schedule|draft_reply|watch_thread|review_manually",
+              "  reason       - <=16 words explaining why this category/action was chosen",
+              "  riskLevel    - high|medium|low, based on consequence if missed",
+              "  isAutomated  - true for no-reply/system/transactional messages",
+              "  isMarketing  - true for marketing/newsletter/cold outreach",
+              "  replyIntent  - ask|approve|decline|schedule|pay|review|ignore|delegate|unknown",
+              "  entities     - short list of people/companies/products mentioned",
               "",
               `Current date/time for the founder: ${describeNow(now, timezone)}.`,
               `Resolve any date or time in the email against this reference — weekday names ("Thursday"), relative terms ("tomorrow", "next week"), and dates without a year all mean the soonest matching date on or after today unless the email clearly states otherwise. A bare time like "2:00 PM" with no timezone stated means the founder's own local time, not UTC and not the sender's possible timezone.`,
               `Output dueDate/meetingTime/meetingEndTime as a LOCAL datetime with NO timezone suffix and NO offset — just "YYYY-MM-DDTHH:mm:ss", e.g. "2026-06-25T14:00:00". Do not attempt to convert to UTC or append any offset yourself — that conversion happens elsewhere. Omit a field entirely if the email does not actually specify it; never guess or default to a placeholder time.`,
               "",
-              'Reply ONLY with compact JSON: {"category":"...","person":"...","serviceName":"...","amount":"...","dueDate":"...","meetingTime":"...","meetingEndTime":"...","meetingTitle":"...","action":"...","summary":"<=20 words","confidence":"high|medium|low"}',
+              'Reply ONLY with compact JSON: {"category":"...","person":"...","entities":["..."],"serviceName":"...","amount":"...","dueDate":"...","meetingTime":"...","meetingEndTime":"...","meetingTitle":"...","action":"...","requiresReply":true,"urgency":"urgent|soon|normal|low","senderType":"human|automated|customer|investor|vendor|internal|unknown","suggestedAction":"ignore|notify|remind|schedule|draft_reply|watch_thread|review_manually","reason":"<=16 words","riskLevel":"high|medium|low","isAutomated":true,"isMarketing":false,"replyIntent":"ask|approve|decline|schedule|pay|review|ignore|delegate|unknown","summary":"<=20 words","confidence":"high|medium|low"}',
             ].join("\n"),
           },
           {
@@ -97,6 +128,7 @@ export class EmailClassifierService {
       return {
         category,
         person: parsed?.person?.trim() || undefined,
+        entities: normalizeEntities(parsed?.entities),
         serviceName: parsed?.serviceName?.trim() || undefined,
         amount: parsed?.amount?.trim() || undefined,
         dueDate: this.toUtcIso(parsed?.dueDate, timezone),
@@ -104,6 +136,15 @@ export class EmailClassifierService {
         meetingEndTime: this.toUtcIso(parsed?.meetingEndTime, timezone),
         meetingTitle: parsed?.meetingTitle?.trim() || undefined,
         action: parsed?.action?.trim() || undefined,
+        requiresReply: normalizeBoolean(parsed?.requiresReply),
+        urgency: normalizeUrgency(parsed?.urgency),
+        senderType: normalizeSenderType(parsed?.senderType),
+        suggestedAction: normalizeSuggestedAction(parsed?.suggestedAction),
+        reason: parsed?.reason?.trim() || undefined,
+        riskLevel: normalizeRiskLevel(parsed?.riskLevel),
+        isAutomated: normalizeBoolean(parsed?.isAutomated),
+        isMarketing: normalizeBoolean(parsed?.isMarketing),
+        replyIntent: normalizeReplyIntent(parsed?.replyIntent),
         summary: parsed?.summary?.trim() || `Email from ${input.from}`,
         confidence: normalizeConfidence(parsed?.confidence),
       };
@@ -164,6 +205,16 @@ export class EmailClassifierService {
         category: "account_alert",
         person: shortFrom(input.from),
         summary: `Account/service alert from ${shortFrom(input.from)}`,
+        entities: [shortFrom(input.from)],
+        requiresReply: false,
+        urgency: "urgent",
+        senderType: "automated",
+        suggestedAction: "review_manually",
+        reason: "Automated service or security warning with possible account impact.",
+        riskLevel: "high",
+        isAutomated: true,
+        isMarketing: false,
+        replyIntent: "review",
         confidence: "medium",
       };
     }
@@ -175,6 +226,16 @@ export class EmailClassifierService {
         category: "payment_due",
         person: shortFrom(input.from),
         summary: `Payment or invoice from ${shortFrom(input.from)}`,
+        entities: [shortFrom(input.from)],
+        requiresReply: false,
+        urgency: "soon",
+        senderType: "automated",
+        suggestedAction: "remind",
+        reason: "Mentions billing, invoice, renewal, receipt, or amount due.",
+        riskLevel: "medium",
+        isAutomated: true,
+        isMarketing: false,
+        replyIntent: "pay",
         confidence: "medium",
       };
     }
@@ -186,6 +247,16 @@ export class EmailClassifierService {
         category: "meeting_request",
         person: shortFrom(input.from),
         summary: `Meeting request from ${shortFrom(input.from)}`,
+        entities: [shortFrom(input.from)],
+        requiresReply: true,
+        urgency: "soon",
+        senderType: "human",
+        suggestedAction: "schedule",
+        reason: "Mentions a meeting, interview, call, schedule, or availability.",
+        riskLevel: "medium",
+        isAutomated: false,
+        isMarketing: false,
+        replyIntent: "schedule",
         confidence: "medium",
       };
     }
@@ -197,6 +268,16 @@ export class EmailClassifierService {
         category: "investor_update",
         person: shortFrom(input.from),
         summary: `Investor update from ${shortFrom(input.from)}`,
+        entities: [shortFrom(input.from)],
+        requiresReply: true,
+        urgency: "soon",
+        senderType: "investor",
+        suggestedAction: "draft_reply",
+        reason: "Mentions investor, term sheet, cap table, diligence, or portfolio update.",
+        riskLevel: "high",
+        isAutomated: false,
+        isMarketing: false,
+        replyIntent: "review",
         confidence: "medium",
       };
     }
@@ -207,6 +288,15 @@ export class EmailClassifierService {
       return {
         category: "newsletter",
         summary: "Newsletter or marketing email",
+        requiresReply: false,
+        urgency: "low",
+        senderType: "automated",
+        suggestedAction: "ignore",
+        reason: "Contains newsletter, digest, announcement, marketing, or unsubscribe signal.",
+        riskLevel: "low",
+        isAutomated: true,
+        isMarketing: true,
+        replyIntent: "ignore",
         confidence: "high",
       };
     }
@@ -215,6 +305,16 @@ export class EmailClassifierService {
       category: "general_medium",
       person: shortFrom(input.from),
       summary: `Email from ${shortFrom(input.from)}: ${input.subject.slice(0, 60)}`,
+      entities: [shortFrom(input.from)],
+      requiresReply: false,
+      urgency: "normal",
+      senderType: "unknown",
+      suggestedAction: "notify",
+      reason: "No strong category-specific signal matched.",
+      riskLevel: "medium",
+      isAutomated: isLikelyAutomated(input.from),
+      isMarketing: false,
+      replyIntent: "unknown",
       confidence: "low",
     };
   }
@@ -239,6 +339,80 @@ function normalizeCategory(raw?: string): EmailCategory {
 function normalizeConfidence(raw?: string): "high" | "medium" | "low" {
   if (raw === "high" || raw === "low") return raw;
   return "medium";
+}
+
+function normalizeUrgency(raw?: string): EmailUrgency | undefined {
+  const valid: EmailUrgency[] = ["urgent", "soon", "normal", "low"];
+  return valid.includes(raw as EmailUrgency) ? (raw as EmailUrgency) : undefined;
+}
+
+function normalizeSenderType(raw?: string): EmailSenderType | undefined {
+  const valid: EmailSenderType[] = [
+    "human",
+    "automated",
+    "customer",
+    "investor",
+    "vendor",
+    "internal",
+    "unknown",
+  ];
+  return valid.includes(raw as EmailSenderType) ? (raw as EmailSenderType) : undefined;
+}
+
+function normalizeSuggestedAction(raw?: string): EmailSuggestedAction | undefined {
+  const valid: EmailSuggestedAction[] = [
+    "ignore",
+    "notify",
+    "remind",
+    "schedule",
+    "draft_reply",
+    "watch_thread",
+    "review_manually",
+  ];
+  return valid.includes(raw as EmailSuggestedAction) ? (raw as EmailSuggestedAction) : undefined;
+}
+
+function normalizeRiskLevel(raw?: string): EmailRiskLevel | undefined {
+  const valid: EmailRiskLevel[] = ["high", "medium", "low"];
+  return valid.includes(raw as EmailRiskLevel) ? (raw as EmailRiskLevel) : undefined;
+}
+
+function normalizeReplyIntent(raw?: string): EmailReplyIntent | undefined {
+  const valid: EmailReplyIntent[] = [
+    "ask",
+    "approve",
+    "decline",
+    "schedule",
+    "pay",
+    "review",
+    "ignore",
+    "delegate",
+    "unknown",
+  ];
+  return valid.includes(raw as EmailReplyIntent) ? (raw as EmailReplyIntent) : undefined;
+}
+
+function normalizeBoolean(raw: unknown): boolean | undefined {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw !== "string") return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return undefined;
+}
+
+function normalizeEntities(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const entities = raw
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return entities.length ? [...new Set(entities)] : undefined;
+}
+
+function isLikelyAutomated(from: string): boolean {
+  return /\b(no-?reply|noreply|notification|notifications|support|billing|alerts?)\b/i.test(from);
 }
 
 function shortFrom(from: string): string {

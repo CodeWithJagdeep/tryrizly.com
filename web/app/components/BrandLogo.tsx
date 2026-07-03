@@ -4,14 +4,14 @@ interface Props {
   className?: string;
 }
 
-// /public/heyriz-transparent.png is the real lockup (icon + "Heyriz" wordmark)
+// /public/rizly-transparent.png is the real lockup (icon + "rizly" wordmark)
 // with the white background removed, 1300x422 — keep that intrinsic ratio so
 // callers only need to set a width via className.
 export function BrandLogo({ className }: Props) {
   return (
     <Image
-      src="/heyriz-transparent.png"
-      alt="Heyriz"
+      src="/rizly-transparent.png"
+      alt="rizly"
       width={1300}
       height={422}
       priority

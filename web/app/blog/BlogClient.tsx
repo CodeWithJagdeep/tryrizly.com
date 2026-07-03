@@ -58,7 +58,7 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
         <Reveal>
           <div className="text-center md:text-left">
             <span className="text-xs font-bold uppercase tracking-widest text-blue-500">
-              The HeyRiz Journal
+              The rizly Journal
             </span>
             <h1 className="font-neue-haas mt-3 text-4xl leading-[1.05] font-normal tracking-tight text-slate-900 sm:text-5xl md:text-6xl">
               Notes on building a proactive AI operator.

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireSession } from "../api/onboarding/_lib/require-user";
 import { ChatSidebar } from "./components/ChatSidebar";
+import { TelegramBanner } from "./components/TelegramBanner";
 import { TrialBar } from "./components/TrialBar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -9,13 +10,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session) redirect("/login");
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#1a1a19] text-[#f2f1ec]">
+    <div className="flex min-h-screen flex-col bg-white text-slate-900">
       <TrialBar />
       <div className="relative flex flex-1">
         <Suspense fallback={null}>
           <ChatSidebar name={session.name} email={session.email} />
         </Suspense>
         <div className="flex-1 lg:pl-64">
+          <TelegramBanner />
           {children}
         </div>
       </div>

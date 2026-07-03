@@ -6,7 +6,10 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
 
   const { avatarUrl } = (await request.json()) as { avatarUrl?: string };
-  if (!avatarUrl || !avatarUrl.startsWith("data:image/")) {
+  // Raster types only. `data:image/svg+xml` would pass a naive "data:image/"
+  // check yet can carry executable script — a stored-XSS vector if the avatar is
+  // ever rendered as anything other than an <img src>.
+  if (!avatarUrl || !/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(avatarUrl)) {
     return Response.json({ message: "Invalid image" }, { status: 400 });
   }
   if (avatarUrl.length > 300_000) {

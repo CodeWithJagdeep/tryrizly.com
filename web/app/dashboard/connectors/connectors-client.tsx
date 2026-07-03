@@ -170,6 +170,8 @@ export function ConnectorsClient() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("All");
+  const [connectorQuery, setConnectorQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [setupConnector, setSetupConnector] = useState<ConnectorCatalogItem | null>(null);
   const [setupEditAccount, setSetupEditAccount] = useState<ConnectorSummary | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -201,13 +203,18 @@ export function ConnectorsClient() {
 
   const connectedCount = connectors.length;
 
-  const filteredConnectors = useMemo(
-    () =>
-      activeCategory === "All"
-        ? connectorCatalog
-        : connectorCatalog.filter((connector) => connector.category === activeCategory),
-    [activeCategory],
-  );
+  const filteredConnectors = useMemo(() => {
+    const query = connectorQuery.trim().toLowerCase();
+    return connectorCatalog.filter((connector) => {
+      const categoryOk = activeCategory === "All" || connector.category === activeCategory;
+      const queryOk =
+        !query ||
+        connector.title.toLowerCase().includes(query) ||
+        connector.description.toLowerCase().includes(query) ||
+        connector.provider.toLowerCase().includes(query);
+      return categoryOk && queryOk;
+    });
+  }, [activeCategory, connectorQuery]);
 
   async function loadConnectors() {
     try {
@@ -315,63 +322,119 @@ export function ConnectorsClient() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-7 px-5 py-8 sm:px-8">
-        <header className="flex flex-col gap-4 border-b border-[#2e2e2c] pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6b63]">
-              heyriz setup
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#f2f1ec] sm:text-3xl">
-              Connectors
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a8a399]">
-              Connect OAuth apps or add provider keys for encrypted vault access.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-[#2e2e2c] bg-[#1f1f1e] px-3.5 py-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-            <span className="text-xs font-medium text-[#a8a399]">
+    <main className="min-h-screen bg-white text-slate-950">
+      <section className="mx-auto flex w-full max-w-[1200px] flex-col px-4 py-8 sm:px-8">
+        <header className="shrink-0">
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+                Integrations
+              </p>
+              <h1 className="mt-2 text-[26px] font-semibold leading-[1.1] tracking-normal text-slate-950">
+                Connect your tools
+              </h1>
+            </div>
+            <span className="shrink-0 border border-slate-200 px-2.5 py-1 text-[11px] font-bold uppercase tracking-tight text-black tabular-nums">
               {connectedCount} connected
             </span>
           </div>
+          <p className="mt-2 max-w-2xl text-[14px] leading-6 text-slate-500">
+            The more rizly can see, the more it can handle. Add OAuth apps or encrypted provider keys.
+          </p>
         </header>
 
         {loadError ? (
-          <p className="rounded-lg border border-[#5c2626] bg-[#241616] px-4 py-3 text-sm text-[#f87171]">
+          <p className="mt-5 border border-slate-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {loadError}
           </p>
         ) : null}
         {actionError ? (
-          <p className="rounded-lg border border-[#5c2626] bg-[#241616] px-4 py-3 text-sm text-[#f87171]">
+          <p className="mt-5 border border-slate-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {actionError}
           </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          {categories.map((category) => (
-            <button
-              className={`h-9 rounded-lg px-3.5 text-sm font-medium transition ${
-                activeCategory === category
-                  ? "bg-[#f2f1ec] text-[#1a1a19]"
-                  : "border border-[#2e2e2c] bg-[#1f1f1e] text-[#a8a399] hover:bg-[#242422] hover:text-[#f2f1ec]"
-              }`}
-              key={category}
-              onClick={() => setActiveCategory(category)}
-              type="button"
-            >
-              {category}
-            </button>
-          ))}
+        <div className="mt-4 flex items-center gap-2">
+          <div className="flex flex-1 flex-wrap gap-2">
+            {categories.map((category) => {
+              const active = activeCategory === category;
+              return (
+                <button
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                    active
+                      ? "bg-black text-white"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                  key={category}
+                  onClick={() => setActiveCategory(category)}
+                  type="button"
+                >
+                  {category}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((open) => {
+                if (open) setConnectorQuery("");
+                return !open;
+              });
+            }}
+            aria-label={searchOpen ? "Close search" : "Search integrations"}
+            aria-expanded={searchOpen}
+            className={`flex size-9 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+              searchOpen
+                ? "bg-black text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </button>
         </div>
 
-        <section className="overflow-hidden rounded-xl border border-[#2e2e2c] bg-[#1f1f1e]">
-          <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-[#2e2e2c] bg-[#232321] px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6b6b63]">
-            <span>App</span>
-            <span className="hidden text-right sm:block">Action</span>
+        {searchOpen && (
+          <div className="mt-2.5 flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-[#FE7F2D]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              value={connectorQuery}
+              onChange={(e) => setConnectorQuery(e.target.value)}
+              placeholder="Search integrations..."
+              className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
+              aria-label="Search integrations"
+              autoComplete="off"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setConnectorQuery("");
+                setSearchOpen(false);
+              }}
+              aria-label="Close search"
+              className="text-black/40 transition-colors hover:text-black"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
           </div>
+        )}
 
-          <div className="divide-y divide-[#2e2e2c]">
+        <section className="mt-4 border-t border-slate-200 pt-4">
+          {filteredConnectors.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-500">
+              No integrations match "{connectorQuery}".
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredConnectors.map((connector) => (
               <ConnectorRow
                 connector={connector}
@@ -387,7 +450,8 @@ export function ConnectorsClient() {
                 telegramLinked={telegramLinked}
               />
             ))}
-          </div>
+            </div>
+          )}
         </section>
       </section>
 
@@ -425,13 +489,13 @@ function ToggleSwitch({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative flex h-[22px] w-10 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
-        checked ? "border-emerald-500/40 bg-emerald-500/25" : "border-[#3a3a36] bg-[#242422]"
+      className={`relative flex h-6 w-11 shrink-0 cursor-pointer items-center border-2 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+        checked ? "border-slate-950 bg-[#d9f99d]" : "border-slate-400 bg-slate-100"
       }`}
     >
       <span
-        className={`absolute h-[14px] w-[14px] rounded-full shadow-sm transition-transform duration-200 ${
-          checked ? "translate-x-[19px] bg-emerald-400" : "translate-x-[3px] bg-[#5a5a56]"
+        className={`absolute h-4 w-4 border border-slate-950 transition-transform duration-200 ${
+          checked ? "translate-x-[21px] bg-emerald-500" : "translate-x-[3px] bg-slate-400"
         }`}
       />
     </button>
@@ -450,8 +514,8 @@ function SettingRow({
   return (
     <div className="flex items-center justify-between gap-6 py-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[#e8e6e0]">{label}</p>
-        {description && <p className="mt-0.5 text-xs leading-5 text-[#5d5d58]">{description}</p>}
+        <p className="text-sm font-bold text-slate-900">{label}</p>
+        {description && <p className="mt-0.5 text-xs font-medium leading-5 text-slate-500">{description}</p>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -535,32 +599,32 @@ function SettingsPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-panel-title"
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-md flex-col rounded-2xl border border-[#2e2e2c] bg-[#1c1c1b] shadow-[0_24px_64px_rgba(0,0,0,0.6)] max-h-[calc(100vh-3rem)] overflow-hidden"
+        className="flex max-h-[calc(100vh-3rem)] w-full max-w-md flex-col overflow-hidden border-2 border-slate-950 bg-white shadow-[8px_8px_0_#0f172a]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ──────────────────────────────────────── */}
-        <div className="flex items-center gap-3 border-b border-[#272725] px-5 py-4">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#2e2e2c] bg-[#161615]">
+        <div className="flex items-center gap-3 border-b-2 border-slate-950 bg-[#f7f7f2] px-5 py-4">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center border-2 border-slate-950 bg-white shadow-[2px_2px_0_#0f172a]">
             <Icon className="h-[18px] w-[18px]" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id="settings-panel-title" className="text-sm font-semibold text-[#f2f1ec]">
+            <h2 id="settings-panel-title" className="text-sm font-black text-slate-950">
               {connector.title}
             </h2>
-            <p className="text-[11px] text-[#5d5d58]">Connector settings</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-slate-500">Connector settings</p>
           </div>
           <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            className={`shrink-0 border px-2 py-0.5 font-mono text-[11px] font-bold uppercase ${
               statusConnected
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-red-500/10 text-red-400"
+                ? "border-emerald-700 bg-emerald-50 text-emerald-700"
+                : "border-red-700 bg-red-50 text-red-700"
             }`}
           >
             {statusConnected ? "Connected" : "Error"}
@@ -568,7 +632,7 @@ function SettingsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#5d5d58] transition hover:bg-[#272725] hover:text-[#f2f1ec]"
+            className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center border border-slate-400 bg-white text-slate-500 transition hover:border-slate-950 hover:text-slate-950"
           >
             <svg viewBox="0 0 14 14" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
               <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -581,37 +645,37 @@ function SettingsPanel({
 
           {/* Connection info */}
           <div className="py-3">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4a4a46]">
+            <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
               Connection
             </p>
-            <div className="rounded-xl border border-[#272725] bg-[#181817] divide-y divide-[#272725]">
+            <div className="divide-y-2 divide-slate-200 border-2 border-slate-950 bg-white">
               <div className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-xs text-[#5d5d58]">Status</span>
-                <span className="flex items-center gap-1.5 text-xs font-medium text-[#d0cec8]">
-                  <span className={`h-1.5 w-1.5 rounded-full ${statusConnected ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span className="text-xs font-semibold text-slate-500">Status</span>
+                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <span className={`h-2 w-2 ${statusConnected ? "bg-emerald-500" : "bg-red-500"}`} />
                   {statusConnected ? "Active" : "Error"}
                 </span>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-xs text-[#5d5d58]">Auth type</span>
-                <span className="text-xs font-medium capitalize text-[#d0cec8]">
+                <span className="text-xs font-semibold text-slate-500">Auth type</span>
+                <span className="text-xs font-bold capitalize text-slate-700">
                   {account.authType === "oauth" ? "OAuth 2.0" : "API key"}
                 </span>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-xs text-[#5d5d58]">Last updated</span>
-                <span className="text-xs font-medium text-[#d0cec8]">{connectedSince}</span>
+                <span className="text-xs font-semibold text-slate-500">Last updated</span>
+                <span className="text-xs font-bold text-slate-700">{connectedSince}</span>
               </div>
               {account.scopes.length > 0 && (
                 <div className="px-4 py-2.5">
-                  <p className="text-xs text-[#5d5d58] mb-1.5">Permissions</p>
+                  <p className="text-xs text-slate-500 mb-1.5">Permissions</p>
                   <div className="flex flex-wrap gap-1">
                     {account.scopes
                       .filter((s) => !s.startsWith("openid") && !s.startsWith("email") && !s.startsWith("profile"))
                       .map((scope) => (
                         <span
                           key={scope}
-                          className="rounded bg-[#242422] px-1.5 py-0.5 text-[10px] font-mono text-[#6b6b63]"
+                        className="border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600"
                         >
                           {scope.split("/").pop()?.split(".").pop() ?? scope}
                         </span>
@@ -624,26 +688,26 @@ function SettingsPanel({
 
           {/* Notifications */}
           <div className="py-3">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4a4a46]">
+            <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
               Notifications
             </p>
 
             {telegramLinked === false && (
-              <div className="mb-2 flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-3 py-2.5">
+              <div className="mb-2 flex items-start gap-2.5 border-2 border-amber-600 bg-amber-50 px-3 py-2.5 shadow-[3px_3px_0_#b45309]">
                 <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true">
                   <path d="M8 2L1.5 13.5h13L8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                   <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
-                <p className="text-[11px] leading-5 text-amber-200/80">
+                <p className="text-[11px] font-semibold leading-5 text-amber-900">
                   Telegram isn&apos;t linked — notifications won&apos;t be delivered.{" "}
-                  <a href="/dashboard/telegram" className="font-semibold underline underline-offset-2 hover:text-amber-200">
+                  <a href="/dashboard/telegram" className="font-bold underline underline-offset-2 hover:text-amber-700">
                     Connect Telegram
                   </a>
                 </p>
               </div>
             )}
 
-            <div className="rounded-xl border border-[#272725] bg-[#181817] divide-y divide-[#272725] px-4">
+            <div className="divide-y-2 divide-slate-200 border-2 border-slate-950 bg-white px-4">
               <SettingRow
                 label="Enable notifications"
                 description="Send Telegram alerts triggered by this connector"
@@ -660,7 +724,7 @@ function SettingsPanel({
                     value={notifScope}
                     onChange={(e) => setNotifScope(e.target.value)}
                     disabled={!notifEnabled}
-                    className="rounded-lg border border-[#2e2e2c] bg-[#242422] px-2.5 py-1.5 text-xs text-[#d0cec8] outline-none transition focus:border-[#3e3e3c] disabled:opacity-40"
+                    className="border-2 border-slate-400 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-slate-950 disabled:opacity-40"
                   >
                     {SCOPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -687,10 +751,10 @@ function SettingsPanel({
           {/* Behaviour — connector-specific */}
           {(isGmail || isCalendar) && (
             <div className="py-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#4a4a46]">
+              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
                 Behaviour
               </p>
-              <div className="rounded-xl border border-[#272725] bg-[#181817] divide-y divide-[#272725] px-4">
+              <div className="divide-y-2 divide-slate-200 border-2 border-slate-950 bg-white px-4">
                 {isGmail && (
                   <SettingRow
                     label="Auto-process emails"
@@ -707,7 +771,7 @@ function SettingsPanel({
                     <select
                       value={reminderMinutes}
                       onChange={(e) => setReminderMinutes(e.target.value)}
-                      className="rounded-lg border border-[#2e2e2c] bg-[#242422] px-2.5 py-1.5 text-xs text-[#d0cec8] outline-none transition focus:border-[#3e3e3c]"
+                      className="border-2 border-slate-400 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-slate-950"
                     >
                       {REMINDER_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -722,11 +786,11 @@ function SettingsPanel({
         </div>
 
         {/* ── Footer ──────────────────────────────────────── */}
-        <div className="flex items-center justify-end gap-2 border-t border-[#272725] px-5 py-3.5">
+        <div className="flex items-center justify-end gap-2 border-t-2 border-slate-950 bg-[#f7f7f2] px-5 py-3.5">
           <button
             type="button"
             onClick={onClose}
-            className="h-9 rounded-lg border border-[#2e2e2c] px-4 text-sm font-medium text-[#7a7a72] transition hover:bg-[#242422] hover:text-[#f2f1ec]"
+            className="h-9 border-2 border-slate-400 bg-white px-4 text-sm font-bold text-slate-600 transition hover:border-slate-950 hover:text-slate-950 active:translate-x-[1px] active:translate-y-[1px]"
           >
             Cancel
           </button>
@@ -734,7 +798,7 @@ function SettingsPanel({
             type="button"
             onClick={() => void handleSave()}
             disabled={saving || saved}
-            className="h-9 rounded-lg bg-[#f2f1ec] px-5 text-sm font-semibold text-[#1a1a19] transition hover:bg-white disabled:opacity-60"
+            className="h-9 border-2 border-slate-950 bg-[#FE7F2D] px-5 text-sm font-black text-white shadow-[3px_3px_0_#0f172a] transition hover:brightness-105 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-60"
           >
             {saved ? "Saved ✓" : saving ? "Saving…" : "Save settings"}
           </button>
@@ -773,98 +837,65 @@ function ConnectorRow({
 
   return (
     <>
-      <article className="px-5 py-5 transition hover:bg-[#232321]/60">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[#2e2e2c] bg-[#1a1a19]">
+      <article className="flex min-h-[230px] flex-col justify-between border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-slate-300 hover:bg-[#FE7F2D]/5 hover:shadow-md">
+        <div>
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center border border-slate-200 bg-white">
               <Icon className="size-5" />
             </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-[#f2f1ec]">{connector.title}</h2>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-sm font-semibold text-black">{connector.title}</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {!multi && <ConnectorBadge connector={linkedConnector} />}
-                {multi && linkedAccounts.length > 0 && (
-                  <span className="shrink-0 rounded-full bg-[#0f2e1f] px-2.5 py-1 text-xs font-medium text-[#4ade80]">
-                    {linkedAccounts.length} connected
+                {multi && (
+                  <span
+                    className={`border border-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight ${
+                      linkedAccounts.length > 0
+                        ? "bg-emerald-500 text-white"
+                        : "bg-slate-50 text-slate-500"
+                    }`}
+                  >
+                    {linkedAccounts.length > 0 ? `${linkedAccounts.length} connected` : "Not connected"}
                   </span>
                 )}
-                {multi && linkedAccounts.length === 0 && (
-                  <span className="shrink-0 rounded-full bg-[#242422] px-2.5 py-1 text-xs font-medium text-[#6b6b63]">
-                    Not connected
-                  </span>
-                )}
-                <span className="rounded-full bg-[#242422] px-2.5 py-1 text-xs font-medium text-[#a8a399]">
+                <span className="border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-black/40">
                   {connector.category}
                 </span>
               </div>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7d7a72]">
-                {connector.description}
-              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {/* Settings gear — only shown when connected (single account) */}
-            {!multi && linkedConnector && (
-              <button
-                type="button"
-                title="Connector settings"
-                onClick={() => setSettingsAccount(linkedConnector)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#2e2e2c] text-[#6b6b63] transition hover:bg-[#242422] hover:text-[#f2f1ec]"
-              >
-                <GearIcon />
-              </button>
-            )}
-            {connector.authType === "oauth" ? (
-              linkedConnector ? (
-                <button className="h-9 rounded-lg border border-[#2e2e2c] px-4 text-sm font-medium text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec]" onClick={onUnlink} type="button">Unlink</button>
-              ) : (
-                <a className="inline-flex h-9 items-center rounded-lg bg-[#2563eb] px-4 text-sm font-medium text-white transition hover:bg-[#1d4ed8]" href={`/api/connectors/${connector.provider}/start?returnTo=%2Fdashboard%2Fconnectors%3Fconnected%3D${connector.provider}`}>Link</a>
-              )
-            ) : multi ? (
-              <button className="h-9 rounded-lg bg-[#2563eb] px-4 text-sm font-medium text-white transition hover:bg-[#1d4ed8]" onClick={onAddAccount} type="button">
-                Add account
-              </button>
-            ) : (
-              <>
-                <button className="h-9 rounded-lg bg-[#2563eb] px-4 text-sm font-medium text-white transition hover:bg-[#1d4ed8]" onClick={onSetup} type="button">
-                  {linkedConnector ? "Edit setup" : "Setup"}
-                </button>
-                {linkedConnector && (
-                  <button className="h-9 rounded-lg border border-[#2e2e2c] px-4 text-sm font-medium text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec]" onClick={onUnlink} type="button">Unlink</button>
-                )}
-              </>
-            )}
-          </div>
+          <p className="mt-2.5 text-xs leading-5 text-slate-500 line-clamp-3">
+            {connector.description}
+          </p>
         </div>
 
         {/* Named accounts list for multi-account DB providers */}
         {multi && linkedAccounts.length > 0 && (
-          <div className="mt-3 ml-13 space-y-2 pl-[52px]">
+          <div className="mt-4 space-y-2 border-t border-slate-200 pt-3">
             {linkedAccounts.map((account) => (
-              <div key={account.id} className="flex items-center gap-3 rounded-lg border border-[#2e2e2c] bg-[#1a1a19] px-3 py-2">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" />
-                <span className="flex-1 truncate text-sm font-medium text-[#f2f1ec]">{account.label}</span>
-                <span className="text-xs text-[#6b6b63]">{new Date(account.updatedAt).toLocaleDateString()}</span>
+              <div key={account.id} className="flex items-center gap-2 border border-slate-200 bg-white px-2.5 py-2">
+                <span className="h-1.5 w-1.5 shrink-0 bg-emerald-500" />
+                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-900">{account.label}</span>
                 <button
                   type="button"
                   title="Account settings"
                   onClick={() => setSettingsAccount(account)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[#6b6b63] transition hover:bg-[#2a2a28] hover:text-[#f2f1ec]"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center border border-slate-200 text-slate-500 transition hover:bg-black hover:text-white"
                 >
                   <GearIcon />
                 </button>
                 <button
                   type="button"
                   onClick={() => onEditAccount(account)}
-                  className="rounded px-2 py-1 text-xs text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec]"
+                  className="shrink-0 px-1 text-xs font-semibold text-black/40 underline-offset-2 transition hover:text-black hover:underline"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onRemoveAccount(account.id, account.label)}
-                  className="rounded px-2 py-1 text-xs text-[#f87171] transition hover:bg-[#2e1a1a]"
+                  className="shrink-0 px-1 text-xs font-semibold text-red-500 underline-offset-2 transition hover:underline"
                 >
                   Remove
                 </button>
@@ -872,6 +903,41 @@ function ConnectorRow({
             ))}
           </div>
         )}
+
+        <div className="mt-4 flex items-center gap-2">
+          {!multi && linkedConnector && (
+            <button
+              type="button"
+              title="Connector settings"
+              onClick={() => setSettingsAccount(linkedConnector)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 text-slate-500 transition hover:bg-black hover:text-white"
+            >
+              <GearIcon />
+            </button>
+          )}
+          {connector.authType === "oauth" ? (
+            linkedConnector ? (
+              <button className="h-9 flex-1 border border-slate-200 bg-white px-4 text-xs font-semibold text-black/40 transition hover:bg-slate-50 hover:text-black" onClick={onUnlink} type="button">Unlink</button>
+            ) : (
+              <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onSetup} type="button">
+                Connect
+              </button>
+            )
+          ) : multi ? (
+            <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onAddAccount} type="button">
+              Add account
+            </button>
+          ) : (
+            <>
+              <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onSetup} type="button">
+                {linkedConnector ? "Edit setup" : "Setup"}
+              </button>
+              {linkedConnector && (
+                <button className="h-9 border border-slate-200 bg-white px-3 text-xs font-semibold text-black/40 transition hover:bg-slate-50 hover:text-black" onClick={onUnlink} type="button">Unlink</button>
+              )}
+            </>
+          )}
+        </div>
       </article>
 
       {settingsAccount && (
@@ -921,7 +987,9 @@ function SetupDialog({
 }) {
   const Icon = connector.icon;
   const multi = isMultiAccount(connector.provider);
+  const isOAuth = connector.authType === "oauth";
   const isEdit = Boolean(editAccount);
+  const oauthHref = `/api/connectors/${connector.provider}/start?returnTo=%2Fdashboard%2Fconnectors%3Fconnected%3D${connector.provider}`;
   const [closing, setClosing] = useState(false);
 
   function handleClose() {
@@ -930,74 +998,159 @@ function SetupDialog({
     setTimeout(onClose, 140);
   }
 
+  const title = isEdit
+    ? `Edit "${editAccount!.label}"`
+    : multi
+      ? `Add ${connector.title} account`
+      : `Setup ${connector.title}`;
+
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8 ${closing ? "dialog-backdrop-exit" : "dialog-backdrop-enter"}`}
+      className={`fixed inset-0 z-50 flex overflow-y-auto bg-black/50 px-4 py-10 backdrop-blur-sm ${closing ? "dialog-backdrop-exit" : "dialog-backdrop-enter"}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="connector-setup-title"
       onClick={handleClose}
     >
       <form
-        className={`w-full max-w-lg rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] p-5 shadow-2xl ${closing ? "dialog-panel-exit" : "dialog-panel-enter"}`}
+        className={`relative m-auto flex w-full max-w-[95%] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl sm:w-[600px] ${closing ? "dialog-panel-exit" : "dialog-panel-enter"}`}
         onSubmit={(e) => onSubmit(e, connector)}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[#2e2e2c] bg-[#1a1a19]">
-              <Icon className="size-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold text-[#f2f1ec]" id="connector-setup-title">
-                {isEdit ? `Edit "${editAccount!.label}"` : multi ? `Add ${connector.title} account` : `Setup ${connector.title}`}
-              </h2>
-              <p className="mt-1 text-sm text-[#a8a399]">
-                {multi ? "Credentials are encrypted and stored securely." : "Add credentials to create an encrypted connector."}
+        <div className="relative flex flex-col items-center gap-5 border-b border-slate-200 px-8 pb-8 pt-10 text-center">
+          <button
+            className="absolute right-4 top-4 flex size-8 items-center justify-center border border-slate-200 bg-white text-black transition-colors hover:bg-[#FE7F2D] hover:text-white"
+            onClick={handleClose}
+            type="button"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+
+          <div className="flex size-[72px] items-center justify-center border border-slate-200 bg-white">
+            <Icon className="size-10" />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <h2 className="text-[22px] font-semibold tracking-tight text-black" id="connector-setup-title">
+              {title}
+            </h2>
+            <p className="mx-auto max-w-sm text-[13px] leading-6 text-slate-500">
+              {isOAuth
+                ? connector.description
+                : isEdit
+                ? "Update the saved connector label or rotate credentials without changing how rizly uses this source."
+                : multi
+                  ? "Name this account and add read-only credentials. Credentials are encrypted before storage."
+                  : "Add credentials to create an encrypted connector rizly can use when you ask."}
+            </p>
+          </div>
+
+          {isOAuth && (
+            <a
+              href={oauthHref}
+              className="inline-flex h-10 items-center gap-2 bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+              </svg>
+              Connect {connector.title}
+            </a>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-7 pt-6">
+          {!isOAuth && (
+          <div>
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
+              Credentials
+            </p>
+
+            {error && (
+              <p className="mb-4 border border-slate-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
               </p>
+            )}
+
+            <div className="flex flex-col gap-3">
+              {multi && (
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-black/60">Account name</span>
+                  <input
+                    className="h-11 border border-slate-200 bg-white px-4 text-sm text-black outline-none placeholder:text-slate-400 transition focus:border-[#FE7F2D]"
+                    name="_name"
+                    placeholder={`e.g. Production ${connector.title}, Staging DB`}
+                    defaultValue={editAccount?.label ?? ""}
+                    required
+                  />
+                  <span className="text-xs leading-5 text-slate-500">
+                    Riz uses this name when you have multiple {connector.title} accounts connected.
+                  </span>
+                </label>
+              )}
+
+              {connector.fields?.map((field) => (
+                <label className="flex flex-col gap-1.5 text-sm" key={field.name}>
+                  <span className="font-medium text-black/60">{field.label}</span>
+                  <input
+                    className="h-11 border border-slate-200 bg-white px-4 text-sm text-black outline-none placeholder:text-slate-400 transition focus:border-[#FE7F2D]"
+                    name={field.name}
+                    placeholder={isEdit ? "Leave blank to keep existing credentials" : field.placeholder}
+                    required={!isEdit}
+                    type={field.type ?? "text"}
+                  />
+                </label>
+              ))}
             </div>
           </div>
-          <button className="rounded-lg border border-[#2e2e2c] px-3 py-2 text-sm font-medium text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec]" onClick={handleClose} type="button">Close</button>
-        </div>
-
-        {error && (
-          <p className="mt-4 rounded-lg border border-[#5c2626] bg-[#241616] px-3 py-2 text-sm text-[#f87171]">{error}</p>
-        )}
-
-        <div className="mt-5 grid gap-4">
-          {/* Name field for multi-account providers */}
-          {multi && (
-            <label className="grid gap-2 text-sm">
-              <span className="font-medium text-[#a8a399]">Account name</span>
-              <input
-                className="h-11 rounded-lg border border-[#2e2e2c] bg-[#1a1a19] px-3 text-sm text-[#f2f1ec] outline-none transition placeholder:text-[#6b6b63] focus:border-[#2563eb]"
-                name="_name"
-                placeholder={`e.g. Production ${connector.title}, Staging DB`}
-                defaultValue={editAccount?.label ?? ""}
-                required
-              />
-              <span className="text-xs text-[#6b6b63]">Riz uses this name to ask you which DB to query when you have multiple connected.</span>
-            </label>
           )}
-          {connector.fields?.map((field) => (
-            <label className="grid gap-2 text-sm" key={field.name}>
-              <span className="font-medium text-[#a8a399]">{field.label}</span>
-              <input
-                className="h-11 rounded-lg border border-[#2e2e2c] bg-[#1a1a19] px-3 text-sm text-[#f2f1ec] outline-none transition placeholder:text-[#6b6b63] focus:border-[#2563eb]"
-                name={field.name}
-                placeholder={isEdit ? "Leave blank to keep existing credentials" : field.placeholder}
-                required={!isEdit}
-                type={field.type ?? "text"}
-              />
-            </label>
-          ))}
-        </div>
 
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button className="h-10 rounded-lg border border-[#2e2e2c] px-4 text-sm font-medium text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec]" onClick={handleClose} type="button">Cancel</button>
-          <button className="h-10 rounded-lg bg-[#2563eb] px-4 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-50" disabled={submitting} type="submit">
-            {submitting ? "Saving…" : isEdit ? "Save changes" : "Connect"}
-          </button>
+          <div className="flex flex-col gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
+              Details
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+                <span className="size-1.5 bg-emerald-500" />
+                {isOAuth ? "OAuth app" : "API key"}
+              </span>
+              <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+                {isOAuth ? "By rizly" : "Encrypted vault"}
+              </span>
+              {multi && (
+                <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+                  Multiple accounts
+                </span>
+              )}
+              {isEdit && (
+                <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+                  Credential rotation
+                </span>
+              )}
+            </div>
+          </div>
+
+          {!isOAuth && (
+          <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
+            <button className="h-10 border border-slate-200 bg-white px-4 text-sm font-semibold text-black/50 transition hover:bg-slate-50 hover:text-black" onClick={handleClose} type="button">
+              Cancel
+            </button>
+            <button className="inline-flex h-10 items-center justify-center gap-2 bg-black px-5 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99] disabled:opacity-50 disabled:shadow-none" disabled={submitting} type="submit">
+              {submitting ? (
+                "Saving..."
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                  </svg>
+                  {isEdit ? "Save changes" : "Connect"}
+                </>
+              )}
+            </button>
+          </div>
+          )}
         </div>
       </form>
     </div>
@@ -1009,8 +1162,8 @@ function ConnectorBadge({ connector }: { connector?: ConnectorSummary }) {
     <span
       className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
         connector
-          ? "bg-[#0f2e1f] text-[#4ade80]"
-          : "bg-[#242422] text-[#6b6b63]"
+          ? "bg-emerald-50 text-emerald-500"
+          : "bg-slate-50 text-slate-500"
       }`}
     >
       {connector ? "Connected" : "Not connected"}

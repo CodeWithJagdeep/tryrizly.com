@@ -1,10 +1,20 @@
 name: heyriz-dev
 
+# Pin containers that make outbound calls (Google/OpenAI/Anthropic/Resend/Razorpay)
+# to public resolvers. Docker otherwise snapshots the host's upstream DNS at
+# container-create time, so switching networks (e.g. phone hotspot -> WiFi) leaves
+# the old, now-unreachable nameserver cached and every external fetch dies with
+# EAI_AGAIN ("fetch failed"). A fixed resolver survives host network changes.
+x-external-dns: &external-dns
+  - 8.8.8.8
+  - 1.1.1.1
+
 services:
   gateway:
     build:
       context: ..
       dockerfile: apps/gateway/Dockerfile.dev
+    dns: *external-dns
     env_file:
       - path: ../.env
         required: false
@@ -35,6 +45,7 @@ services:
     build:
       context: ..
       dockerfile: apps/billing/Dockerfile.dev
+    dns: *external-dns
     env_file:
       - path: ../.env
         required: false
@@ -56,6 +67,7 @@ services:
     build:
       context: ..
       dockerfile: apps/ai-core/Dockerfile.dev
+    dns: *external-dns
     env_file:
       - path: ../.env
         required: false
@@ -79,6 +91,7 @@ services:
     build:
       context: ..
       dockerfile: apps/worker/Dockerfile.dev
+    dns: *external-dns
     env_file:
       - path: ../.env
         required: false

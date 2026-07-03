@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowUpIcon, LibraryIcon } from "./icons";
 import {
-  ArrowUpIcon,
-  BoltIcon,
-  LayersIcon,
-  LibraryIcon,
-  MicIcon,
-  PlusIcon,
-  SlidersIcon,
-} from "./icons";
+  CalendarIcon,
+  GmailIcon,
+  MongoDbIcon,
+  PostgresIcon,
+  StripeIcon,
+  TelegramIcon,
+} from "../../components/ConnectorIcons";
 import {
   type ChatSession,
   type PendingApproval,
@@ -41,7 +41,7 @@ export function ChatHome({ name }: { name?: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
   const [onboarding, setOnboarding] = useState<{ googleConnected?: boolean; telegramLinked?: boolean } | null>(null);
-  const [connectorsCount, setConnectorsCount] = useState(0);
+  const [connectorProviders, setConnectorProviders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setSession(sessionId ? getSession(sessionId) ?? null : null);
@@ -61,7 +61,12 @@ export function ChatHome({ name }: { name?: string }) {
       .catch(() => null);
     fetch("/api/connectors")
       .then((r) => r.json())
-      .then((d: { connectors?: unknown[] }) => setConnectorsCount(d.connectors?.length ?? 0))
+      .then((d: { connectors?: { provider?: string }[] }) => {
+        const providers = (d.connectors ?? [])
+          .map((c) => c.provider)
+          .filter((p): p is string => Boolean(p));
+        setConnectorProviders(new Set(providers));
+      })
       .catch(() => null);
   }, []);
 
@@ -74,9 +79,19 @@ export function ChatHome({ name }: { name?: string }) {
   const firstName = name?.split(" ")[0];
   const hasMessages = (session?.messages.length ?? 0) > 0;
 
+  const googleConnected = Boolean(onboarding?.googleConnected);
+  const connectTiles = [
+    { title: "Telegram", subtitle: "Reminders & briefs on your phone", href: "/dashboard/telegram", Icon: TelegramIcon, connected: Boolean(telegramLinked) },
+    { title: "Gmail", subtitle: "Triage inbox & draft replies", href: "/dashboard/connectors", Icon: GmailIcon, connected: googleConnected || connectorProviders.has("gmail") || connectorProviders.has("google") },
+    { title: "Google Calendar", subtitle: "Meetings & scheduling", href: "/dashboard/connectors", Icon: CalendarIcon, connected: googleConnected || connectorProviders.has("calendar") || connectorProviders.has("google") },
+    { title: "Postgres", subtitle: "Query your database", href: "/dashboard/connectors", Icon: PostgresIcon, connected: connectorProviders.has("postgres") },
+    { title: "Stripe", subtitle: "Revenue & subscriptions", href: "/dashboard/connectors", Icon: StripeIcon, connected: connectorProviders.has("stripe") },
+    { title: "MongoDB", subtitle: "Query your collections", href: "/dashboard/connectors", Icon: MongoDbIcon, connected: connectorProviders.has("mongodb") },
+  ];
+
   async function runTurn(
     displayContent: string,
-    apiOverrides: { approve?: boolean; pendingApproval?: { tool: string; payload: unknown } } = {},
+    apiOverrides: { approve?: boolean; pendingApprovalId?: string } = {},
   ) {
     if (sending) return;
 
@@ -156,7 +171,7 @@ export function ChatHome({ name }: { name?: string }) {
   }
 
   async function handleApprove(approval: PendingApproval) {
-    await runTurn("Approve", { approve: true, pendingApproval: { tool: approval.tool, payload: approval.payload } });
+    await runTurn("Approve", { approve: true, pendingApprovalId: approval.id });
   }
 
   function handleReject(approval: PendingApproval) {
@@ -182,7 +197,7 @@ export function ChatHome({ name }: { name?: string }) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-[#1a1a19]">
+    <main className="flex min-h-screen flex-col bg-white">
       {hasMessages ? (
         <>
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8">
@@ -195,21 +210,21 @@ export function ChatHome({ name }: { name?: string }) {
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap ${
                         turn.role === "user"
-                          ? "self-end bg-[#f2f1ec] text-[#1a1a19]"
-                          : "self-start border border-[#2e2e2c] bg-[#232321] text-[#f2f1ec]"
+                          ? "self-end bg-slate-900 text-white"
+                          : "self-start border border-slate-200 bg-slate-50 text-slate-800"
                       }`}
                     >
                       {turn.content}
                     </div>
                     {approval && !approval.resolved && isLast && (
-                      <div className="self-start rounded-2xl border border-[#2e2e2c] bg-[#232321] px-4 py-3 text-sm text-[#f2f1ec]">
-                        <p className="text-[#cfcfc7]">{approval.preview}</p>
+                      <div className="self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                        <p className="text-slate-600">{approval.preview}</p>
                         <div className="mt-3 flex gap-2">
                           <button
                             type="button"
                             disabled={sending}
                             onClick={() => void handleApprove(approval)}
-                            className="rounded-lg bg-[#f2f1ec] px-3 py-1.5 text-xs font-semibold text-[#1a1a19] transition disabled:opacity-50"
+                            className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
                           >
                             Approve
                           </button>
@@ -217,7 +232,7 @@ export function ChatHome({ name }: { name?: string }) {
                             type="button"
                             disabled={sending}
                             onClick={() => handleReject(approval)}
-                            className="rounded-lg border border-[#2e2e2c] px-3 py-1.5 text-xs font-semibold text-[#cfcfc7] transition hover:bg-[#2a2a28] disabled:opacity-50"
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
                           >
                             Reject
                           </button>
@@ -228,7 +243,7 @@ export function ChatHome({ name }: { name?: string }) {
                 );
               })}
               {sending && (
-                <div className="self-start rounded-2xl border border-[#2e2e2c] bg-[#232321] px-4 py-2.5 text-sm text-[#a8a399]">
+                <div className="self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-400">
                   Thinking…
                 </div>
               )}
@@ -237,87 +252,99 @@ export function ChatHome({ name }: { name?: string }) {
 
           <div className="px-6 pb-8">
             <div className="mx-auto w-full max-w-2xl">
-              {error && <p className="mb-2 text-sm text-[#f87171]">{error}</p>}
+              {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
               <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
             </div>
           </div>
         </>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8">
-          <h1 className="text-center text-2xl font-semibold text-[#f2f1ec] sm:text-3xl">
-            {firstName ? `What's on your mind today, ${firstName}?` : "What's on your mind today?"}
-          </h1>
+        <div
+          className="relative flex flex-1 flex-col items-center overflow-y-auto px-6 pb-16"
+          style={{
+            background:
+              "radial-gradient(60% 45% at 50% 0%, rgba(254,127,45,0.08), transparent 62%), radial-gradient(42% 34% at 88% 6%, rgba(96,165,250,0.06), transparent 60%), radial-gradient(42% 34% at 10% 12%, rgba(244,114,182,0.06), transparent 60%), #fbfbfa",
+          }}
+        >
+          {/* Ambient dotted texture */}
+          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:18px_18px]" />
 
-          {/* Feature highlight: Telegram USP + DB connectors */}
-          <div className="mt-6 flex w-full max-w-2xl gap-3">
-            <Link
-              href="/dashboard/telegram"
-              className="group relative flex flex-1 flex-col gap-1.5 overflow-hidden rounded-2xl border border-[#2e4a5c] bg-[#1a2e3a] px-4 py-3.5 transition hover:border-[#3a6a8a] hover:bg-[#1f3545]"
-            >
-              <div className="flex items-center gap-2">
-                <TelegramIcon className="h-4 w-4 text-[#4da8d8] shrink-0" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#4da8d8]">Telegram</p>
-                {telegramLinked === true && (
-                  <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                    Connected
-                  </span>
-                )}
+          <div className="relative z-10 flex w-full flex-col items-center">
+            {/* Search section — 80vh tall, input bar centered */}
+            <div className="flex h-[80vh] w-full max-w-2xl flex-col items-center justify-center">
+              <h1 className="text-center text-[26px] font-bold tracking-tight text-slate-900 sm:text-[32px]">
+                {firstName ? `What's on your mind today, ${firstName}?` : "What's on your mind today?"}
+              </h1>
+
+              {/* Copilot-style input card */}
+              <div className="mt-8 w-full">
+                {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+                <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
+                <p className="mt-2.5 text-center text-xs text-slate-400">
+                  Riz is AI and can make mistakes. Double-check important actions.
+                </p>
               </div>
-              <p className="text-sm font-medium text-[#f2f1ec]">
-                {telegramLinked ? "Chat via Telegram" : "Start chatting on Telegram"}
-              </p>
-              <p className="text-xs text-[#6b8fa0]">
-                {telegramLinked
-                  ? "Send messages, get reminders & briefs right on your phone"
-                  : "Your primary channel — reminders, briefs & replies on Telegram"}
-              </p>
-            </Link>
 
-            <Link
-              href="/dashboard/connectors"
-              className="group flex flex-1 flex-col gap-1.5 rounded-2xl border border-[#2e2e2c] bg-[#232321] px-4 py-3.5 transition hover:border-[#3e3e3c] hover:bg-[#2a2a28]"
-            >
-              <div className="flex items-center gap-2">
-                <DatabaseIcon className="h-4 w-4 text-[#a89878] shrink-0" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6b6b63]">DB Connectors</p>
-              </div>
-              <p className="text-sm font-medium text-[#f2f1ec]">Connect your database</p>
-              <p className="text-xs text-[#6b6b63]">
-                Postgres &amp; MongoDB — query and analyze your data via Riz
-              </p>
-            </Link>
-          </div>
-
-          {onboarding && (
-            <OnboardingChecklist
-              googleConnected={Boolean(onboarding.googleConnected)}
-              telegramLinked={Boolean(onboarding.telegramLinked)}
-              hasConnectors={connectorsCount > 0}
-            />
-          )}
-
-          <div className="mt-4 w-full max-w-2xl">
-            {error && <p className="mb-2 text-sm text-[#f87171]">{error}</p>}
-            <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {suggestions.map((suggestion) => (
+              {/* Question prompts — directly below the input */}
+              <div className="mt-5 flex w-full flex-wrap justify-center gap-2">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => sendMessage(suggestion)}
+                    className="rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
                 <button
-                  key={suggestion}
                   type="button"
-                  onClick={() => sendMessage(suggestion)}
-                  className="rounded-full border border-[#2e2e2c] bg-[#232321] px-4 py-2 text-sm text-[#cfcfc7] shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:bg-[#2a2a28]"
+                  onClick={openChatSearch}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white"
                 >
-                  {suggestion}
+                  <LibraryIcon className="h-4 w-4 text-slate-400" />
+                  Chat library
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={openChatSearch}
-                className="flex items-center gap-1.5 rounded-full border border-[#2e2e2c] bg-[#232321] px-4 py-2 text-sm text-[#cfcfc7] shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition hover:bg-[#2a2a28]"
-              >
-                <LibraryIcon className="h-4 w-4 text-[#8a8578]" />
-                Chat library
-              </button>
+              </div>
+            </div>
+
+            {/* Connect your tools — the "Start from scratch" section */}
+            <div className="w-full max-w-6xl">
+              <div className="mb-3 flex items-baseline justify-between">
+                <p className="text-base font-bold text-slate-900">Connect your tools</p>
+                <span className="text-xs font-medium text-slate-400 tabular-nums">
+                  {connectTiles.filter((t) => t.connected).length} of {connectTiles.length} connected
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {connectTiles.map((t) => {
+                  const Icon = t.Icon;
+                  return (
+                    <Link
+                      key={t.title}
+                      href={t.href}
+                      className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white/70 px-4 py-3 backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900">{t.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">{t.subtitle}</p>
+                      </div>
+                      {t.connected ? (
+                        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-[11px] font-semibold text-[#FE7F2D] transition-transform group-hover:translate-x-0.5">
+                          Connect →
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -339,39 +366,38 @@ function ChatInputForm({
 }) {
   return (
     <form
-      className="rounded-2xl border border-[#2e2e2c] bg-[#232321] p-3 shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+      className="border-2 border-black bg-white transition"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(message);
       }}
     >
-      <textarea
-        value={message}
-        onChange={(event) => onMessageChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            onSubmit(message);
-          }
-        }}
-        placeholder="Ask anything, or tell me what to handle..."
-        rows={2}
-        disabled={sending}
-        className="w-full resize-none bg-transparent text-sm text-[#f2f1ec] placeholder:text-[#6b6b63] focus:outline-none disabled:opacity-60"
-      />
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <IconButton title="Attach (coming soon)"><PlusIcon className="h-4 w-4" /></IconButton>
-          <IconButton title="Layers (coming soon)"><LayersIcon className="h-4 w-4" /></IconButton>
-          <IconButton title="Tune (coming soon)"><SlidersIcon className="h-4 w-4" /></IconButton>
-          <IconButton title="Quick action (coming soon)"><BoltIcon className="h-4 w-4" /></IconButton>
-        </div>
-        <div className="flex items-center gap-2">
-          <IconButton title="Voice input (coming soon)"><MicIcon className="h-4 w-4" /></IconButton>
+      <div className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
+        <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D]">
+          <SparkIcon className="h-3.5 w-3.5" />
+        </span>
+        <span className="text-sm font-bold text-slate-900">Ask Riz</span>
+      </div>
+      <div className="p-3">
+        <textarea
+          value={message}
+          onChange={(event) => onMessageChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              onSubmit(message);
+            }
+          }}
+          placeholder="Ask anything, or tell me what to handle…"
+          rows={3}
+          disabled={sending}
+          className="w-full resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+        />
+        <div className="mt-2 flex items-center justify-end">
           <button
             type="submit"
             disabled={!message.trim() || sending}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f1ec] text-[#1a1a19] transition disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white transition hover:brightness-105 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-400"
           >
             <ArrowUpIcon className="h-4 w-4" />
           </button>
@@ -381,68 +407,11 @@ function ChatInputForm({
   );
 }
 
-function IconButton({ children, title }: { children: React.ReactNode; title: string }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8a8578] transition hover:bg-[#2a2a28]"
-    >
-      {children}
-    </button>
-  );
-}
-
-function TelegramIcon({ className }: { className?: string }) {
+function SparkIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z" />
+      <path d="M12 2l1.9 5.6a4 4 0 0 0 2.5 2.5L22 12l-5.6 1.9a4 4 0 0 0-2.5 2.5L12 22l-1.9-5.6a4 4 0 0 0-2.5-2.5L2 12l5.6-1.9a4 4 0 0 0 2.5-2.5L12 2z" />
     </svg>
   );
 }
 
-function DatabaseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5v4c0 1.657 4.03 3 9 3s9-1.343 9-3V5" />
-      <path d="M3 9v4c0 1.657 4.03 3 9 3s9-1.343 9-3V9" />
-      <path d="M3 13v4c0 1.657 4.03 3 9 3s9-1.343 9-3v-4" />
-    </svg>
-  );
-}
-
-function CheckStep({ done, label, href }: { done: boolean; label: string; href: string }) {
-  return (
-    <Link href={href} className="flex items-center gap-2.5 text-sm transition hover:opacity-80">
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${done ? "border-emerald-500 bg-emerald-500/15 text-emerald-400" : "border-white/20 text-white/30"}`}>
-        {done ? (
-          <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        ) : (
-          <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
-        )}
-      </span>
-      <span className={done ? "text-white/40 line-through" : "text-white/80"}>{label}</span>
-    </Link>
-  );
-}
-
-function OnboardingChecklist({ googleConnected, telegramLinked, hasConnectors }: {
-  googleConnected: boolean;
-  telegramLinked: boolean;
-  hasConnectors: boolean;
-}) {
-  const allDone = googleConnected && telegramLinked && hasConnectors;
-  if (allDone) return null;
-
-  return (
-    <div className="mt-5 w-full max-w-2xl rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/30">Get started</p>
-      <div className="flex flex-col gap-2.5">
-        <CheckStep done={googleConnected} label="Connect Gmail & Calendar" href="/dashboard/connectors" />
-        <CheckStep done={telegramLinked} label="Link Telegram for notifications" href="/dashboard/telegram" />
-        <CheckStep done={hasConnectors} label="Connect a data source (Postgres, Stripe…)" href="/dashboard/connectors" />
-      </div>
-    </div>
-  );
-}

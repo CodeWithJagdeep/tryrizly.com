@@ -2,7 +2,7 @@ import { callGateway } from "../../../_lib/gateway";
 import { normalizeEmail, sanitizeReturnPath, setAuthCookie, signAuthToken } from "../../../_lib/auth-store";
 
 type CompleteResult = {
-  identity?: { email: string; name?: string };
+  identity?: { email: string; name?: string; needsOnboarding?: boolean; tokenVersion?: number };
   returnTo?: string;
   error?: string;
 };
@@ -27,7 +27,12 @@ export async function GET(request: Request) {
     return Response.redirect(`${baseUrl}/login?error=linkedin_${result.error ?? "failed"}`);
   }
 
-  const jwt = signAuthToken(result.identity);
+  let jwt: string;
+  try {
+    jwt = signAuthToken(result.identity);
+  } catch {
+    return Response.redirect(`${baseUrl}/login?error=linkedin_session_init_failed`);
+  }
   await setAuthCookie(jwt);
 
   // Auto-start 15-day trial on first login; idempotent if already started.
@@ -38,5 +43,6 @@ export async function GET(request: Request) {
     name: result.identity.name,
   }).catch(() => undefined);
 
-  return Response.redirect(new URL(sanitizeReturnPath(result.returnTo), baseUrl));
+  const destination = result.identity.needsOnboarding ? "/onboarding" : sanitizeReturnPath(result.returnTo);
+  return Response.redirect(new URL(destination, baseUrl));
 }

@@ -128,14 +128,14 @@ export class AiCoreService {
     return { tasks, reminders };
   }
 
-  async markTaskDone(body: { id: string }) {
-    await this.taskRepository.markDone(body.id);
-    return { ok: true };
+  async markTaskDone(body: { id: string; userId: string }) {
+    const updated = await this.taskRepository.markDone(body.id, body.userId);
+    return { ok: updated };
   }
 
-  async cancelScheduledReminder(body: { id: string }) {
-    await cancelReminder(body.id);
-    return { ok: true };
+  async cancelScheduledReminder(body: { id: string; userId: string }) {
+    const cancelled = await cancelReminder(body.id, body.userId);
+    return { ok: cancelled };
   }
 
   /** Spine: resolve a person/company reference to a canonical entity id. */
@@ -268,6 +268,30 @@ export class AiCoreService {
     return this.proactive.morningBrief(body.userId ?? env.DEFAULT_USER_ID);
   }
 
+  /**
+   * Scheduler entrypoint: only send the morning brief when it's actually
+   * `briefHour` in *this* user's saved timezone. The worker fires this hourly for
+   * every user, so a user in Asia/Kolkata gets their brief in the Kolkata morning
+   * and one in America/Guatemala gets it in the Guatemala morning — not all at a
+   * single global UTC hour. On-demand briefs still use proactiveBrief directly.
+   */
+  async proactiveBriefIfDue(body: { userId?: string; briefHour?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const briefHour = body.briefHour ?? env.MORNING_BRIEF_HOUR;
+    const timezone = await this.preferences.getTimezone(userId);
+    const localHour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "2-digit",
+        hourCycle: "h23",
+      }).format(new Date()),
+    );
+    if (localHour !== briefHour) {
+      return { ok: true, skipped: true as const, localHour, timezone };
+    }
+    return this.proactive.morningBrief(userId);
+  }
+
   proactiveSync(body: { userId?: string }) {
     return this.proactive.syncMeetingReminders(body.userId ?? env.DEFAULT_USER_ID);
   }
@@ -299,19 +323,20 @@ export class AiCoreService {
       ],
     });
 
-    if (data.extractDecisions) {
-      const msg = await this.google.getMessage(data.userId, data.messageId, "full");
-      const body = msg.connected ? msg.message.body : "";
-      if (body) {
+    const msg = await this.google.getMessage(data.userId, data.messageId, "full");
+    const body = msg.connected ? msg.message.body : "";
+
+    if (data.extractDecisions && body) {
         await this.decisions.extractFromEmail(data.userId, {
           from: data.from,
           subject: data.subject,
           body,
         });
+    }
 
-        // Mine signature contacts (emails, phones, LinkedIn URLs) from body
-        await enrichContactsFromBody(data.userId, body, this.entityResolver);
-      }
+    if (body) {
+      // Mine signature contacts (emails, phones, LinkedIn/GitHub URLs) from body.
+      await enrichContactsFromBody(data.userId, body, this.entityResolver);
     }
 
     return { ok: true as const };
@@ -517,8 +542,8 @@ export class AiCoreService {
   }
 
   async scheduleReminder(body: ReminderRequest) {
-    if (!body.message || !body.runAt) {
-      throw new Error("message_and_runAt_required");
+    if (!body.message || (!body.runAt && !body.repeat)) {
+      throw new Error("message_and_runAt_or_repeat_required");
     }
 
     const context = await this.contextService.build({
@@ -695,6 +720,7 @@ function parseCcHeader(cc: string): { name?: string; email?: string }[] {
 
 const PHONE_RE = /(?:\+?\d[\d\s\-().]{7,}\d)/g;
 const LINKEDIN_RE = /https?:\/\/(?:www\.)?linkedin\.com\/in\/[\w-]+\/?/gi;
+const GITHUB_RE = /https?:\/\/(?:www\.)?github\.com\/(?!features|marketplace|pricing|topics|orgs\b)[\w-]+\/?/gi;
 const EMAIL_IN_BODY_RE = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
 
 /**
@@ -713,6 +739,7 @@ async function enrichContactsFromBody(
 
   const phones = [...new Set((tail.match(PHONE_RE) ?? []).map((p) => p.trim()))].slice(0, 3);
   const linkedins = [...new Set((tail.match(LINKEDIN_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
+  const githubs = [...new Set((tail.match(GITHUB_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
   const bodyEmails = [...new Set((tail.match(EMAIL_IN_BODY_RE) ?? []).map((e) => e.toLowerCase()))].slice(0, 5);
 
   // For each email found in the signature: if it matches an existing entity,
@@ -731,7 +758,7 @@ async function enrichContactsFromBody(
       }).catch(() => undefined);
     }
 
-    for (const url of linkedins) {
+    for (const url of [...linkedins, ...githubs]) {
       await resolver.attachAlias(userId, entityId, {
         alias: url,
         normalized: url,

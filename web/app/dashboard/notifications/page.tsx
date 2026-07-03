@@ -1,7 +1,7 @@
 import { NotificationsClient } from "./notifications-client";
 
 export const metadata = {
-  title: "Notifications | HeyRiz",
+  title: "Notifications | rizly",
 };
 
 export default function NotificationsPage() {

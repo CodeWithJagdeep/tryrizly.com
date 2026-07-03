@@ -1,7 +1,7 @@
 import { ConnectorsClient } from "./connectors-client";
 
 export const metadata = {
-  title: "Connectors | HeyRiz",
+  title: "Connectors | rizly",
 };
 
 export default function ConnectorsPage() {

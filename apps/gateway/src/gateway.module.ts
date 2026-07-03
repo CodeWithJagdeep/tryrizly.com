@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ThrottlerModule } from "@nestjs/throttler";
 import {
   APPROVAL_STORE,
   RedisApprovalStore,
@@ -7,6 +8,7 @@ import { ApprovalsController } from "./approvals.controller";
 import { AuthController } from "./auth/auth.controller";
 import { AuthRepository } from "./auth/auth.repository";
 import { AuthService } from "./auth/auth.service";
+import { EmailThrottlerGuard } from "./auth/email-throttler.guard";
 import {
   CONVERSATION_STORE,
   RedisConversationStore,
@@ -15,15 +17,23 @@ import { BillingController } from "./billing/billing.controller";
 import { BillingGatewayService } from "./billing/billing.service";
 import { GatewayController } from "./gateway.controller";
 import { GatewayService } from "./gateway.service";
+import { RedisThrottlerStorage } from "./throttler-redis.storage";
 import { TelegramPollerService } from "./telegram-poller.service";
 import { TelegramService } from "./telegram.service";
 
 @Module({
+  imports: [
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 20 }],
+      storage: new RedisThrottlerStorage(),
+    }),
+  ],
   controllers: [GatewayController, AuthController, BillingController, ApprovalsController],
   providers: [
     AuthRepository,
     AuthService,
     BillingGatewayService,
+    EmailThrottlerGuard,
     GatewayService,
     TelegramService,
     TelegramPollerService,

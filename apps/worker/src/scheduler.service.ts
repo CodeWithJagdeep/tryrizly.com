@@ -35,10 +35,12 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     const connection = createRedisConnection();
     this.queue = new Queue(queueNames.scheduler, { connection });
 
-    // Daily morning brief, calendar sweep, and inbox email poll.
+    // Morning brief: fire hourly, but ai-core only actually sends to each user
+    // when it's MORNING_BRIEF_HOUR in *their* saved timezone — so the brief lands
+    // in each principal's own morning, not a single global UTC hour.
     await this.queue.upsertJobScheduler(
       "morning-brief",
-      { pattern: `0 ${env.MORNING_BRIEF_HOUR} * * *`, tz: env.DEFAULT_TIMEZONE },
+      { pattern: `0 * * * *`, tz: "UTC" },
       { name: "morning-brief", data: {} },
     );
     await this.queue.upsertJobScheduler(
@@ -63,7 +65,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       { pattern: "0 14 * * *", tz: env.DEFAULT_TIMEZONE },
       { name: "daily-anomaly", data: {} },
     );
-    // Trial-expiry nudge: runs daily at 10 AM, ai-core fans out to users nearing end.
+    // Daily billing sweep at 10 AM: trial nudges + expiry + subscription
+    // reconciliation. Scheduler id kept from the old nudge-only job so the
+    // stale repeatable job doesn't linger in Redis alongside a new one.
     await this.queue.upsertJobScheduler(
       "trial-expiry-nudge",
       { pattern: "0 10 * * *", tz: env.DEFAULT_TIMEZONE },
@@ -76,7 +80,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         if (job.name === "morning-brief") {
           await this.forEachActiveUser(undefined, async (userId) => {
             const result = await firstValueFrom(
-              this.aiCore.send("proactive.brief", { userId }),
+              this.aiCore.send("proactive.briefIfDue", {
+                userId,
+                briefHour: env.MORNING_BRIEF_HOUR,
+              }),
             );
             logger.info("scheduler tick handled", { job: job.name, userId, result });
           });
@@ -119,7 +126,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (job.name === "trial-expiry-nudge") {
-          await this.nudgeExpiringTrials();
+          await this.runBillingSweep();
           return;
         }
       },
@@ -143,63 +150,66 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async nudgeExpiringTrials() {
-    type ActiveUsersResult = { users?: string[] };
-    type BillingStatus = { trial?: { active?: boolean; endsAt?: string } | null };
+  /**
+   * The billing service owns the sweep logic (who to nudge, expiry processing,
+   * provider reconciliation — deduped in its own tables); this side owns the
+   * clock and the notification queue, so it enqueues whatever the sweep returns.
+   */
+  private async runBillingSweep() {
+    type SweepResult = {
+      ok?: boolean;
+      nudges?: Array<{ userId: string; kind: string; message: string; emailFallback?: boolean }>;
+      expiredProcessed?: number;
+      reconciled?: number;
+    };
 
     const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
     const secret = env.AUTH_INTERNAL_SECRET;
     if (!gatewayUrl) return;
 
-    let users: string[] = [];
+    let result: SweepResult;
     try {
-      const result = await firstValueFrom(
-        this.aiCore.send<ActiveUsersResult>("users.active", {}),
-      );
-      users = [...new Set(result.users ?? [])].filter(Boolean);
-    } catch {
+      const headers: Record<string, string> = {};
+      if (secret) headers["x-heyriz-internal-secret"] = secret;
+      const res = await fetch(`${gatewayUrl}/api/billing/sweep`, { method: "POST", headers });
+      if (!res.ok) {
+        logger.warn("billing sweep request failed", { status: res.status });
+        return;
+      }
+      result = (await res.json()) as SweepResult;
+    } catch (err) {
+      logger.warn("billing sweep request threw", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
 
-    for (const userId of users) {
+    for (const nudge of result.nudges ?? []) {
       try {
-        const headers: Record<string, string> = {};
-        if (secret) headers["x-heyriz-internal-secret"] = secret;
-        const res = await fetch(
-          `${gatewayUrl}/api/billing/status?userId=${encodeURIComponent(userId)}`,
-          { headers },
+        await getNotificationQueue().add(
+          "telegram-notification",
+          {
+            userId: nudge.userId,
+            message: nudge.message,
+            source: "gateway" as const,
+            emailFallback: nudge.emailFallback,
+          },
+          { jobId: `${nudge.kind}:${nudge.userId}:${new Date().toISOString().slice(0, 10)}` },
         );
-        if (!res.ok) continue;
-        const data = (await res.json()) as BillingStatus;
-        const trial = data.trial;
-        if (!trial?.active || !trial.endsAt) continue;
-
-        const daysLeft = Math.ceil(
-          (new Date(trial.endsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-        );
-
-        if (daysLeft === 3 || daysLeft === 1) {
-          await getNotificationQueue().add(
-            "telegram-notification",
-            {
-              userId,
-              message:
-                daysLeft === 1
-                  ? "⏰ Your HeyRiz free trial ends tomorrow. Subscribe now to keep access: /dashboard/upgrade"
-                  : "⏰ Your HeyRiz free trial ends in 3 days. Subscribe to keep your reminders, email triage, and morning briefs: /dashboard/upgrade",
-              source: "ai-core" as const,
-            },
-            { jobId: `trial-nudge:${userId}:d${daysLeft}` },
-          );
-          logger.info("trial nudge enqueued", { userId, daysLeft });
-        }
+        logger.info("billing nudge enqueued", { userId: nudge.userId, kind: nudge.kind });
       } catch (err) {
-        logger.warn("trial nudge failed for user", {
-          userId,
+        logger.warn("billing nudge enqueue failed", {
+          userId: nudge.userId,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
+
+    logger.info("billing sweep completed", {
+      nudges: (result.nudges ?? []).length,
+      expiredProcessed: result.expiredProcessed ?? 0,
+      reconciled: result.reconciled ?? 0,
+    });
   }
 
   async onModuleDestroy() {

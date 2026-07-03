@@ -1,7 +1,7 @@
 import { EmailsClient } from "./emails-client";
 
 export const metadata = {
-  title: "Emails | HeyRiz",
+  title: "Emails | rizly",
 };
 
 export default function EmailsPage() {

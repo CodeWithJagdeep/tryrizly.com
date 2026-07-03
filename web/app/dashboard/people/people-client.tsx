@@ -49,65 +49,6 @@ const AVATAR_COLORS = [
   "bg-cyan-500/20 text-cyan-300",
 ];
 
-const SAMPLE_PEOPLE: Person[] = [
-  {
-    id: "sample-person-arjun",
-    type: "person",
-    canonicalName: "Arjun Mehta",
-    createdAt: daysAgo(1),
-    emails: ["arjun@northstar.vc"],
-    phones: ["+91 98765 43210"],
-    urls: ["https://linkedin.com/in/arjunmehta"],
-    sample: true,
-  },
-  {
-    id: "sample-person-maya",
-    type: "person",
-    canonicalName: "Maya Kapoor",
-    createdAt: daysAgo(3),
-    emails: ["maya@ledgerflow.io"],
-    phones: [],
-    urls: ["https://linkedin.com/in/mayakapoor"],
-    sample: true,
-  },
-  {
-    id: "sample-person-sarah",
-    type: "person",
-    canonicalName: "Sarah Chen",
-    createdAt: daysAgo(8),
-    emails: ["sarah@brightdesk.co"],
-    phones: ["+1 415 555 0192"],
-    urls: [],
-    sample: true,
-  },
-  {
-    id: "sample-company-ledgerflow",
-    type: "company",
-    canonicalName: "LedgerFlow",
-    createdAt: daysAgo(2),
-    emails: ["billing@ledgerflow.io"],
-    phones: [],
-    urls: [],
-    sample: true,
-  },
-  {
-    id: "sample-company-northstar",
-    type: "company",
-    canonicalName: "Northstar Ventures",
-    createdAt: daysAgo(6),
-    emails: ["team@northstar.vc"],
-    phones: [],
-    urls: [],
-    sample: true,
-  },
-];
-
-function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString();
-}
-
 function avatarColor(id: string) {
   let n = 0;
   for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
@@ -138,7 +79,7 @@ export function PeopleClient() {
     })();
   }, []);
 
-  const displayPeople = !gmailConnected && people.length === 0 ? SAMPLE_PEOPLE : people;
+  const displayPeople = people;
 
   const tabbedPeople =
     activeTab === "all" ? displayPeople : displayPeople.filter((person) => person.type === activeTab);
@@ -158,16 +99,16 @@ export function PeopleClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
+    <main className="min-h-screen bg-white text-slate-900">
       {/* Header */}
       <header className="px-6 pt-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">People</h1>
-            <p className="mt-0.5 text-sm text-white/55">Everyone Riz has seen in your emails</p>
+            <p className="mt-0.5 text-sm text-slate-500">Everyone Riz has seen in your emails</p>
           </div>
           {!loading && (
-            <span className="border border-[#2e2e2c] px-3 py-1 text-sm text-white/55">
+            <span className="border border-slate-200 px-3 py-1 text-sm text-slate-500">
               {displayPeople.length} contact{displayPeople.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -180,7 +121,7 @@ export function PeopleClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name or email…"
-            className="w-full border border-[#2e2e2c] bg-[#1f1f1e] py-2.5 pl-9 pr-4 text-sm text-[#f2f1ec] placeholder:text-white/45 focus:border-[#3e3e3c] focus:outline-none"
+            className="w-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
           />
         </div>
 
@@ -192,14 +133,14 @@ export function PeopleClient() {
               onClick={() => setActiveTab(tab.key)}
               className={`-mb-px flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === tab.key
-                  ? "bg-[#242422] text-[#f2f1ec]"
-                  : "text-white/55 hover:bg-[#20201f] hover:text-white/65"
+                  ? "bg-slate-50 text-slate-900"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-600"
               }`}
             >
               {tab.label}
               {!loading && counts[tab.key] > 0 && (
                 <span className={`px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === tab.key ? "bg-[#f2f1ec]/15 text-[#f2f1ec]" : "bg-[#2e2e2c] text-white/55"
+                  activeTab === tab.key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   {counts[tab.key]}
                 </span>
@@ -212,8 +153,8 @@ export function PeopleClient() {
       <div className="w-full px-6 py-6 space-y-6">
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#2e2e2c] border-t-[#f2f1ec]" />
-            <span className="text-sm text-white/55">Loading contacts…</span>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+            <span className="text-sm text-slate-500">Loading contacts…</span>
           </div>
         )}
 
@@ -225,14 +166,16 @@ export function PeopleClient() {
 
         {!loading && !error && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-center">
-            <div className="flex h-12 w-12 items-center justify-center border border-[#2e2e2c] bg-[#1f1f1e]">
+            <div className="flex h-12 w-12 items-center justify-center border border-slate-200 bg-white">
               <UsersIcon />
             </div>
             <p className="font-medium">{query ? "No matches" : "No contacts yet"}</p>
-            <p className="max-w-xs text-sm text-white/55">
+            <p className="max-w-xs text-sm text-slate-500">
               {query
                 ? "Try a different name or email."
-                : "As Riz processes your emails, everyone you correspond with will appear here."}
+                : gmailConnected
+                  ? "As Riz processes your emails, real people and companies you correspond with will appear here."
+                  : "Connect Gmail to build this list from real email contacts."}
             </p>
           </div>
         )}
@@ -247,12 +190,12 @@ export function PeopleClient() {
 
 function PeopleTable({ items }: { items: Person[] }) {
   return (
-    <div className="overflow-x-auto bg-[#1f1f1e]">
+    <div className="overflow-x-auto bg-white">
       <table className="w-full min-w-[1200px] border-collapse text-left">
-        <thead className="bg-[#1a1a19] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
+        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="w-10 px-3 py-3">
-              <span className="block h-4 w-4 border border-[#2e2e2c]" />
+              <span className="block h-4 w-4 border border-slate-200" />
             </th>
             <th className="px-4 py-3">Contact name</th>
             <th className="px-4 py-3">First seen</th>
@@ -282,9 +225,9 @@ function PersonRow({ person }: { person: Person }) {
   const linkedinHandle = linkedinUrl?.replace(/https?:\/\/(?:www\.)?linkedin\.com\/in\//, "").replace(/\/$/, "");
 
   return (
-    <tr className="border-t border-[#2e2e2c] bg-[#1f1f1e] transition hover:bg-[#242422]">
+    <tr className="border-t border-slate-200 bg-white transition hover:bg-slate-50">
       <td className="px-3 py-4 align-middle">
-        <span className="block h-4 w-4 border border-[#343431] bg-[#1a1a19]" />
+        <span className="block h-4 w-4 border border-slate-200 bg-white" />
       </td>
       <td className="px-4 py-4 align-middle">
         <div className="flex items-center gap-3">
@@ -293,44 +236,44 @@ function PersonRow({ person }: { person: Person }) {
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-medium text-[#f2f1ec]">{person.canonicalName}</p>
+              <p className="truncate text-sm font-medium text-slate-900">{person.canonicalName}</p>
               {person.sample ? (
                 <span className="shrink-0 border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
                   Sample
                 </span>
               ) : null}
             </div>
-            <p className="mt-0.5 text-[11px] text-white/55">{person.type === "company" ? "Company" : "Person"}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{person.type === "company" ? "Company" : "Person"}</p>
           </div>
         </div>
       </td>
-      <td className="px-4 py-4 align-middle text-sm text-white/80">
+      <td className="px-4 py-4 align-middle text-sm text-slate-700">
         <p>{formatContactDate(person.createdAt)}</p>
-        <p className="mt-0.5 text-[11px] text-white/55">{timeAgo(person.createdAt)}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">{timeAgo(person.createdAt)}</p>
       </td>
       <td className="px-4 py-4 align-middle">
         <div className="flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#2a2a28] text-[10px] font-semibold text-white/65">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
             {company.charAt(0).toUpperCase()}
           </span>
-          <span className="text-sm text-white/80">{company}</span>
+          <span className="text-sm text-slate-700">{company}</span>
         </div>
       </td>
       <td className="px-4 py-4 align-middle">
         {primaryEmail ? (
-          <p className="text-sm text-white/80">{primaryEmail}</p>
+          <p className="text-sm text-slate-700">{primaryEmail}</p>
         ) : (
-          <p className="text-sm text-white/25">—</p>
+          <p className="text-sm text-slate-400">—</p>
         )}
         {person.emails.length > 1 && (
-          <p className="mt-0.5 text-[11px] text-white/40">+{person.emails.length - 1} more</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">+{person.emails.length - 1} more</p>
         )}
       </td>
       <td className="px-4 py-4 align-middle">
         {primaryPhone ? (
-          <p className="text-sm text-white/80">{primaryPhone}</p>
+          <p className="text-sm text-slate-700">{primaryPhone}</p>
         ) : (
-          <p className="text-sm text-white/25">—</p>
+          <p className="text-sm text-slate-400">—</p>
         )}
       </td>
       <td className="px-4 py-4 align-middle">
@@ -345,7 +288,7 @@ function PersonRow({ person }: { person: Person }) {
             <span className="truncate max-w-[120px]">{linkedinHandle}</span>
           </a>
         ) : (
-          <p className="text-sm text-white/25">—</p>
+          <p className="text-sm text-slate-400">—</p>
         )}
       </td>
     </tr>
@@ -373,7 +316,7 @@ function formatContactDate(iso: string) {
 function SearchIcon() {
   return (
     <svg
-      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45"
+      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
       viewBox="0 0 16 16" fill="none" aria-hidden="true"
     >
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
@@ -392,7 +335,7 @@ function LinkedInIcon() {
 
 function UsersIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/45" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400" aria-hidden="true">
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />

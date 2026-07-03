@@ -119,18 +119,23 @@ export class AiCoreController {
   }
 
   @MessagePattern("task.markDone")
-  markTaskDone(@Payload() payload: { id: string }) {
+  markTaskDone(@Payload() payload: { id: string; userId: string }) {
     return this.aiCoreService.markTaskDone(payload);
   }
 
   @MessagePattern("reminder.cancel")
-  cancelReminder(@Payload() payload: { id: string }) {
+  cancelReminder(@Payload() payload: { id: string; userId: string }) {
     return this.aiCoreService.cancelScheduledReminder(payload);
   }
 
   @MessagePattern("proactive.brief")
   proactiveBrief(@Payload() payload: { userId?: string }) {
     return this.aiCoreService.proactiveBrief(payload);
+  }
+
+  @MessagePattern("proactive.briefIfDue")
+  proactiveBriefIfDue(@Payload() payload: { userId?: string; briefHour?: number }) {
+    return this.aiCoreService.proactiveBriefIfDue(payload);
   }
 
   @MessagePattern("proactive.sync")

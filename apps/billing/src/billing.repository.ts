@@ -117,6 +117,14 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async findCustomer(userId: string): Promise<{ user_id: string; email: string | null; name: string | null } | null> {
+    const result = await this.query<{ user_id: string; email: string | null; name: string | null }>(
+      "select user_id, email, name from billing_customers where user_id = $1",
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async findTrial(userId: string): Promise<BillingTrialRecord | null> {
     const result = await this.query<BillingTrialRecord>(
       "select * from billing_trials where user_id = $1",
@@ -140,6 +148,50 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
       [input.userId, input.planId, input.startedAt, input.endsAt],
     );
     return result.rows[0];
+  }
+
+  /** Trials still running that end within `days` days — sweep nudge candidates. */
+  async findTrialsEndingWithin(days: number): Promise<BillingTrialRecord[]> {
+    const result = await this.query<BillingTrialRecord>(
+      `
+        select * from billing_trials
+        where consumed = false
+          and ends_at > now()
+          and ends_at <= now() + ($1 || ' days')::interval
+      `,
+      [days],
+    );
+    return result.rows;
+  }
+
+  /** Trials past their end date whose expiry hasn't been processed yet. */
+  async findExpiredUnconsumedTrials(): Promise<BillingTrialRecord[]> {
+    const result = await this.query<BillingTrialRecord>(
+      "select * from billing_trials where consumed = false and ends_at <= now()",
+    );
+    return result.rows;
+  }
+
+  async markTrialConsumed(userId: string) {
+    await this.query("update billing_trials set consumed = true where user_id = $1", [userId]);
+  }
+
+  /**
+   * Provider subscriptions that still look active locally but whose paid period
+   * lapsed more than a day ago — a missed webhook until proven otherwise.
+   */
+  async findLapsedProviderSubscriptions(): Promise<BillingSubscriptionRecord[]> {
+    const result = await this.query<BillingSubscriptionRecord>(
+      `
+        select * from billing_subscriptions
+        where provider = 'razorpay'
+          and provider_subscription_id is not null
+          and status in ('active', 'authenticated')
+          and current_period_end is not null
+          and current_period_end < now() - interval '1 day'
+      `,
+    );
+    return result.rows;
   }
 
   async createSubscription(input: {

@@ -5,9 +5,14 @@ import { TelegramService } from "../telegram.service";
 import type { GatewayService } from "../gateway.service";
 import type { AuthRepository } from "../auth/auth.repository";
 
+// The approval scenarios below all run as a linked owner. isOwner() now requires
+// a real telegram link (it fails closed), so the mock resolves a userId for any
+// chat — except the explicit "unlinked" chat id used by the deny scenario.
+const UNLINKED_CHAT_ID = "9999";
 const fakeAuthRepo = {
-  countTelegramLinks: async () => 0,
-  findUserIdByTelegramChat: async () => null,
+  countTelegramLinks: async () => 1,
+  findUserIdByTelegramChat: async (chatId: string) =>
+    chatId === UNLINKED_CHAT_ID ? null : "owner@example.com",
 } as unknown as AuthRepository;
 
 type Call = { pattern: string; payload: Record<string, unknown> };
@@ -137,6 +142,16 @@ async function main() {
     await tg.handleUpdate({ message: { chat: { id: 22 }, text: "schedule a sync" } });
     await tg.handleUpdate({ message: { chat: { id: 22 }, text: "yes" } });
     checks.push(["two pending -> bare 'yes' asks, never executes", calls.length === 2]);
+  }
+
+  // Scenario 8: a chat with no telegram link is not an owner — its messages are
+  // ignored and never reach ai-core (fail-closed; guards against the old
+  // "nobody linked yet -> everyone is owner" and DB-error fail-open).
+  {
+    const { svc, calls } = fakeGateway([proposal]);
+    const tg = new TelegramService(svc, new MemoryApprovalStore(), new MemoryConversationStore(), fakeAuthRepo);
+    await tg.handleUpdate({ message: { chat: { id: Number(UNLINKED_CHAT_ID) }, text: "reply to Naman" } });
+    checks.push(["unlinked chat -> ignored, never reaches ai-core", calls.length === 0]);
   }
 
   let ok = true;

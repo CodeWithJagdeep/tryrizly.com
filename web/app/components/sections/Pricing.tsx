@@ -15,8 +15,8 @@ const plans: Plan[] = [
     id: "free",
     name: "Free",
     price: "$0",
-    cadence: "7-day trial",
-    description: "Full features for a week, then choose a plan.",
+    cadence: "15-day trial",
+    description: "Full features for 15 days, then choose a plan.",
     features: ["Limited chat", "Basic memory", "Manual connector setup"],
   },
   {
@@ -48,52 +48,57 @@ const plans: Plan[] = [
 
 export function Pricing() {
   return (
-    <section className="bg-white py-20 md:py-28" id="pricing">
+    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas" id="pricing">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <h2 className="font-neue-haas max-w-lg text-3xl font-normal tracking-tight text-[#0f172a] md:text-4xl">
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">Pricing</p>
+          <h2 className="mt-4 max-w-lg text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             One price, no surprise overage.
           </h2>
-          <p className="mt-3 max-w-xl text-base leading-relaxed text-[#475569]">
-            Pick a plan and know exactly what you'll pay every month.
+          <p className="mt-3 max-w-xl text-base leading-relaxed text-gray-500">
+            Pick a plan and know exactly what you&apos;ll pay every month.
           </p>
         </Reveal>
 
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {plans.map((plan, index) => (
             <Reveal key={plan.id} delay={index * 0.05}>
               <div
-                className={`flex h-full flex-col rounded-xl border p-6 ${
+                className={`relative flex h-full flex-col border-2 border-black bg-white p-8 transition-all duration-300 ${
                   plan.highlighted
-                    ? "border-[#3784ff] bg-[#3784ff]/[0.03] shadow-[0_18px_40px_-24px_rgba(55,132,255,0.45)]"
-                    : "border-slate-200 bg-white"
+                    ? "shadow-[8px_8px_0px_0px_rgba(254,127,45,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[10px_10px_0px_0px_rgba(254,127,45,1)]"
+                    : "shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
                 }`}
               >
                 {plan.highlighted && (
-                  <span className="mb-3 inline-flex w-fit items-center rounded-full bg-[#3784ff] px-2.5 py-1 text-[11px] font-semibold text-white">
+                  <span className="mb-4 inline-flex w-fit items-center border-2 border-black bg-[#FE7F2D] px-3 py-1.5 text-xs font-black uppercase tracking-wide text-white">
                     Most popular
                   </span>
                 )}
-                <h3 className="text-lg font-semibold text-slate-950">{plan.name}</h3>
-                <p className="mt-3 flex items-baseline gap-1.5">
-                  <span className="text-3xl font-semibold text-slate-950">{plan.price}</span>
-                  <span className="text-sm text-slate-400">{plan.cadence}</span>
+                <h3 className="text-xl font-black uppercase tracking-tight text-black">{plan.name}</h3>
+                <p className="mt-4 flex items-baseline gap-2">
+                  <span className="text-4xl font-black text-black lg:text-5xl">{plan.price}</span>
+                  <span className="text-base font-medium text-gray-400">{plan.cadence}</span>
                 </p>
-                <p className="mt-3 text-sm leading-relaxed text-[#475569]">{plan.description}</p>
-                <ul className="mt-5 flex flex-col gap-2.5 text-sm text-slate-600">
+                <p className="mt-4 text-base leading-relaxed text-gray-500">{plan.description}</p>
+                <ul className="mt-6 flex flex-col gap-3 text-[15px] font-medium text-gray-600">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+                    <li key={feature} className="flex items-start gap-2.5">
+                      <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D]/10">
+                        <svg className="h-2.5 w-2.5 text-[#FE7F2D]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 8l3.5 3.5L13 4" />
+                        </svg>
+                      </span>
                       {feature}
                     </li>
                   ))}
                 </ul>
                 <a
                   href="/signup"
-                  className={`mt-6 flex h-11 w-full items-center justify-center rounded-full text-sm font-semibold transition ${
+                  className={`mt-8 flex h-12 w-full items-center justify-center border-2 border-black text-base font-black uppercase tracking-tight transition-colors ${
                     plan.highlighted
-                      ? "bg-[#3784ff] text-white hover:bg-[#2c72e5]"
-                      : "border border-slate-200 text-slate-950 hover:bg-slate-50"
+                      ? "bg-[#FE7F2D] text-white hover:bg-black"
+                      : "bg-white text-black hover:bg-black hover:text-white"
                   }`}
                 >
                   Start free trial

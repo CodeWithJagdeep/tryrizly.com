@@ -3,11 +3,11 @@ import { callGateway } from "../auth/_lib/gateway";
 import { requireSession } from "../onboarding/_lib/require-user";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
-type PendingApproval = { tool: string; payload: unknown };
 
 type ChatReply = {
   reply?: string;
-  pendingApproval?: { tool: string; payload: unknown; preview: string };
+  /** Opaque id + human preview only — the real tool/payload never leave the server. */
+  pendingApproval?: { id: string; preview: string };
   error?: string;
 };
 
@@ -15,7 +15,7 @@ type ChatBody = {
   message?: string;
   history?: ChatTurn[];
   approve?: boolean;
-  pendingApproval?: PendingApproval;
+  pendingApprovalId?: string;
 };
 
 export async function POST(request: Request) {
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       userId: session.userId,
       message,
       history: body?.history ?? [],
-      ...(body?.approve ? { approve: true, pendingApproval: body.pendingApproval } : {}),
+      ...(body?.approve ? { approve: true, pendingApprovalId: body.pendingApprovalId } : {}),
     });
 
     if (!result?.reply) {

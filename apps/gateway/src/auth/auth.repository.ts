@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { randomBytes, timingSafeEqual } from "crypto";
 import { Injectable } from "@nestjs/common";
 import { getDb } from "@heyriz/shared/db/mongo";
 
@@ -15,6 +15,12 @@ export type StoredUser = {
   passwordHash?: string;
   passwordSalt?: string;
   provider?: string;
+  /** True only once the address has been proven — OTP entered, or an OAuth
+   * sign-in that inherently proves the mailbox. Login is gated on this. */
+  emailVerified?: boolean;
+  /** Monotonic session epoch. Baked into issued JWTs; bumping it invalidates
+   * every outstanding token for the user (logout / "sign out everywhere"). */
+  tokenVersion?: number;
   onboarding: OnboardingState;
 };
 
@@ -97,11 +103,39 @@ export class AuthRepository {
     const record = await db
       .collection<{ code: string; expiresAt: Date }>("otp_codes")
       .findOne({ email });
-    if (!record || record.expiresAt.getTime() < Date.now() || record.code !== code) {
+    if (!record || record.expiresAt.getTime() < Date.now() || !codesMatch(record.code, code)) {
       return false;
     }
     await db.collection("otp_codes").deleteOne({ email });
     return true;
+  }
+
+  /**
+   * Marks the address as proven. `clearPassword` unsets any stored password —
+   * used when an OAuth sign-in proves ownership of an email that a *different*
+   * party had pre-seeded with a password (unverified), neutralising that
+   * pre-account-takeover vector.
+   */
+  async getTokenVersion(email: string): Promise<number> {
+    const user = await this.getUser(email);
+    return user?.tokenVersion ?? 0;
+  }
+
+  /** Bumps the session epoch so all previously-issued tokens stop validating. */
+  async incrementTokenVersion(email: string): Promise<void> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    await db.collection("users").updateOne({ email }, { $inc: { tokenVersion: 1 } });
+  }
+
+  async markEmailVerified(email: string, opts?: { clearPassword?: boolean }): Promise<void> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    const update: Record<string, unknown> = { $set: { emailVerified: true } };
+    if (opts?.clearPassword) {
+      update.$unset = { passwordHash: "", passwordSalt: "" };
+    }
+    await db.collection("users").updateOne({ email }, update);
   }
 
   async setOAuthState(provider: string, state: string, data: { returnTo: string }, ttlMs: number) {
@@ -184,4 +218,11 @@ export class AuthRepository {
     const db = await getDb();
     return db.collection("telegram_links").countDocuments();
   }
+}
+
+/** Constant-time OTP comparison — avoids leaking correct digits via timing. */
+function codesMatch(expected: string, actual: string): boolean {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(actual);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

@@ -10,17 +10,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  env: {
-    NEXT_PUBLIC_GATEWAY_URL: "https://api.getrizly.com",
-    NEXT_PUBLIC_SITE_URL: "https://getrizly.com",
-    WEB_APP_URL: "https://getrizly.com",
-    AUTH_JWT_SECRET: "REDACTED",
-    AUTH_INTERNAL_SECRET: "REDACTED",
-    GOOGLE_CLIENT_ID: "927489744703-ipmeciigf234kkceflkatb0o6pg55tlu.apps.googleusercontent.com",
-    GOOGLE_CLIENT_SECRET: "REDACTED",
-    GOOGLE_REDIRECT_URI: "https://api.getrizly.com/api/connectors/google/callback",
-    GOOGLE_LOGIN_REDIRECT_URI: "https://getrizly.com/api/auth/google/callback",
-  },
   async headers() {
     return [
       {

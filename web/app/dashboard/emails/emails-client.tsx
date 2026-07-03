@@ -76,10 +76,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   follow_up_needed: "bg-amber-500/15 text-amber-300 border-amber-500/20",
   general_high:     "bg-orange-500/15 text-orange-300 border-orange-500/20",
   account_alert:    "bg-red-500/15 text-red-300 border-red-500/20",
-  general_medium:   "bg-[#2a2a28] text-white/65 border-[#3e3e3c]",
-  general_low:      "bg-[#222220] text-white/55 border-[#2e2e2c]",
-  newsletter:       "bg-[#222220] text-white/55 border-[#2e2e2c]",
-  otp:              "bg-[#222220] text-white/55 border-[#2e2e2c]",
+  general_medium:   "bg-slate-100 text-slate-600 border-slate-300",
+  general_low:      "bg-slate-100 text-slate-500 border-slate-200",
+  newsletter:       "bg-slate-100 text-slate-500 border-slate-200",
+  otp:              "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -89,111 +89,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "business", label: "Business" },
   { key: "updates", label: "Updates" },
 ];
-
-const SAMPLE_EMAILS: ProcessedEmail[] = [
-  {
-    id: "sample-email-investor",
-    summary:
-      "Email from Arjun Mehta (Investor update request): Arjun asked for the latest traction numbers before Friday's partner meeting. He wants revenue, active customers, and the hiring plan summarized in one note.",
-    category: "investor_update",
-    tab: "business",
-    person: "Arjun Mehta",
-    dueDate: "Friday",
-    createdAt: hoursAgo(2),
-    messageId: "sample-investor",
-    sample: true,
-  },
-  {
-    id: "sample-email-payment",
-    summary:
-      "Email from Maya Kapoor (Invoice overdue): Maya flagged that the March platform invoice is still unpaid and asked whether finance needs a revised purchase order.",
-    category: "payment_due",
-    tab: "business",
-    person: "Maya Kapoor",
-    dueDate: "Today",
-    createdAt: hoursAgo(5),
-    messageId: "sample-payment",
-    sample: true,
-  },
-  {
-    id: "sample-email-meeting",
-    summary:
-      "Email from Sarah Chen (Book onboarding call): Sarah shared three slots for an onboarding call next week and asked which one works best for the team.",
-    category: "meeting_request",
-    tab: "business",
-    person: "Sarah Chen",
-    dueDate: "Tomorrow",
-    createdAt: hoursAgo(22),
-    messageId: "sample-meeting",
-    sample: true,
-  },
-  {
-    id: "sample-email-alert",
-    summary:
-      "Email from Stripe (Payout completed): Stripe confirmed that the latest payout has been sent to the connected bank account.",
-    category: "account_alert",
-    tab: "updates",
-    person: "Stripe",
-    dueDate: "",
-    createdAt: hoursAgo(30),
-    messageId: "sample-alert",
-    sample: true,
-  },
-  {
-    id: "sample-email-newsletter",
-    summary:
-      "Email from Product Hunt (Weekly digest): Product Hunt sent a weekly digest of tools trending in AI operations and customer support.",
-    category: "newsletter",
-    tab: "updates",
-    person: "Product Hunt",
-    dueDate: "",
-    createdAt: hoursAgo(55),
-    messageId: "sample-newsletter",
-    sample: true,
-  },
-];
-
-const SAMPLE_TASKS: EmailTask[] = [
-  {
-    id: "sample-task-investor",
-    summary: "Send Arjun the traction summary before Friday's partner meeting.",
-    source: "email",
-    status: "open",
-    createdAt: hoursAgo(2),
-  },
-  {
-    id: "sample-task-payment",
-    summary: "Confirm whether Maya needs a revised purchase order for the overdue invoice.",
-    source: "email",
-    status: "open",
-    createdAt: hoursAgo(5),
-  },
-];
-
-const SAMPLE_SENT: SentEmail[] = [
-  {
-    id: "sample-sent-investor",
-    to: "arjun@northstar.vc",
-    subject: "Re: Investor update request",
-    status: "Sent",
-    sentAt: hoursAgo(4),
-    sample: true,
-  },
-  {
-    id: "sample-sent-onboarding",
-    to: "sarah@brightdesk.co",
-    subject: "Onboarding call slots",
-    status: "Draft approved",
-    sentAt: hoursAgo(28),
-    sample: true,
-  },
-];
-
-function hoursAgo(hours: number) {
-  const date = new Date();
-  date.setHours(date.getHours() - hours);
-  return date.toISOString();
-}
 
 async function chatAction(msg: string) {
   await fetch("/api/chat", {
@@ -234,9 +129,9 @@ export function EmailsClient() {
   const realEmails = data.emails ?? [];
   const realEmailTasks = data.emailTasks ?? [];
   const gmailConnected = data.gmailConnected ?? false;
-  const emails = !gmailConnected && realEmails.length === 0 ? SAMPLE_EMAILS : realEmails;
-  const emailTasks = !gmailConnected && realEmailTasks.length === 0 ? SAMPLE_TASKS : realEmailTasks;
-  const sentEmails = SAMPLE_SENT;
+  const emails = realEmails;
+  const emailTasks = realEmailTasks;
+  const sentEmails: SentEmail[] = [];
   const labels = data.categoryLabels ?? {};
 
   const counts: Record<Tab, number> = {
@@ -270,13 +165,13 @@ export function EmailsClient() {
     : sentEmails;
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
+    <main className="min-h-screen bg-white text-slate-900">
       {/* Header */}
-      <header className="border-b border-[#2e2e2c] px-6 pt-5">
+      <header className="border-b border-slate-200 px-6 pt-5">
         <div className="flex items-center justify-between pb-4">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Emails</h1>
-            <p className="mt-0.5 text-sm text-white/55">
+            <p className="mt-0.5 text-sm text-slate-500">
               Analysed by Riz as they arrive via webhook
             </p>
           </div>
@@ -284,7 +179,7 @@ export function EmailsClient() {
             type="button"
             onClick={() => void load(true)}
             disabled={refreshing || loading}
-            className="flex items-center gap-2 rounded-lg border border-[#2e2e2c] px-3 py-1.5 text-sm text-white/65 transition hover:border-[#3e3e3c] hover:text-[#f2f1ec] disabled:opacity-40"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing} />
             Refresh
@@ -293,7 +188,7 @@ export function EmailsClient() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
             <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
@@ -301,7 +196,7 @@ export function EmailsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search emails…"
-            className="w-full rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] py-2 pl-9 pr-4 text-sm text-[#f2f1ec] placeholder:text-white/45 focus:border-[#3e3e3c] focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
           />
         </div>
 
@@ -314,14 +209,14 @@ export function EmailsClient() {
               onClick={() => setActiveTab(key)}
               className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === key
-                  ? "border-[#f2f1ec] text-[#f2f1ec]"
-                  : "border-transparent text-white/55 hover:text-white/65"
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-600"
               }`}
             >
               {label}
               {!loading && counts[key] > 0 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === key ? "bg-[#f2f1ec]/15 text-[#f2f1ec]" : "bg-[#2e2e2c] text-white/55"
+                  activeTab === key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   {counts[key]}
                 </span>
@@ -335,8 +230,8 @@ export function EmailsClient() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#2e2e2c] border-t-[#f2f1ec]" />
-            <span className="text-sm text-white/55">Loading emails…</span>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+            <span className="text-sm text-slate-500">Loading emails…</span>
           </div>
         )}
 
@@ -357,12 +252,14 @@ export function EmailsClient() {
               <SentTable emails={displayedSent} />
             ) : (
               <div className="flex flex-col items-center gap-3 py-20 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2e2e2c] bg-[#1f1f1e]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
                   <InboxIcon />
                 </div>
                 <p className="font-medium">No emails here yet</p>
-                <p className="max-w-xs text-sm text-white/55">
-                  {activeTab === "followups"
+                <p className="max-w-xs text-sm text-slate-500">
+                  {!gmailConnected
+                    ? "Connect Gmail so Riz can analyse incoming email and build this inbox from real messages."
+                    : activeTab === "followups"
                     ? "Follow-ups Riz creates from email will appear here."
                     : activeTab === "sent"
                       ? "Sent email history is not connected yet."
@@ -372,23 +269,31 @@ export function EmailsClient() {
                       ? "Account alerts, newsletters and notifications will appear here."
                       : "Every email Riz analyses via webhook will appear here."}
                 </p>
+                {!gmailConnected && (
+                  <a
+                    href="/api/connectors/gmail/start?returnTo=%2Fdashboard%2Femails"
+                    className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+                  >
+                    Connect Gmail
+                  </a>
+                )}
               </div>
             )}
 
             {emailTab && emailTasks.length > 0 && (
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-white/55">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   Follow-ups Riz created from email
                 </p>
                 <div className="flex flex-col gap-2">
                   {emailTasks.map((t) => (
-                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] px-4 py-3">
+                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
                       <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-violet-500/40 bg-violet-500/10">
                         <CheckIcon />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white/80 leading-snug">{t.summary}</p>
-                        <p className="mt-1 text-[11px] text-white/45">{timeAgo(t.createdAt)}</p>
+                        <p className="text-sm text-slate-700 leading-snug">{t.summary}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">{timeAgo(t.createdAt)}</p>
                       </div>
                     </div>
                   ))}
@@ -414,9 +319,9 @@ function EmailTable({
   onRefresh: () => void;
 }) {
   return (
-    <div className="overflow-x-auto bg-[#1f1f1e]">
+    <div className="overflow-x-auto bg-white">
       <table className="w-full min-w-[1050px] border-collapse text-left">
-        <thead className="bg-[#1a1a19] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
+        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="px-4 py-3">Sender</th>
             <th className="px-4 py-3">Subject</th>
@@ -465,21 +370,21 @@ function EmailTableRow({
   }
 
   return (
-    <tr className="border-t border-[#2e2e2c] bg-[#1f1f1e] align-top transition hover:bg-[#242422]">
+    <tr className="border-t border-slate-200 bg-white align-top transition hover:bg-slate-50">
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2a2a28] text-[13px] font-semibold text-white/65">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600">
             {initials}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#f2f1ec]">{from || email.person || "Unknown"}</p>
-            {email.person ? <p className="mt-0.5 text-xs text-white/55">{email.person}</p> : null}
+            <p className="truncate text-sm font-semibold text-slate-900">{from || email.person || "Unknown"}</p>
+            {email.person ? <p className="mt-0.5 text-xs text-slate-500">{email.person}</p> : null}
           </div>
         </div>
       </td>
       <td className="max-w-[420px] px-4 py-4">
-        <p className="truncate text-sm text-white/80">{subject || email.summary}</p>
-        {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/55">{body}</p> : null}
+        <p className="truncate text-sm text-slate-700">{subject || email.summary}</p>
+        {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{body}</p> : null}
       </td>
       <td className="px-4 py-4">
         <div className="flex flex-wrap gap-1.5">
@@ -493,11 +398,11 @@ function EmailTableRow({
           ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap px-4 py-4 text-sm text-white/65">{email.dueDate || "-"}</td>
-      <td className="whitespace-nowrap px-4 py-4 text-sm text-white/65">{formatDate(email.createdAt)}</td>
+      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{email.dueDate || "-"}</td>
+      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.createdAt)}</td>
       <td className="px-4 py-4 text-right">
         {email.sample ? (
-          <span className="text-xs text-white/55">Sample</span>
+          <span className="text-xs text-slate-500">Sample</span>
         ) : (
           <div className="flex justify-end gap-1.5">
             <ActionButton
@@ -521,9 +426,9 @@ function EmailTableRow({
 
 function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
   return (
-    <div className="overflow-x-auto bg-[#1f1f1e]">
+    <div className="overflow-x-auto bg-white">
       <table className="w-full min-w-[860px] border-collapse text-left">
-        <thead className="bg-[#1a1a19] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
+        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="px-4 py-3">Follow-up</th>
             <th className="px-4 py-3">Source</th>
@@ -533,15 +438,15 @@ function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
         </thead>
         <tbody>
           {tasks.map((task) => (
-            <tr key={task.id} className="border-t border-[#2e2e2c] bg-[#1f1f1e] transition hover:bg-[#242422]">
-              <td className="px-4 py-4 text-sm text-white/80">{task.summary}</td>
-              <td className="px-4 py-4 text-sm text-white/65">{task.source}</td>
+            <tr key={task.id} className="border-t border-slate-200 bg-white transition hover:bg-slate-50">
+              <td className="px-4 py-4 text-sm text-slate-700">{task.summary}</td>
+              <td className="px-4 py-4 text-sm text-slate-600">{task.source}</td>
               <td className="px-4 py-4">
                 <span className="border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-300">
                   {task.status || "open"}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/65">{timeAgo(task.createdAt)}</td>
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{timeAgo(task.createdAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -552,9 +457,9 @@ function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
 
 function SentTable({ emails }: { emails: SentEmail[] }) {
   return (
-    <div className="overflow-x-auto bg-[#1f1f1e]">
+    <div className="overflow-x-auto bg-white">
       <table className="w-full min-w-[860px] border-collapse text-left">
-        <thead className="bg-[#1a1a19] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
+        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="px-4 py-3">Recipient</th>
             <th className="px-4 py-3">Subject</th>
@@ -564,15 +469,15 @@ function SentTable({ emails }: { emails: SentEmail[] }) {
         </thead>
         <tbody>
           {emails.map((email) => (
-            <tr key={email.id} className="border-t border-[#2e2e2c] bg-[#1f1f1e] transition hover:bg-[#242422]">
-              <td className="px-4 py-4 text-sm text-white/80">{email.to}</td>
-              <td className="px-4 py-4 text-sm text-white/80">{email.subject}</td>
+            <tr key={email.id} className="border-t border-slate-200 bg-white transition hover:bg-slate-50">
+              <td className="px-4 py-4 text-sm text-slate-700">{email.to}</td>
+              <td className="px-4 py-4 text-sm text-slate-700">{email.subject}</td>
               <td className="px-4 py-4">
                 <span className="border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
                   {email.sample ? "Sample" : email.status}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/65">{formatDate(email.sentAt)}</td>
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.sentAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -609,19 +514,19 @@ function EmailItem({
   }
 
   return (
-    <div className="group flex items-start gap-3 bg-[#1f1f1e] px-4 py-4 transition hover:bg-[#242422]">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2a2a28] text-[13px] font-semibold text-white/65">
+    <div className="group flex items-start gap-3 bg-white px-4 py-4 transition hover:bg-slate-50">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600">
         {initials}
       </span>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-semibold text-[#f2f1ec]">{from || "Unknown"}</span>
-          <span className="shrink-0 text-[11px] text-white/45">{formatDate(email.createdAt)}</span>
+          <span className="truncate text-sm font-semibold text-slate-900">{from || "Unknown"}</span>
+          <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.createdAt)}</span>
         </div>
 
-        {subject && <p className="mt-0.5 truncate text-sm text-white/80">{subject}</p>}
-        {body && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/55">{body}</p>}
+        {subject && <p className="mt-0.5 truncate text-sm text-slate-700">{subject}</p>}
+        {body && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{body}</p>}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${catColor}`}>
@@ -632,7 +537,7 @@ function EmailItem({
               Sample
             </span>
           )}
-          {email.person && <span className="text-[11px] text-white/45">· {email.person}</span>}
+          {email.person && <span className="text-[11px] text-slate-400">· {email.person}</span>}
           {email.dueDate && <span className="text-[11px] text-amber-500/70">· Due {email.dueDate}</span>}
         </div>
 
@@ -685,7 +590,7 @@ function ActionButton({
       className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
         done
           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-          : "border-[#2e2e2c] bg-[#1a1a19] text-white/65 hover:border-[#3e3e3c] hover:text-[#f2f1ec]"
+          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
       } disabled:opacity-50`}
     >
       {active ? "…" : done ? `✓ ${label}` : label}
@@ -708,7 +613,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 
 function InboxIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/45" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400" aria-hidden="true">
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>

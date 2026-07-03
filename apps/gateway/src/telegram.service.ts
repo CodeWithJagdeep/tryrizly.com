@@ -13,6 +13,7 @@ import {
 import { GatewayService } from "./gateway.service";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { sendEmail } from "@heyriz/shared/email";
 import {
   answerCallbackQuery,
   approvalKeyboard,
@@ -22,6 +23,16 @@ import {
 } from "@heyriz/shared/telegram";
 
 const START_TOKEN = /^\/start\s+(\S+)/;
+
+async function sendWelcomeEmail(email: string, name: string | undefined): Promise<void> {
+  const greeting = name ? `Hi ${name}` : "Hi there";
+  await sendEmail({
+    to: email,
+    subject: "Welcome to Rizly — you're all set up",
+    text: `${greeting},\n\nYour Rizly operator is live. From now on, drafts, approvals, and your daily brief will land right here in Telegram — nothing sends without your say-so.\n\nReply here anytime with a question about your inbox, calendar, or revenue.\n\n— The Rizly team`,
+    html: `<p>${greeting},</p><p>Your Rizly operator is live. From now on, drafts, approvals, and your daily brief will land right here in Telegram — nothing sends without your say-so.</p><p>Reply here anytime with a question about your inbox, calendar, or revenue.</p><p>— The Rizly team</p>`,
+  });
+}
 
 type TelegramChat = { id: number };
 type TelegramMessage = {
@@ -169,7 +180,17 @@ export class TelegramService {
     }
 
     const userId = userIdFromEmail(record.email);
+    const userBeforeLink = await this.authRepo.getUser(record.email);
+    const isFirstOnboarding = !userBeforeLink?.onboarding?.completedAt;
     await this.authRepo.linkTelegramChat(String(chatId), record.email, userId);
+
+    if (isFirstOnboarding) {
+      sendWelcomeEmail(record.email, userBeforeLink?.name).catch((error) => {
+        logger.warn("failed to send welcome email", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
 
     try {
       await this.gateway.sendToAiCore("connector.save", {
@@ -411,10 +432,18 @@ export class TelegramService {
       return String(chatId) === String(env.TELEGRAM_CHAT_ID);
     }
 
-    const linked = await this.authRepo.countTelegramLinks().catch(() => 0);
-    if (linked === 0) return true; // nobody's linked yet (or Mongo unset): stay open like before
-
-    return Boolean(await this.authRepo.findUserIdByTelegramChat(String(chatId)));
+    // Fail closed. A DB error must not promote an arbitrary chat to owner, and
+    // "nobody linked yet" is not a licence to act for everyone — the only way in
+    // is an explicit /start link (handled before this gate) or TELEGRAM_CHAT_ID.
+    try {
+      return Boolean(await this.authRepo.findUserIdByTelegramChat(String(chatId)));
+    } catch (error) {
+      logger.warn("telegram owner check failed; denying", {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   private async userIdForChat(chatId: number): Promise<string> {

@@ -6,8 +6,11 @@ import {
   Inject,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
+import { EmailThrottlerGuard } from "./email-throttler.guard";
 import { requireInternalSecret } from "../internal-auth";
 
 @Controller("api/auth")
@@ -18,6 +21,8 @@ export class AuthController {
   ) {}
 
   @Post("register")
+  @UseGuards(EmailThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
   async register(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body() body: { name?: string; email?: string; password?: string },
@@ -38,12 +43,17 @@ export class AuthController {
   }
 
   @Post("login")
+  @UseGuards(EmailThrottlerGuard)
+  @Throttle({ default: { limit: 8, ttl: 300_000 } })
   async login(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body() body: { email?: string; password?: string },
   ) {
     this.requireInternal(secret);
     const identity = await this.auth.login(body.email ?? "", body.password ?? "");
+    if (identity === "unverified") {
+      return { error: "Please verify your email before signing in.", needsVerification: true };
+    }
     if (!identity) {
       return { error: "Invalid email or password" };
     }
@@ -51,6 +61,8 @@ export class AuthController {
   }
 
   @Post("email/send-verification")
+  @UseGuards(EmailThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 600_000 } })
   async sendVerification(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body() body: { email?: string },
@@ -63,6 +75,8 @@ export class AuthController {
   }
 
   @Post("email/verify")
+  @UseGuards(EmailThrottlerGuard)
+  @Throttle({ default: { limit: 8, ttl: 600_000 } })
   async verify(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body() body: { email?: string; otp?: string },
@@ -73,6 +87,27 @@ export class AuthController {
       return { error: "Invalid or expired code" };
     }
     return { identity };
+  }
+
+  @Get("session-version")
+  async sessionVersion(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("email") email?: string,
+  ) {
+    this.requireInternal(secret);
+    if (!email) return { error: "email is required" };
+    return { version: await this.auth.getTokenVersion(email) };
+  }
+
+  @Post("logout")
+  async logout(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.email) return { error: "email is required" };
+    await this.auth.logout(body.email);
+    return { ok: true };
   }
 
   @Post("oauth/state")

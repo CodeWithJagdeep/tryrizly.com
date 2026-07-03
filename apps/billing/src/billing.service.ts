@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { sendEmail } from "@heyriz/shared/email";
 import { BillingRepository } from "./billing.repository";
 import { billingPlans, findPlan } from "./plans";
 import { RazorpayClient } from "./razorpay.client";
@@ -19,6 +20,17 @@ import type {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "authenticated"]);
 const ACCESS_PURCHASE_STATUSES = new Set(["paid", "captured"]);
+const TERMINAL_SUBSCRIPTION_STATUSES = new Set(["cancelled", "completed", "expired", "halted"]);
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A Telegram nudge the sweep wants delivered; the worker owns the queue, so these are returned, not enqueued here. */
+export type SweepNudge = {
+  userId: string;
+  kind: "trial-d3" | "trial-d1" | "trial-ended";
+  message: string;
+  emailFallback: boolean;
+};
 
 @Injectable()
 export class BillingService {
@@ -109,6 +121,14 @@ export class BillingService {
       trialEndsAt: endsAt,
       metadata: { source: "local_trial" },
     });
+
+    if (input.email) {
+      sendTrialStartedEmail(input.email, input.name, plan.name, endsAt).catch((error) => {
+        logger.warn("failed to send trial started email", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
 
     return {
       ok: true,
@@ -235,6 +255,12 @@ export class BillingService {
       providerSubscriptionId,
     });
 
+    if (cancelled) {
+      this.notifyCustomer(userId, input.email, input.name, (email, name) =>
+        sendSubscriptionCancelledEmail(email, name, current.current_period_end ?? undefined),
+      );
+    }
+
     return {
       ok: Boolean(cancelled),
       subscription: cancelled ? this.publicSubscription(cancelled) : null,
@@ -282,6 +308,10 @@ export class BillingService {
     const userId = stringValue(notes.userId);
     const planId = stringValue(notes.planId);
     const status = stringValue(entity.status) || eventType.replace("subscription.", "");
+    const isTerminal = status === "cancelled" || status === "completed";
+
+    const previous = await this.repository.findSubscriptionByProviderId(providerSubscriptionId);
+    const wasAlreadyTerminal = previous?.status === "cancelled" || previous?.status === "completed";
 
     await this.repository.updateSubscriptionByProvider({
       providerSubscriptionId,
@@ -290,12 +320,21 @@ export class BillingService {
       provider: "razorpay",
       status,
       currentPeriodEnd: this.secondsToDate(numberValue(entity.current_end)),
-      cancelAtPeriodEnd: status === "cancelled" || status === "completed",
+      cancelAtPeriodEnd: isTerminal,
       metadata: {
         eventType,
         providerStatus: status,
       },
     });
+
+    // Only notify on the transition into cancelled/completed — avoids a double
+    // send when this webhook follows our own cancelSubscription() call, which
+    // already emailed the customer directly.
+    if (userId && isTerminal && !wasAlreadyTerminal) {
+      this.notifyCustomer(userId, undefined, undefined, (email, name) =>
+        sendSubscriptionCancelledEmail(email, name, this.secondsToDate(numberValue(entity.current_end)) ?? undefined),
+      );
+    }
   }
 
   private async applyPurchaseEvent(eventType: string, payload: Record<string, unknown>) {
@@ -314,19 +353,195 @@ export class BillingService {
           ? "authorized"
           : "paid";
 
+    const userId = stringValue(notes.userId);
+    const amount = numberValue(payment.amount) ?? numberValue(order.amount);
+    const currency = stringValue(payment.currency) || stringValue(order.currency);
+
     await this.repository.updatePurchaseByProviderOrder({
       providerOrderId,
-      userId: stringValue(notes.userId),
+      userId,
       planId: stringValue(notes.planId),
       provider: "razorpay",
-      amount: numberValue(payment.amount) ?? numberValue(order.amount),
-      currency: stringValue(payment.currency) || stringValue(order.currency),
+      amount,
+      currency,
       status,
       metadata: {
         eventType,
         paymentId: stringValue(payment.id),
       },
     });
+
+    if (userId && eventType === "payment.failed") {
+      this.notifyCustomer(userId, undefined, undefined, sendPaymentFailedEmail);
+    } else if (userId && eventType === "payment.captured") {
+      // Razorpay fires both payment.captured and order.paid for a single purchase;
+      // only capture the receipt on one of them to avoid sending it twice.
+      this.notifyCustomer(userId, undefined, undefined, (email, name) =>
+        sendPaymentReceiptEmail(email, name, amount, currency),
+      );
+    }
+  }
+
+  /**
+   * Daily billing sweep, called by the worker's scheduler. Three jobs:
+   * trial-expiry nudges (3-day and 1-day, deduped through billing_events so a
+   * missed cron day can't skip a user), day-of-expiry processing (mark the
+   * trial consumed + "trial ended" email), and reconciliation of provider
+   * subscriptions whose paid period lapsed without a webhook. Telegram nudges
+   * are returned to the caller — the worker owns the notification queue.
+   */
+  async runBillingSweep() {
+    const nudges: SweepNudge[] = [];
+    const upgradeUrl = `${env.WEB_APP_URL}/dashboard/upgrade`;
+
+    let ending: BillingTrialRecord[] = [];
+    let expired: BillingTrialRecord[] = [];
+    try {
+      [ending, expired] = await Promise.all([
+        this.repository.findTrialsEndingWithin(3),
+        this.repository.findExpiredUnconsumedTrials(),
+      ]);
+    } catch (error) {
+      logger.warn("billing sweep: trial lookup failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    for (const trial of ending) {
+      try {
+        if (await this.hasPaidAccess(trial.user_id)) continue;
+        const daysLeft = Math.ceil((trial.ends_at.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        const kind = daysLeft <= 1 ? "trial-d1" : "trial-d3";
+        const firstTime = await this.repository.insertEvent({
+          provider: "internal",
+          eventId: `trial-nudge:${trial.user_id}:${kind}`,
+          eventType: "trial_nudge",
+          payload: { daysLeft },
+        });
+        if (!firstTime) continue;
+        nudges.push({
+          userId: trial.user_id,
+          kind,
+          message:
+            kind === "trial-d1"
+              ? `⏰ Your Rizly free trial ends tomorrow. Subscribe now to keep access: ${upgradeUrl}`
+              : `⏰ Your Rizly free trial ends in ${daysLeft} days. Subscribe to keep your reminders, email triage, and morning briefs: ${upgradeUrl}`,
+          emailFallback: true,
+        });
+      } catch (error) {
+        logger.warn("billing sweep: trial nudge failed", {
+          userId: trial.user_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    let expiredProcessed = 0;
+    for (const trial of expired) {
+      try {
+        await this.repository.markTrialConsumed(trial.user_id);
+        expiredProcessed += 1;
+        if (await this.hasPaidAccess(trial.user_id)) continue;
+
+        const customer = await this.repository.findCustomer(trial.user_id);
+        const email =
+          customer?.email ?? (EMAIL_RE.test(trial.user_id) ? trial.user_id : undefined);
+        if (email) {
+          sendTrialEndedEmail(email, customer?.name ?? undefined, upgradeUrl).catch((error) => {
+            logger.warn("failed to send trial ended email", {
+              userId: trial.user_id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+        nudges.push({
+          userId: trial.user_id,
+          kind: "trial-ended",
+          message: `Your Rizly trial has ended — you're on the Free plan now. Reactivate reminders, email triage, and morning briefs: ${upgradeUrl}`,
+          // The email above already covers unlinked users; don't email twice.
+          emailFallback: false,
+        });
+      } catch (error) {
+        logger.warn("billing sweep: trial expiry processing failed", {
+          userId: trial.user_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    const reconciled = await this.reconcileLapsedSubscriptions();
+
+    return { ok: true, nudges, expiredProcessed, reconciled };
+  }
+
+  /**
+   * Access rests on Razorpay webhooks; a missed one leaves a lapsed
+   * subscription "active" locally forever. Re-poll anything whose paid period
+   * ended over a day ago and adopt the provider's real status.
+   */
+  private async reconcileLapsedSubscriptions(): Promise<number> {
+    if (!this.razorpay.configured()) return 0;
+
+    let lapsed: BillingSubscriptionRecord[] = [];
+    try {
+      lapsed = await this.repository.findLapsedProviderSubscriptions();
+    } catch (error) {
+      logger.warn("billing sweep: lapsed subscription lookup failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+
+    let reconciled = 0;
+    for (const subscription of lapsed) {
+      const providerSubscriptionId = subscription.provider_subscription_id;
+      if (!providerSubscriptionId) continue;
+      try {
+        const remote = await this.razorpay.fetchSubscription(providerSubscriptionId);
+        if (remote.status === subscription.status && !remote.current_end) continue;
+
+        await this.repository.updateSubscriptionByProvider({
+          providerSubscriptionId,
+          status: remote.status,
+          currentPeriodEnd: this.secondsToDate(remote.current_end),
+          cancelAtPeriodEnd: TERMINAL_SUBSCRIPTION_STATUSES.has(remote.status) || undefined,
+          metadata: { reconciledAt: new Date().toISOString(), providerStatus: remote.status },
+        });
+        reconciled += 1;
+
+        if (
+          TERMINAL_SUBSCRIPTION_STATUSES.has(remote.status) &&
+          !TERMINAL_SUBSCRIPTION_STATUSES.has(subscription.status)
+        ) {
+          this.notifyCustomer(subscription.user_id, undefined, undefined, (email, name) =>
+            sendSubscriptionCancelledEmail(email, name, this.secondsToDate(remote.current_end) ?? undefined),
+          );
+        }
+        logger.info("billing sweep: subscription reconciled", {
+          userId: subscription.user_id,
+          providerSubscriptionId,
+          from: subscription.status,
+          to: remote.status,
+        });
+      } catch (error) {
+        logger.warn("billing sweep: subscription reconciliation failed", {
+          providerSubscriptionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return reconciled;
+  }
+
+  private async hasPaidAccess(userId: string): Promise<boolean> {
+    const [subscription, purchase] = await Promise.all([
+      this.repository.findCurrentSubscription(userId),
+      this.repository.findCurrentPurchase(userId),
+    ]);
+    return Boolean(
+      (subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) ||
+        (purchase && ACCESS_PURCHASE_STATUSES.has(purchase.status)),
+    );
   }
 
   private resolveAccess(
@@ -485,6 +700,29 @@ export class BillingService {
   private extractEntity(payload: Record<string, unknown>, key: string) {
     return asRecord(asRecord(asRecord(payload.payload)?.[key])?.entity);
   }
+
+  /** Resolves the customer's email (falling back to the stored record) and fires the given email, best-effort. */
+  private notifyCustomer(
+    userId: string,
+    email: string | undefined,
+    name: string | undefined,
+    send: (email: string, name: string | undefined) => Promise<void>,
+  ) {
+    void (async () => {
+      try {
+        const customer = email ? null : await this.repository.findCustomer(userId);
+        const resolvedEmail = email ?? customer?.email ?? undefined;
+        const resolvedName = name ?? customer?.name ?? undefined;
+        if (!resolvedEmail) return;
+        await send(resolvedEmail, resolvedName);
+      } catch (error) {
+        logger.warn("failed to send billing notification email", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -497,4 +735,77 @@ function stringValue(value: unknown) {
 
 function numberValue(value: unknown) {
   return typeof value === "number" ? value : undefined;
+}
+
+function greet(name: string | undefined) {
+  return name ? `Hi ${name}` : "Hi there";
+}
+
+async function sendTrialStartedEmail(
+  email: string,
+  name: string | undefined,
+  planName: string,
+  endsAt: Date,
+): Promise<void> {
+  const endsAtLabel = endsAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  await sendEmail({
+    to: email,
+    subject: `Your ${planName} trial has started`,
+    text: `${greet(name)},\n\nYour ${planName} trial is live and runs through ${endsAtLabel}. Every feature is unlocked — connect your accounts and Riz will start triaging right away.\n\n— The Rizly team`,
+    html: `<p>${greet(name)},</p><p>Your <strong>${planName}</strong> trial is live and runs through <strong>${endsAtLabel}</strong>. Every feature is unlocked — connect your accounts and Riz will start triaging right away.</p><p>— The Rizly team</p>`,
+  });
+}
+
+async function sendTrialEndedEmail(
+  email: string,
+  name: string | undefined,
+  upgradeUrl: string,
+): Promise<void> {
+  await sendEmail({
+    to: email,
+    subject: "Your Rizly trial has ended",
+    text: `${greet(name)},\n\nYour free trial ended today, so your account is now on the Free plan. Reminders, email triage, and morning briefs are paused until you pick a plan.\n\nReactivate everything here: ${upgradeUrl}\n\n— The Rizly team`,
+    html: `<p>${greet(name)},</p><p>Your free trial ended today, so your account is now on the <strong>Free</strong> plan. Reminders, email triage, and morning briefs are paused until you pick a plan.</p><p><a href="${upgradeUrl}">Reactivate everything</a></p><p>— The Rizly team</p>`,
+  });
+}
+
+async function sendSubscriptionCancelledEmail(
+  email: string,
+  name: string | undefined,
+  accessUntil: Date | undefined,
+): Promise<void> {
+  const untilLabel = accessUntil
+    ? accessUntil.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : undefined;
+  await sendEmail({
+    to: email,
+    subject: "Your Rizly subscription has been cancelled",
+    text: `${greet(name)},\n\nYour subscription has been cancelled.${untilLabel ? ` You'll keep access until ${untilLabel}.` : ""} If this was a mistake, you can resubscribe anytime from your dashboard.\n\n— The Rizly team`,
+    html: `<p>${greet(name)},</p><p>Your subscription has been cancelled.${untilLabel ? ` You'll keep access until <strong>${untilLabel}</strong>.` : ""} If this was a mistake, you can resubscribe anytime from your dashboard.</p><p>— The Rizly team</p>`,
+  });
+}
+
+async function sendPaymentFailedEmail(email: string, name: string | undefined): Promise<void> {
+  await sendEmail({
+    to: email,
+    subject: "We couldn't process your payment",
+    text: `${greet(name)},\n\nYour recent payment to Rizly didn't go through. Please update your payment method to keep your subscription active.\n\n— The Rizly team`,
+    html: `<p>${greet(name)},</p><p>Your recent payment to Rizly didn't go through. Please update your payment method to keep your subscription active.</p><p>— The Rizly team</p>`,
+  });
+}
+
+async function sendPaymentReceiptEmail(
+  email: string,
+  name: string | undefined,
+  amount: number | undefined,
+  currency: string | undefined,
+): Promise<void> {
+  const amountLabel =
+    amount !== undefined && currency ? `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}` : "your payment";
+  await sendEmail({
+    to: email,
+    subject: "Payment received — thank you",
+    text: `${greet(name)},\n\nWe've received ${amountLabel}. Thanks for staying with Rizly.\n\n— The Rizly team`,
+    html: `<p>${greet(name)},</p><p>We've received <strong>${amountLabel}</strong>. Thanks for staying with Rizly.</p><p>— The Rizly team</p>`,
+  });
 }

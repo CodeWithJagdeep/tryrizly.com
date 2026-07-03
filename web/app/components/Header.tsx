@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 type DropdownItem = {
   label: string;
@@ -19,19 +20,24 @@ const navGroups: DropdownGroup[] = [
     label: 'Product',
     items: [
       {
+        label: 'Features',
+        description: 'Explore all the ways Rizly can help your team.',
+        href: '/features',
+      },
+      {
         label: 'AI operator',
         description: 'Chat with Riz across inbox, calendar, and business data.',
-        href: '/#capabilities',
+        href: '/product/ai-operator',
       },
       {
         label: 'Email triage',
         description: 'Classify, summarize, draft, and route important messages.',
-        href: '/#capabilities',
+        href: '/product/email-triage',
       },
       {
         label: 'Approvals',
         description: 'Approve outbound actions before anything is sent.',
-        href: '/#how-it-works',
+        href: '/product/approvals',
       },
     ],
   },
@@ -41,17 +47,17 @@ const navGroups: DropdownGroup[] = [
       {
         label: 'Founders',
         description: 'Keep investor, customer, and ops work from slipping.',
-        href: '/#day-in-life',
+        href: '/solutions/founders',
       },
       {
         label: 'Revenue teams',
         description: 'Watch Stripe, Razorpay, Postgres, and MongoDB signals.',
-        href: '/#integrations',
+        href: '/solutions/revenue-teams',
       },
       {
         label: 'Busy operators',
         description: 'Turn scattered tasks into one approval flow.',
-        href: '/#how-it-works',
+        href: '/solutions/busy-operators',
       },
     ],
   },
@@ -66,12 +72,12 @@ const navGroups: DropdownGroup[] = [
       {
         label: 'Trust',
         description: 'See how approval-first automation works.',
-        href: '/#trust',
+        href: '/trust',
       },
       {
         label: 'FAQ',
         description: 'Answers on setup, billing, and controls.',
-        href: '/#faq',
+        href: '/faq',
       },
     ],
   },
@@ -96,7 +102,7 @@ function Chevron({ className = '' }: { className?: string }) {
 }
 
 function DropdownNav({ group }: { group: DropdownGroup }) {
-  const buttonClassName = 'inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[15px] font-medium text-black/90 transition hover:bg-slate-100 hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-300';
+  const buttonClassName = 'inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-300';
 
   return (
     <div className="group relative">
@@ -115,7 +121,7 @@ function DropdownNav({ group }: { group: DropdownGroup }) {
             className="block rounded-xl px-4 py-3 text-left transition hover:bg-slate-50"
             role="menuitem"
           >
-            <span className="block text-[15px] font-semibold text-black">{item.label}</span>
+            <span className="block text-[15px] font-normal text-black">{item.label}</span>
             <span className="mt-1 block text-[13px] leading-5 text-slate-500">{item.description}</span>
           </Link>
         ))}
@@ -127,23 +133,25 @@ function DropdownNav({ group }: { group: DropdownGroup }) {
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const headerClassName = 'sticky top-0 z-50 w-full bg-white/95 font-neue-haas backdrop-blur-md';
-  const pricingClassName = 'hidden h-11 items-center rounded-full px-3 text-[15px] font-medium text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
-  const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-medium text-black/90 transition hover:bg-slate-100 hover:text-black xl:inline-flex';
-  const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-medium text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
+  const headerClassName = 'w-full bg-white/95 font-neue-haas backdrop-blur-md';
+  const pricingClassName = 'hidden h-11 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
+  const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black xl:inline-flex';
+  const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
   const mobileLineClassName = 'bg-slate-950';
 
   return (
-    <>
+    <div className="sticky top-0 z-50 w-full">
       {/* Promotional Header */}
-      <div className="sticky top-0 z-50 w-full border-b border-[#233D4D]/20 bg-[#233D4D] px-4 py-3.5 sm:px-6 lg:px-14">
-        <div className="flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:justify-center sm:gap-4">
-          <p className="text-sm font-medium text-white">
-            We're changing how AI works. You stay in control. AI works for you.
-          </p>
-          <a href="#" className="whitespace-nowrap text-sm font-semibold text-white/90 transition hover:text-white">
-            Discover the difference
-            <span className="ml-1.5">→</span>
+      <div className="w-full border-b border-black/10 bg-white">
+        <div className="flex flex-1 items-center justify-start px-8 py-3 overflow-hidden">
+          <a
+            className="flex items-center gap-3 text-[13px] font-semibold text-gray-600 hover:text-[#FE7F2D] transition-colors whitespace-nowrap"
+            href="/agent"
+          >
+            <span className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-2 py-0.5 text-[10px] font-semibold text-white uppercase tracking-tighter">
+              New
+            </span>
+            Meet Riz, your AI agent&nbsp;→
           </a>
         </div>
       </div>
@@ -154,16 +162,13 @@ export function Header() {
         aria-label="Main navigation"
       >
         <Link className="flex shrink-0 items-center transition-opacity hover:opacity-80" href="/">
-          <img
-            alt="Heyriz Logo"
-            loading="lazy"
+          <Image
+            alt="rizly Logo"
             width={112}
             height={26}
-            decoding="async"
-            data-nimg="1"
             className="h-8 w-auto object-contain"
-            style={{ color: 'transparent' }}
-            src="/heyriz_white.png"
+            src="/rizly_white.png"
+            priority
           />
         </Link>
 
@@ -180,7 +185,7 @@ export function Header() {
         <div className="flex-1" />
 
         <div className="hidden items-center gap-1 lg:flex">
-          <Link className={utilityLinkClassName} href="/#trust">
+          <Link className={utilityLinkClassName} href="/contact">
             Contact sales
           </Link>
           <Link className={loginClassName} href="/login">
@@ -236,7 +241,7 @@ export function Header() {
                     href={item.href}
                     className="block rounded-xl px-2 py-2.5"
                   >
-                    <span className="block text-[15px] font-semibold text-black">{item.label}</span>
+                    <span className="block text-[15px] font-normal text-black">{item.label}</span>
                     <span className="mt-0.5 block text-[13px] leading-5 text-slate-500">
                       {item.description}
                     </span>
@@ -260,7 +265,7 @@ export function Header() {
             </Link>
             <Link
               onClick={() => setIsMobileMenuOpen(false)}
-              className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#3784ff] text-[15px] font-semibold text-white"
+              className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
               href="/signup"
             >
               Get started
@@ -269,6 +274,6 @@ export function Header() {
         </div>
       )}
     </header>
-    </>
+    </div>
   );
 }

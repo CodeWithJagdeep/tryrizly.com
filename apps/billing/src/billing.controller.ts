@@ -48,6 +48,11 @@ export class BillingController {
     return this.billingService.cancelSubscription(payload);
   }
 
+  @MessagePattern("billing.sweep")
+  runBillingSweep() {
+    return this.billingService.runBillingSweep();
+  }
+
   @MessagePattern("billing.webhook.razorpay")
   handleRazorpayWebhook(payload: BillingWebhookInput) {
     return this.billingService.handleRazorpayWebhook(payload);

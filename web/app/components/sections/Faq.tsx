@@ -31,34 +31,37 @@ export function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="bg-slate-50/50 py-20 md:py-28">
+    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <h2 className="font-neue-haas text-3xl font-normal tracking-tight text-slate-900 md:text-4xl text-center md:text-left">
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">FAQ</p>
+          <h2 className="mt-4 text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             Questions worth answering up front.
           </h2>
         </Reveal>
 
-        <div className="mt-10 border-t border-slate-200">
+        <div className="mt-10 space-y-3">
           {faqs.map((item, index) => {
             const isOpen = openIndex === index;
             return (
               <Reveal key={item.q} delay={index * 0.04}>
-                <div className="border-b border-slate-200">
+                <div
+                  className={`overflow-hidden border-2 border-black bg-white transition-all duration-200 ${
+                    isOpen ? "shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                  }`}
+                >
                   <button
                     onClick={() => setOpenIndex(isOpen ? null : index)}
-                    className="flex w-full items-center justify-between py-6 text-left focus:outline-none group"
+                    className="group flex w-full items-center justify-between px-6 py-5 text-left focus:outline-none"
                   >
-                    <span className="text-base font-semibold text-slate-900 transition-colors duration-200 group-hover:text-[#3784ff] md:text-lg">
+                    <span className="text-base font-bold text-black transition-colors duration-200 group-hover:text-[#FE7F2D] md:text-lg">
                       {item.q}
                     </span>
                     <motion.span
                       animate={{ rotate: isOpen ? 45 : 0 }}
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className={`ml-4 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base font-medium transition-colors duration-200 ${
-                        isOpen
-                          ? "bg-[#3784ff]/10 text-[#3784ff]"
-                          : "bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600"
+                      className={`ml-4 flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-base font-black transition-colors duration-200 ${
+                        isOpen ? "bg-[#FE7F2D] text-white" : "bg-white text-black group-hover:bg-black group-hover:text-white"
                       }`}
                     >
                       +
@@ -71,9 +74,9 @@ export function Faq() {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        className="overflow-hidden"
+                        className="overflow-hidden border-t-2 border-black/10"
                       >
-                        <p className="pb-6 pr-10 text-sm leading-relaxed text-slate-600 md:text-base">
+                        <p className="px-6 py-6 pr-10 text-sm leading-relaxed text-gray-500 md:text-base">
                           {item.a}
                         </p>
                       </motion.div>

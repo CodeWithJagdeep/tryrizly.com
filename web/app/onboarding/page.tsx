@@ -1,7 +1,7 @@
 import { OnboardingClient } from "./onboarding-client";
 
 export const metadata = {
-  title: "Get started | HeyRiz",
+  title: "Get started | rizly",
 };
 
 export default function OnboardingPage() {

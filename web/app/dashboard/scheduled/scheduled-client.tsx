@@ -22,6 +22,7 @@ type ScheduledReminder = {
 };
 
 type ScheduleTab = "all" | "active" | "today" | "week" | "reminders" | "followups" | "priority" | "history";
+type ReminderRepeat = "once" | "daily" | "weekdays" | "weekly" | "monthly";
 
 type ScheduleRow = {
   id: string;
@@ -54,6 +55,15 @@ const TABS: { key: ScheduleTab; label: string }[] = [
 
 const HIGH_WORDS = ["urgent", "asap", "today", "now", "important", "critical", "deadline", "payment", "invoice"];
 const MEDIUM_WORDS = ["follow", "reply", "call", "meeting", "review", "send", "check"];
+const WEEKDAYS = [
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+  { value: "0", label: "Sunday" },
+];
 
 export function ScheduledClient() {
   const [tasks, setTasks] = useState<PrincipalTask[]>([]);
@@ -67,6 +77,11 @@ export function ScheduledClient() {
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMessage, setCreateMessage] = useState("");
+  const [createRepeat, setCreateRepeat] = useState<ReminderRepeat>("once");
+  const [createDate, setCreateDate] = useState("");
+  const [createTime, setCreateTime] = useState("");
+  const [createWeekday, setCreateWeekday] = useState("1");
+  const [createMonthDay, setCreateMonthDay] = useState("1");
   const [createError, setCreateError] = useState<string | null>(null);
 
   async function load(showRefreshing = false) {
@@ -115,6 +130,11 @@ export function ScheduledClient() {
 
   function openCreate() {
     setCreateMessage("");
+    setCreateRepeat("once");
+    setCreateDate(isoDateInput(new Date()));
+    setCreateTime(defaultTimeInput());
+    setCreateWeekday(String(new Date().getDay()));
+    setCreateMonthDay(String(new Date().getDate()));
     setCreateError(null);
     setCreateOpen(true);
   }
@@ -124,16 +144,36 @@ export function ScheduledClient() {
       setCreateError("Tell Riz what to remind you about.");
       return;
     }
+    if (!createTime) {
+      setCreateError("Choose a time for the reminder.");
+      return;
+    }
+    if (createRepeat === "once" && !createDate) {
+      setCreateError("Choose a date for the reminder.");
+      return;
+    }
+
+    const schedulePayload = buildReminderSchedule({
+      repeat: createRepeat,
+      date: createDate,
+      time: createTime,
+      weekday: createWeekday,
+      monthDay: createMonthDay,
+    });
+
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/reminders", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: createMessage.trim() }),
+        body: JSON.stringify({
+          message: createMessage.trim(),
+          ...schedulePayload,
+        }),
       });
-      const data = (await res.json()) as { reply?: string; error?: string };
-      if (!res.ok || data.error) throw new Error(data.error ?? "Failed to schedule reminder");
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error ?? data.message ?? "Failed to schedule reminder");
       setCreateOpen(false);
       await load(true);
     } catch (err) {
@@ -164,12 +204,12 @@ export function ScheduledClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
-      <header className="border-b border-[#2e2e2c] bg-[#1a1a19] px-6 pt-5">
+    <main className="min-h-screen bg-white text-slate-900">
+      <header className="border-b border-slate-200 bg-white px-6 pt-5">
         <div className="flex items-center justify-between gap-4 pb-4">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Scheduled</h1>
-            <p className="mt-0.5 text-sm text-white/55">
+            <p className="mt-0.5 text-sm text-slate-500">
               Reminders, follow-ups and priorities Riz is tracking
             </p>
           </div>
@@ -178,7 +218,7 @@ export function ScheduledClient() {
               type="button"
               onClick={() => void load(true)}
               disabled={refreshing || loading}
-              className="flex items-center gap-2 rounded-md border border-[#2e2e2c] bg-[#1f1f1e] px-3 py-1.5 text-sm text-white/65 transition hover:border-[#3e3e3c] hover:text-[#f2f1ec] disabled:opacity-40"
+              className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
             >
               <RefreshIcon spinning={refreshing} />
               Refresh
@@ -186,7 +226,7 @@ export function ScheduledClient() {
             <button
               type="button"
               onClick={openCreate}
-              className="flex items-center gap-2 rounded-md bg-[#f2f1ec] px-3 py-1.5 text-sm font-semibold text-[#1a1a19] transition hover:bg-white"
+              className="flex items-center gap-2 rounded-md bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
             >
               <PlusIcon />
               New Reminder
@@ -200,7 +240,7 @@ export function ScheduledClient() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search schedule..."
-            className="w-full rounded-md border border-[#2e2e2c] bg-[#1f1f1e] py-2 pl-9 pr-4 text-sm text-[#f2f1ec] placeholder:text-white/45 outline-none transition focus:border-[#3e3e3c]"
+            className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
           />
         </div>
 
@@ -212,14 +252,14 @@ export function ScheduledClient() {
               onClick={() => setActiveTab(tab.key)}
               className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === tab.key
-                  ? "border-[#f2f1ec] text-[#f2f1ec]"
-                  : "border-transparent text-white/55 hover:text-white/65"
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-600"
               }`}
             >
               {tab.label}
               {!loading && countForTab(tab.key, counts) > 0 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === tab.key ? "bg-[#f2f1ec]/15 text-[#f2f1ec]" : "bg-[#2e2e2c] text-white/55"
+                  activeTab === tab.key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   {countForTab(tab.key, counts)}
                 </span>
@@ -250,38 +290,110 @@ export function ScheduledClient() {
 
       {createOpen ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/55 px-4 py-5 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-md rounded-xl border border-[#3a3a36] bg-[#1f1f1e] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#2e2e2c] px-5 py-4">
-              <h2 className="text-base font-semibold text-[#f2f1ec]">New Reminder</h2>
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h2 className="text-base font-semibold text-slate-900">New Reminder</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                className="rounded-md px-2 py-1 text-sm text-[#8f8b83] transition hover:bg-[#2a2a28] hover:text-[#f2f1ec]"
+                className="rounded-md px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 Close
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
-              <p className="text-xs text-white/45">
-                Describe what you want — Riz handles the rest. Try "remind me for medicine every day at 8 PM" or "follow up with Arjun next Monday".
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">Reminder</label>
+                <textarea
+                  autoFocus
+                  value={createMessage}
+                  onChange={(e) => setCreateMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submitCreate();
+                  }}
+                  placeholder="Remind me to take medicine"
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">Schedule type</label>
+                <select
+                  value={createRepeat}
+                  onChange={(event) => setCreateRepeat(event.target.value as ReminderRepeat)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                >
+                  <option value="once">One time</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekdays">Weekdays</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {createRepeat === "once" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
+                    <input
+                      type="date"
+                      value={createDate}
+                      onChange={(event) => setCreateDate(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    />
+                  </div>
+                )}
+
+                {createRepeat === "weekly" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Day</label>
+                    <select
+                      value={createWeekday}
+                      onChange={(event) => setCreateWeekday(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    >
+                      {WEEKDAYS.map((day) => (
+                        <option key={day.value} value={day.value}>{day.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {createRepeat === "monthly" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Day of month</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={createMonthDay}
+                      onChange={(event) => setCreateMonthDay(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500">Time</label>
+                  <input
+                    type="time"
+                    value={createTime}
+                    onChange={(event) => setCreateTime(event.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                {scheduleSummary(createRepeat, createDate, createTime, createWeekday, createMonthDay)}
               </p>
-              <textarea
-                autoFocus
-                value={createMessage}
-                onChange={(e) => setCreateMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submitCreate();
-                }}
-                placeholder="Remind me to take medicine every day at 8 PM…"
-                rows={3}
-                className="w-full resize-none rounded-lg border border-[#343431] bg-[#1a1a19] px-3 py-2 text-sm leading-6 text-[#f2f1ec] outline-none transition placeholder:text-[#5d5d58] focus:border-[#595951]"
-              />
               {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setCreateOpen(false)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-white/65 transition hover:bg-[#292927] hover:text-[#f2f1ec]"
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                 >
                   Cancel
                 </button>
@@ -289,7 +401,7 @@ export function ScheduledClient() {
                   type="button"
                   onClick={() => void submitCreate()}
                   disabled={creating}
-                  className="rounded-lg bg-[#f2f1ec] px-4 py-2 text-sm font-semibold text-[#1a1a19] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Scheduling…" : "Schedule"}
                 </button>
@@ -425,6 +537,75 @@ function startOfToday() {
   return today;
 }
 
+function isoDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function defaultTimeInput() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() < 30 ? 30 : 0, 0, 0);
+  if (date.getMinutes() === 0) date.setHours(date.getHours() + 1);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function buildReminderSchedule(input: {
+  repeat: ReminderRepeat;
+  date: string;
+  time: string;
+  weekday: string;
+  monthDay: string;
+}) {
+  if (input.repeat === "once") {
+    return { runAt: `${input.date}T${input.time}` };
+  }
+
+  const [hourRaw, minuteRaw] = input.time.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  if (input.repeat === "daily") {
+    return { repeat: { cron: `${minute} ${hour} * * *`, tz: timezone } };
+  }
+  if (input.repeat === "weekdays") {
+    return { repeat: { cron: `${minute} ${hour} * * 1-5`, tz: timezone } };
+  }
+  if (input.repeat === "weekly") {
+    return { repeat: { cron: `${minute} ${hour} * * ${input.weekday}`, tz: timezone } };
+  }
+
+  const day = Math.min(31, Math.max(1, Number(input.monthDay) || 1));
+  return { repeat: { cron: `${minute} ${hour} ${day} * *`, tz: timezone } };
+}
+
+function scheduleSummary(
+  repeat: ReminderRepeat,
+  date: string,
+  time: string,
+  weekday: string,
+  monthDay: string,
+) {
+  if (!time) return "Choose when Riz should remind you.";
+  const readableTime = formatTimeInput(time);
+  if (repeat === "once") {
+    return date ? `Riz will remind you on ${formatDate(`${date}T00:00`)} at ${readableTime}.` : "Choose a date for this reminder.";
+  }
+  if (repeat === "daily") return `Riz will remind you every day at ${readableTime}.`;
+  if (repeat === "weekdays") return `Riz will remind you every weekday at ${readableTime}.`;
+  if (repeat === "weekly") {
+    const day = WEEKDAYS.find((item) => item.value === weekday)?.label ?? "selected day";
+    return `Riz will remind you every ${day} at ${readableTime}.`;
+  }
+  return `Riz will remind you every month on day ${Math.min(31, Math.max(1, Number(monthDay) || 1))} at ${readableTime}.`;
+}
+
+function formatTimeInput(time: string) {
+  const [hourRaw, minuteRaw] = time.split(":");
+  const date = new Date();
+  date.setHours(Number(hourRaw), Number(minuteRaw), 0, 0);
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 
 function formatDateTime(iso?: string) {
   if (!iso) return "Not set";
@@ -455,11 +636,11 @@ function ScheduleTable({
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-[#343431] bg-[#242422]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-slate-200 bg-slate-50">
           <CalendarIcon />
         </div>
-        <p className="mt-4 text-sm font-medium text-[#f2f1ec]">No scheduled work in this view</p>
-        <p className="mt-1 max-w-sm text-sm leading-6 text-[#77736a]">
+        <p className="mt-4 text-sm font-medium text-slate-900">No scheduled work in this view</p>
+        <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
           Try another tab or ask Riz to create a reminder or follow-up.
         </p>
       </div>
@@ -467,10 +648,10 @@ function ScheduleTable({
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-md border border-[#2e2e2c] bg-[#1f1f1e]">
+    <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-white">
       <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] border-collapse text-left">
-        <thead className="bg-[#1a1a19] text-xs font-semibold uppercase tracking-[0.08em] text-white/55">
+        <thead className="bg-white text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="px-4 py-3">Type</th>
             <th className="px-4 py-3">Schedule item</th>
@@ -481,37 +662,37 @@ function ScheduleTable({
             <th className="px-4 py-3 text-right">Action</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#2e2e2c]">
+        <tbody className="divide-y divide-slate-200">
           {rows.map((row) => {
             const historic = isHistoric(row);
             return (
-            <tr key={row.id} className={`align-top transition hover:bg-[#242422] ${historic ? "opacity-55" : ""}`}>
+            <tr key={row.id} className={`align-top transition hover:bg-slate-50 ${historic ? "opacity-55" : ""}`}>
               <td className="whitespace-nowrap px-4 py-4">
                 <TypeBadge type={row.type} />
               </td>
               <td className="max-w-[380px] px-4 py-4">
-                <p className={`text-sm font-medium leading-5 ${historic ? "line-through text-white/40" : "text-[#f2f1ec]"}`}>{row.title}</p>
-                <p className="mt-1 text-xs leading-5 text-[#77736a]">{row.detail}</p>
+                <p className={`text-sm font-medium leading-5 ${historic ? "line-through text-slate-400" : "text-slate-900"}`}>{row.title}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{row.detail}</p>
               </td>
               <td className="whitespace-nowrap px-4 py-4">
                 <PriorityBadge priority={row.priority} />
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/80 tabular-nums">
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700 tabular-nums">
                 {row.recurring ? (
                   <span>
                     Repeats
-                    <span className="block text-xs text-[#77736a]">{row.cron ?? "Custom"} {row.tz ? `(${row.tz})` : ""}</span>
+                    <span className="block text-xs text-slate-500">{row.cron ?? "Custom"} {row.tz ? `(${row.tz})` : ""}</span>
                   </span>
                 ) : (
                   formatDateTime(row.dueAt)
                 )}
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/65 tabular-nums">
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600 tabular-nums">
                 {formatDate(row.createdAt)}
               </td>
               <td className="px-4 py-4">
-                <p className="text-sm text-white/80">{row.source}</p>
-                <p className="mt-1 text-xs text-[#77736a]">{row.status}</p>
+                <p className="text-sm text-slate-700">{row.source}</p>
+                <p className="mt-1 text-xs text-slate-500">{row.status}</p>
               </td>
               <td className="whitespace-nowrap px-4 py-4 text-right">
                 {row.sample ? (
@@ -578,7 +759,7 @@ function PriorityBadge({ priority }: { priority: ScheduleRow["priority"] }) {
   const classes = {
     High: "border-red-500/25 bg-red-500/10 text-red-300",
     Medium: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-    Low: "border-[#3a3a36] bg-[#292927] text-white/65",
+    Low: "border-slate-200 bg-slate-100 text-slate-600",
   }[priority];
 
   return <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${classes}`}>{priority}</span>;
@@ -590,9 +771,9 @@ function TableSkeleton() {
     <div className="p-4">
       <div className="space-y-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="grid min-h-16 grid-cols-[120px_1fr_110px_150px_130px] gap-4 rounded-lg border border-[#292927] bg-[#20201f] p-4">
+          <div key={index} className="grid min-h-16 grid-cols-[120px_1fr_110px_150px_130px] gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
             {Array.from({ length: 5 }).map((__, cellIndex) => (
-              <span key={cellIndex} className="h-4 animate-pulse rounded bg-[#30302d]" />
+              <span key={cellIndex} className="h-4 animate-pulse rounded bg-slate-100" />
             ))}
           </div>
         ))}
@@ -612,7 +793,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 
 function SearchIcon() {
   return (
-    <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5d5d58]" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
       <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
@@ -621,7 +802,7 @@ function SearchIcon() {
 
 function CalendarIcon() {
   return (
-    <svg className="h-5 w-5 text-[#8f8b83]" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <svg className="h-5 w-5 text-slate-500" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.4" />
       <path d="M6.5 2.8v3.4M13.5 2.8v3.4M3.5 8h13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>

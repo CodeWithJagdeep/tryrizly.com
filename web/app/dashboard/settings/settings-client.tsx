@@ -158,7 +158,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
   const accountRows = useMemo(
     () => [
       { label: "Email", value: email },
-      { label: "Workspace", value: "HeyRiz workspace" },
+      { label: "Workspace", value: "rizly workspace" },
       { label: "Local chat sessions", value: String(chatCount) },
       { label: "Onboarding", value: onboarding?.completedAt ? formatDate(onboarding.completedAt) : "In progress" },
     ],
@@ -266,17 +266,17 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
   }
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
-      <header className="border-b border-white/[0.05] px-6 py-5">
-        <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-white">Settings</h1>
-        <p className="mt-1 text-[15px] leading-6 text-white/40">
+    <main className="min-h-screen bg-white text-slate-900">
+      <header className="border-b border-slate-200 px-6 py-5">
+        <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-slate-900">Settings</h1>
+        <p className="mt-1 text-[15px] leading-6 text-slate-400">
           Account details, Riz behavior, billing, and workspace status.
         </p>
       </header>
 
-      <div className="grid min-h-[calc(100vh-89px)] w-full gap-0 bg-[#1f1f1e] lg:grid-cols-[260px_1fr]">
-        <nav className="border-b border-white/[0.05] bg-[#1a1a1a] p-3 lg:border-b-0 lg:border-r">
-          <p className="mb-1 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/25">
+      <div className="grid min-h-[calc(100vh-89px)] w-full gap-0 bg-white lg:grid-cols-[260px_1fr]">
+        <nav className="border-b border-slate-200 bg-white p-3 lg:border-b-0 lg:border-r">
+          <p className="mb-1 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
             Account settings
           </p>
           <div className="grid gap-0.5">
@@ -290,11 +290,11 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   onClick={() => setActiveSection(section.id)}
                   className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[15px] transition-colors ${
                     active
-                      ? "bg-white/[0.07] text-white"
-                      : "text-white/75 hover:bg-white/[0.04] hover:text-white"
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
-                  <Icon className={`h-4 w-4 ${active ? "text-white/70" : "text-white/40"}`} />
+                  <Icon className={`h-4 w-4 ${active ? "text-slate-600" : "text-slate-400"}`} />
                   {section.label}
                 </button>
               );
@@ -302,19 +302,19 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
           </div>
         </nav>
 
-        <div className="bg-[#1a1a19] px-6 py-7">
+        <div className="bg-white px-6 py-7">
           {activeSection === "profile" && (
             <SettingsPanel
               title="Profile"
               description="Identity and timing settings used across reminders, calendar work, and onboarding."
             >
-              <div className="mb-7 flex items-center gap-3 border-b border-white/[0.06] pb-6">
+              <div className="mb-7 flex items-center gap-3 border-b border-slate-200 pb-6">
                 <button
                   type="button"
                   title="Change profile picture"
                   disabled={avatarUploading}
                   onClick={() => avatarInputRef.current?.click()}
-                  className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#3784ff] text-[17px] font-semibold text-white disabled:opacity-60"
+                  className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[17px] font-semibold text-white disabled:opacity-60"
                 >
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -326,7 +326,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                     {avatarUploading ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     ) : (
-                      <CameraIcon className="h-4 w-4 text-white" />
+                      <CameraIcon className="h-4 w-4 text-slate-900" />
                     )}
                   </span>
                 </button>
@@ -342,18 +342,18 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   }}
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-[17px] font-semibold leading-tight text-white">{displayName}</p>
-                  <p className="mt-1 truncate text-[15px] text-white/35">{email}</p>
+                  <p className="truncate text-[17px] font-semibold leading-tight text-slate-900">{displayName}</p>
+                  <p className="mt-1 truncate text-[15px] text-slate-400">{email}</p>
                 </div>
               </div>
 
               <form onSubmit={(event) => void saveProfile(event)}>
-                <div className="grid gap-0 border-t border-white/[0.06]">
+                <div className="grid gap-0 border-t border-slate-200">
                   <ReadOnlyRow label="Display name" value={name || "Not provided"} />
                   <ReadOnlyRow label="Email address" value={email} />
                   <FieldRow label="Timezone" help="Used for reminders, calendar checks, and morning briefs.">
                     <select
-                      className="h-9 w-full max-w-sm border border-white/[0.08] bg-[#1a1a19] px-3 text-[15px] text-white outline-none transition focus:border-white/20"
+                      className="h-9 w-full max-w-sm border border-slate-200 bg-white px-3 text-[15px] text-slate-900 outline-none transition focus:border-slate-300"
                       value={TIMEZONES.some((t) => t.value === timezone) ? timezone : "__custom__"}
                       onChange={(event) => {
                         if (event.target.value !== "__custom__") setTimezone(event.target.value);
@@ -367,9 +367,9 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                       )}
                     </select>
                   </FieldRow>
-                  <FieldRow label="How you found HeyRiz" help="Helps keep onboarding and support context accurate.">
+                  <FieldRow label="How you found rizly" help="Helps keep onboarding and support context accurate.">
                     <select
-                      className="h-9 w-full max-w-sm border border-white/[0.08] bg-white/[0.04] px-3 text-[15px] text-white outline-none transition focus:border-white/20"
+                      className="h-9 w-full max-w-sm border border-slate-200 bg-slate-50 px-3 text-[15px] text-slate-900 outline-none transition focus:border-slate-300"
                       onChange={(event) => setSource(event.target.value)}
                       value={source}
                     >
@@ -399,10 +399,10 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
               description="Control how Riz addresses you, signs drafts, and chooses default language."
             >
               <form onSubmit={(event) => void saveRizPreferences(event)}>
-                <div className="grid gap-0 border-t border-white/[0.06]">
+                <div className="grid gap-0 border-t border-slate-200">
                   <FieldRow label="What Riz should call you" help="Example: Jagdeep, sir, boss, or your first name.">
                     <input
-                      className="h-9 w-full max-w-sm border border-white/[0.08] bg-white/[0.04] px-3 text-[15px] text-white outline-none transition placeholder:text-white/20 focus:border-white/20"
+                      className="h-9 w-full max-w-sm border border-slate-200 bg-slate-50 px-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-slate-300"
                       onChange={(event) => setHonorific(event.target.value)}
                       placeholder="Jagdeep"
                       value={honorific}
@@ -410,7 +410,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   </FieldRow>
                   <FieldRow label="Email signature name" help="Used when Riz drafts or sends email on your behalf.">
                     <input
-                      className="h-9 w-full max-w-sm border border-white/[0.08] bg-white/[0.04] px-3 text-[15px] text-white outline-none transition placeholder:text-white/20 focus:border-white/20"
+                      className="h-9 w-full max-w-sm border border-slate-200 bg-slate-50 px-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-slate-300"
                       onChange={(event) => setSignatureName(event.target.value)}
                       placeholder={displayName}
                       value={signatureName}
@@ -418,7 +418,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   </FieldRow>
                   <FieldRow label="Default language" help="Riz can still switch language when you ask in chat.">
                     <select
-                      className="h-9 w-full max-w-sm border border-white/[0.08] bg-white/[0.04] px-3 text-[15px] text-white outline-none transition focus:border-white/20"
+                      className="h-9 w-full max-w-sm border border-slate-200 bg-slate-50 px-3 text-[15px] text-slate-900 outline-none transition focus:border-slate-300"
                       onChange={(event) => setLanguage(event.target.value)}
                       value={language}
                     >
@@ -452,7 +452,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                 </p>
               ) : (
                 <>
-                  <div className="grid gap-0 border-t border-white/[0.06]">
+                  <div className="grid gap-0 border-t border-slate-200">
                     <ReadOnlyRow label="Current plan" value={billing?.plan?.name ?? "Loading..."} />
                     <ReadOnlyRow label="Subscription state" value={billing?.access?.state ?? "Loading..."} />
                     <ReadOnlyRow
@@ -462,13 +462,13 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   </div>
                   <div className="mt-6 flex flex-wrap gap-2">
                     <a
-                      className="inline-flex h-9 items-center justify-center bg-white px-4 text-[15px] font-medium text-[#1a1a19] transition hover:bg-white/90"
+                      className="inline-flex h-9 items-center justify-center bg-white px-4 text-[15px] font-medium text-slate-900 transition hover:brightness-105"
                       href="/pricing"
                     >
                       View plans
                     </a>
                     <a
-                      className="inline-flex h-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] px-4 text-[15px] font-medium text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                      className="inline-flex h-9 items-center justify-center border border-slate-200 bg-slate-50 px-4 text-[15px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                       href="/dashboard/usage"
                     >
                       View AI usage
@@ -493,7 +493,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
               title="Account"
               description="Workspace readiness and browser-local session information."
             >
-              <div className="grid gap-0 border-t border-white/[0.06]">
+              <div className="grid gap-0 border-t border-slate-200">
                 {accountRows.map((row) => (
                   <ReadOnlyRow key={row.label} label={row.label} value={row.value} />
                 ))}
@@ -502,13 +502,13 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
               </div>
               <div className="mt-6 flex flex-wrap gap-2">
                 <a
-                  className="inline-flex h-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] px-4 text-[15px] font-medium text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                  className="inline-flex h-9 items-center justify-center border border-slate-200 bg-slate-50 px-4 text-[15px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                   href="/dashboard/connectors"
                 >
                   Manage connectors
                 </a>
                 <a
-                  className="inline-flex h-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] px-4 text-[15px] font-medium text-white/75 transition hover:bg-white/[0.07] hover:text-white"
+                  className="inline-flex h-9 items-center justify-center border border-slate-200 bg-slate-50 px-4 text-[15px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                   href="/dashboard/telegram"
                 >
                   Manage Telegram
@@ -534,8 +534,8 @@ function SettingsPanel({
   return (
     <section className="w-full">
       <div className="mb-7">
-        <h2 className="text-[18px] font-semibold leading-tight text-white">{title}</h2>
-        <p className="mt-1 max-w-3xl text-[15px] leading-6 text-white/40">{description}</p>
+        <h2 className="text-[18px] font-semibold leading-tight text-slate-900">{title}</h2>
+        <p className="mt-1 max-w-3xl text-[15px] leading-6 text-slate-400">{description}</p>
       </div>
       {children}
     </section>
@@ -544,9 +544,9 @@ function SettingsPanel({
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-2 border-b border-white/[0.06] py-4 md:grid-cols-[260px_1fr]">
-      <p className="text-[15px] font-medium text-white/45">{label}</p>
-      <p className="min-w-0 break-words text-[15px] text-white">{value}</p>
+    <div className="grid gap-2 border-b border-slate-200 py-4 md:grid-cols-[260px_1fr]">
+      <p className="text-[15px] font-medium text-slate-400">{label}</p>
+      <p className="min-w-0 break-words text-[15px] text-slate-900">{value}</p>
     </div>
   );
 }
@@ -561,10 +561,10 @@ function FieldRow({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-3 border-b border-white/[0.06] py-4 md:grid-cols-[260px_1fr]">
+    <label className="grid gap-3 border-b border-slate-200 py-4 md:grid-cols-[260px_1fr]">
       <span>
-        <span className="block text-[15px] font-medium text-white/75">{label}</span>
-        <span className="mt-1 block max-w-sm text-[13px] leading-5 text-white/30">{help}</span>
+        <span className="block text-[15px] font-medium text-slate-600">{label}</span>
+        <span className="mt-1 block max-w-sm text-[13px] leading-5 text-slate-400">{help}</span>
       </span>
       <span>{children}</span>
     </label>
@@ -573,9 +573,9 @@ function FieldRow({
 
 function StatusRow({ label, connected }: { label: string; connected: boolean }) {
   return (
-    <div className="grid gap-2 border-b border-white/[0.06] py-4 md:grid-cols-[260px_1fr]">
-      <p className="text-[15px] font-medium text-white/45">{label}</p>
-      <p className={connected ? "text-[15px] text-emerald-300" : "text-[15px] text-white/35"}>
+    <div className="grid gap-2 border-b border-slate-200 py-4 md:grid-cols-[260px_1fr]">
+      <p className="text-[15px] font-medium text-slate-400">{label}</p>
+      <p className={connected ? "text-[15px] text-emerald-300" : "text-[15px] text-slate-400"}>
         {connected ? "Connected" : "Not connected"}
       </p>
     </div>
@@ -592,7 +592,7 @@ function UsageSettingsView({
   error: string | null;
 }) {
   if (loading) {
-    return <p className="border-t border-white/[0.06] py-4 text-[15px] text-white/40">Loading usage...</p>;
+    return <p className="border-t border-slate-200 py-4 text-[15px] text-slate-400">Loading usage...</p>;
   }
 
   if (error) {
@@ -612,7 +612,7 @@ function UsageSettingsView({
 
   return (
     <div>
-      <div className="grid gap-0 border-t border-white/[0.06]">
+      <div className="grid gap-0 border-t border-slate-200">
         <ReadOnlyRow label="Cycle started" value={formatDate(usage.cycleStart)} />
         <ReadOnlyRow label="AI spend" value={`$${usage.spendUsd.toFixed(2)}`} />
         <ReadOnlyRow label="Budget" value={unlimited ? "No budget cap" : `$${usage.budgetUsd.toFixed(2)}`} />
@@ -622,13 +622,13 @@ function UsageSettingsView({
       {!unlimited ? (
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between gap-4 text-[15px]">
-            <span className="text-white/45">Budget used</span>
-            <span className="font-medium text-white">{percent}%</span>
+            <span className="text-slate-400">Budget used</span>
+            <span className="font-medium text-slate-900">{percent}%</span>
           </div>
           <div className="h-2 w-full bg-white/[0.08]">
             <div className={`h-full ${barColor}`} style={{ width: `${percent}%` }} />
           </div>
-          <p className="mt-2 max-w-3xl text-[13px] leading-5 text-white/35">
+          <p className="mt-2 max-w-3xl text-[13px] leading-5 text-slate-400">
             {usage.state === "exceeded"
               ? "Budget used up. Background features pause until the next billing cycle."
               : usage.state === "warn"
@@ -640,27 +640,27 @@ function UsageSettingsView({
 
       <div className="mt-8">
         <div className="mb-2 flex items-center justify-between gap-4">
-          <h3 className="text-[15px] font-semibold text-white">By feature</h3>
-          <a className="text-[15px] font-medium text-white/45 transition hover:text-white" href="/dashboard/usage">
+          <h3 className="text-[15px] font-semibold text-slate-900">By feature</h3>
+          <a className="text-[15px] font-medium text-slate-400 transition hover:text-slate-900" href="/dashboard/usage">
             Detailed usage
           </a>
         </div>
-        <div className="border-t border-white/[0.06]">
+        <div className="border-t border-slate-200">
           {usage.breakdown.length === 0 ? (
-            <p className="border-b border-white/[0.06] py-4 text-[15px] text-white/35">
+            <p className="border-b border-slate-200 py-4 text-[15px] text-slate-400">
               No AI usage recorded yet this cycle.
             </p>
           ) : (
             usage.breakdown.map((row) => (
               <div
                 key={row.task}
-                className="grid gap-2 border-b border-white/[0.06] py-4 md:grid-cols-[1fr_120px_120px]"
+                className="grid gap-2 border-b border-slate-200 py-4 md:grid-cols-[1fr_120px_120px]"
               >
-                <p className="text-[15px] font-medium text-white">{TASK_LABELS[row.task] ?? row.task}</p>
-                <p className="text-[15px] text-white/45">
+                <p className="text-[15px] font-medium text-slate-900">{TASK_LABELS[row.task] ?? row.task}</p>
+                <p className="text-[15px] text-slate-400">
                   {row.calls} call{row.calls === 1 ? "" : "s"}
                 </p>
-                <p className="text-[15px] font-medium text-white md:text-right">${row.costUsd.toFixed(2)}</p>
+                <p className="text-[15px] font-medium text-slate-900 md:text-right">${row.costUsd.toFixed(2)}</p>
               </div>
             ))
           )}
@@ -686,7 +686,7 @@ function ActionFooter({
   return (
     <div className="mt-6 flex flex-wrap items-center gap-3">
       <button
-        className="inline-flex h-9 items-center justify-center bg-white px-4 text-[15px] font-medium text-[#1a1a19] transition hover:bg-white/90 disabled:opacity-50"
+        className="inline-flex h-9 items-center justify-center bg-white px-4 text-[15px] font-medium text-slate-900 transition hover:brightness-105 disabled:opacity-50"
         disabled={saving}
         type="submit"
       >

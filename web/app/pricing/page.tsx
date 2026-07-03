@@ -23,6 +23,22 @@ export const metadata: Metadata = {
   },
 };
 
+// Mirrors apps/billing/src/plans.ts — keep prices in sync.
+const productSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Rizly",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web, Telegram",
+  url: SITE_URL,
+  offers: [
+    { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Starter", price: "49", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Pro", price: "99", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Business", price: "199", priceCurrency: "USD" },
+  ],
+};
+
 const breadcrumbSchema = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -38,6 +54,10 @@ export default function PricingPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
       />
       <PricingClient />
     </>

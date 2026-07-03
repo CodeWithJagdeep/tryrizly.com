@@ -188,14 +188,17 @@ export async function listReminders(userId: string): Promise<ScheduledReminder[]
   return [...upcoming, ...fired, ...failedReminders, ...recurring];
 }
 
-/** Cancel a pending one-time reminder (BullMQ job) or recurring scheduler by id. */
-export async function cancelReminder(id: string): Promise<void> {
+/** Cancel a pending one-time reminder (BullMQ job) or recurring scheduler by id, scoped to its owner. */
+export async function cancelReminder(id: string, userId: string): Promise<boolean> {
   const queue = getNotificationQueue();
   const job = await queue.getJob(id);
   if (job) {
+    if ((job.data as { userId?: string }).userId !== userId) return false;
     await job.remove();
-    return;
+    return true;
   }
-  // Try as a job scheduler id
-  await queue.removeJobScheduler(id).catch(() => {});
+  // Try as a job scheduler id — schedulers don't carry userId, so ownership
+  // can't be verified here; only remove if the caller already knows the id.
+  const removed = await queue.removeJobScheduler(id).catch(() => false);
+  return Boolean(removed);
 }

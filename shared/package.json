@@ -22,6 +22,10 @@
       "types": "./dist/telegram.d.ts",
       "default": "./dist/telegram.js"
     },
+    "./email": {
+      "types": "./dist/email.d.ts",
+      "default": "./dist/email.js"
+    },
     "./db/mongo": {
       "types": "./dist/db/mongo.d.ts",
       "default": "./dist/db/mongo.js"

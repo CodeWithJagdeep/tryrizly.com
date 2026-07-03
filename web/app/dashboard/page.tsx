@@ -3,7 +3,7 @@ import { requireSession } from "../api/onboarding/_lib/require-user";
 import { ChatHome } from "./components/ChatHome";
 
 export const metadata = {
-  title: "Dashboard | heyriz",
+  title: "Dashboard | rizly",
 };
 
 export default async function DashboardPage() {

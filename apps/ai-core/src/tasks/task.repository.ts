@@ -138,21 +138,22 @@ export class TaskRepository implements OnModuleDestroy {
     return result.rows;
   }
 
-  async markDone(id: string): Promise<void> {
+  /** Returns true only if a task owned by `userId` was actually updated. */
+  async markDone(id: string, userId: string): Promise<boolean> {
     const now = new Date().toISOString();
     if (!this.pool) {
       const existing = inMemoryTasks.get(id);
-      if (existing) {
-        inMemoryTasks.set(id, { ...existing, status: "done", updatedAt: now });
-      }
-      return;
+      if (!existing || existing.userId !== userId) return false;
+      inMemoryTasks.set(id, { ...existing, status: "done", updatedAt: now });
+      return true;
     }
 
     await this.ensureTable();
-    await this.pool.query(
-      "update tasks set status = 'done', updated_at = $2 where id = $1",
-      [id, now],
+    const result = await this.pool.query(
+      "update tasks set status = 'done', updated_at = $2 where id = $1 and user_id = $3",
+      [id, now, userId],
     );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async onModuleDestroy() {

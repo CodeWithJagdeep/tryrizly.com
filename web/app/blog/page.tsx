@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import { BlogClient } from "./BlogClient";
 import { posts } from "./data";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://heyriz.co";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
   title: "Blog",
   description:
-    "Notes, guides, and technical updates from the HeyRiz team on building a proactive AI operator for founders.",
+    "Notes, guides, and technical updates from the rizly team on building a proactive AI operator for founders.",
   alternates: { canonical: `${SITE_URL}/blog` },
   openGraph: {
-    title: "Blog | HeyRiz",
+    title: "Blog | rizly",
     description:
       "Notes, guides, and technical updates on building a proactive AI operator for founders.",
     url: `${SITE_URL}/blog`,
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blog | HeyRiz",
+    title: "Blog | rizly",
     description:
       "Notes, guides, and technical updates on building a proactive AI operator for founders.",
   },
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
 const blogListSchema = {
   "@context": "https://schema.org",
   "@type": "Blog",
-  name: "HeyRiz Blog",
+  name: "rizly Blog",
   url: `${SITE_URL}/blog`,
-  description: "Notes, guides, and technical updates from the HeyRiz team.",
+  description: "Notes, guides, and technical updates from the rizly team.",
   blogPost: posts.map((post) => ({
     "@type": "BlogPosting",
     headline: post.title,

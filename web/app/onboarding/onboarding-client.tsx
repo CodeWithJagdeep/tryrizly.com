@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarIcon,
-  CustomApiIcon,
   GmailIcon,
   MongoDbIcon,
   PostgresIcon,
@@ -46,7 +47,7 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     provider: "gmail",
     title: "Gmail",
     description:
-      "HeyRiz watches your inbox, surfaces important emails, triages by priority, and drafts approved replies — all without you lifting a finger.",
+      "rizly watches your inbox, surfaces important emails, triages by priority, and drafts approved replies — all without you lifting a finger.",
     category: "Google",
     authType: "oauth",
     icon: GmailIcon,
@@ -63,7 +64,7 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     provider: "calendar",
     title: "Google Calendar",
     description:
-      "HeyRiz checks your calendar for conflicts, creates and reschedules events with your approval, and sends reminders before meetings.",
+      "rizly checks your calendar for conflicts, creates and reschedules events with your approval, and sends reminders before meetings.",
     category: "Google",
     authType: "oauth",
     icon: CalendarIcon,
@@ -165,28 +166,9 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     website: "https://mongodb.com",
     privacy: "https://www.mongodb.com/legal/privacy-policy",
   },
-  {
-    provider: "custom_api",
-    title: "Custom API",
-    description:
-      "Point HeyRiz at your own backend endpoint to pull live metrics, product data, or any JSON response into the morning brief.",
-    category: "APIs",
-    authType: "manual",
-    icon: CustomApiIcon,
-    fields: [
-      { name: "baseUrl", label: "Base URL", placeholder: "https://api.yourapp.com" },
-      { name: "accessToken", label: "Access Token", type: "password" },
-    ],
-    prompts: [
-      "What does our /metrics endpoint say about today's revenue?",
-      "Fetch current system health from /status.",
-      "Pull today's conversion rate from /analytics.",
-      "Get the latest error count from /errors and alert me if it's high.",
-    ],
-  },
 ];
 
-const CATEGORIES = ["Google", "Payments", "Databases", "APIs"] as const;
+const CATEGORIES = ["Google", "Payments", "Databases"] as const;
 
 const SOURCE_OPTIONS = ["Twitter / X", "LinkedIn", "Friend or colleague", "Search", "Other"];
 
@@ -230,7 +212,7 @@ function PromptIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="shrink-0 text-white/35"
+      className="shrink-0 text-black/50"
       aria-hidden="true"
     >
       <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
@@ -285,27 +267,16 @@ function ConnectorDialog({
     <div
       role="dialog"
       aria-modal="true"
-      className="relative m-auto flex w-full max-w-[95%] flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d0f14] shadow-[0_32px_80px_-12px_rgba(0,0,0,0.8)] sm:w-[600px]"
+      className="relative m-auto flex w-full max-w-[95%] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl sm:w-[600px]"
     >
       {/* ── Hero header ───────────────────────────────────────────────────── */}
-      <div className="relative flex flex-col items-center gap-5 overflow-hidden px-8 pb-8 pt-10 text-center">
-        {/* radial glow */}
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-48 opacity-30"
-          style={{
-            background:
-              "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(255,255,255,0.18), transparent)",
-          }}
-        />
-        {/* hairline shine */}
-        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
+      <div className="relative flex flex-col items-center gap-5 border-b border-slate-200 px-8 pb-8 pt-10 text-center">
         {/* close */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/40 transition hover:bg-white/10 hover:text-white/80"
+          className="absolute right-4 top-4 flex size-8 items-center justify-center border border-slate-200 bg-white text-black transition-colors hover:bg-[#FE7F2D] hover:text-white"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -313,14 +284,14 @@ function ConnectorDialog({
         </button>
 
         {/* icon */}
-        <div className="flex size-[72px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] shadow-[0_0_40px_0_rgba(255,255,255,0.06)]">
+        <div className="flex size-[72px] items-center justify-center border border-slate-200 bg-white">
           <Icon className="size-10" />
         </div>
 
         {/* title + description */}
         <div className="flex flex-col gap-2">
-          <h2 className="text-[22px] font-semibold tracking-tight">{connector.title}</h2>
-          <p className="mx-auto max-w-sm text-[13px] leading-6 text-white/50">
+          <h2 className="text-[22px] font-semibold tracking-tight text-black">{connector.title}</h2>
+          <p className="mx-auto max-w-sm text-[13px] leading-6 text-slate-500">
             {connector.description}
           </p>
         </div>
@@ -329,7 +300,7 @@ function ConnectorDialog({
         {isOAuth && (
           <a
             href={oauthHref}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-[#0d0f14] shadow-[0_2px_12px_0_rgba(255,255,255,0.15)] transition hover:opacity-90 active:scale-[0.98]"
+            className="inline-flex h-10 items-center gap-2 bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
@@ -340,17 +311,17 @@ function ConnectorDialog({
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-6 overflow-y-auto border-t border-white/[0.06] px-6 pb-7 pt-6">
+      <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-7 pt-6">
 
         {/* Manual credentials form */}
         {!isOAuth && connector.fields && (
           <form onSubmit={(e) => void onManualSubmit(e, connector)}>
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/30">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
               Credentials
             </p>
 
             {error && (
-              <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <p className="mb-4 border border-slate-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
                 {error}
               </p>
             )}
@@ -358,13 +329,13 @@ function ConnectorDialog({
             <div className="flex flex-col gap-3">
               {connector.fields.map((field) => (
                 <label key={field.name} className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-white/55">{field.label}</span>
+                  <span className="font-medium text-black/60">{field.label}</span>
                   <input
                     name={field.name}
                     type={field.type ?? "text"}
                     placeholder={field.placeholder}
                     required
-                    className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/20 transition focus:border-white/25 focus:bg-white/[0.06]"
+                    className="h-11 border border-slate-200 bg-white px-4 text-sm text-black outline-none placeholder:text-slate-400 transition focus:border-[#FE7F2D]"
                   />
                 </label>
               ))}
@@ -373,7 +344,7 @@ function ConnectorDialog({
             <button
               type="submit"
               disabled={submitting}
-              className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-[#0d0f14] shadow-[0_2px_12px_0_rgba(255,255,255,0.15)] transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 bg-black text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
             >
               {submitting ? (
                 "Saving…"
@@ -391,19 +362,19 @@ function ConnectorDialog({
 
         {/* Example prompts */}
         <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/30">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
             Example prompts
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {connector.prompts.map((prompt) => (
               <div
                 key={prompt}
-                className="group flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
+                className="group flex items-start gap-3 border border-slate-200 bg-white p-3.5 transition-colors hover:bg-[#FE7F2D]/5"
               >
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-white/[0.07]">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center border border-slate-200 bg-white">
                   <PromptIcon />
                 </span>
-                <p className="text-[12.5px] leading-5 text-white/55 group-hover:text-white/75">
+                <p className="text-[12.5px] leading-5 text-black/60 group-hover:text-black">
                   {prompt}
                 </p>
               </div>
@@ -413,23 +384,23 @@ function ConnectorDialog({
 
         {/* Details pills */}
         <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/30">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
             Details
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50">
-              <span className="size-1.5 rounded-full bg-emerald-400" />
+            <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+              <span className="size-1.5 bg-emerald-500" />
               {isOAuth ? "OAuth app" : "API key"}
             </span>
-            <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50">
-              By HeyRiz
+            <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
+              By rizly
             </span>
             {connector.website && (
               <a
                 href={connector.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50 transition hover:border-white/20 hover:text-white/80"
+                className="flex items-center gap-1 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70 transition-colors hover:bg-[#FE7F2D] hover:text-white"
               >
                 Website <ExternalIcon />
               </a>
@@ -439,7 +410,7 @@ function ConnectorDialog({
                 href={connector.privacy}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/50 transition hover:border-white/20 hover:text-white/80"
+                className="flex items-center gap-1 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70 transition-colors hover:bg-[#FE7F2D] hover:text-white"
               >
                 Privacy <ExternalIcon />
               </a>
@@ -452,12 +423,195 @@ function ConnectorDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/70 px-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/50 px-4 py-10 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       {dialogBody}
+    </div>
+  );
+}
+
+// ── Step metadata (drives the progress stepper + eyebrows) ──────────────────
+const STEP_META = [
+  { eyebrow: "Welcome" },
+  { eyebrow: "Preferences" },
+  { eyebrow: "Integrations" },
+  { eyebrow: "Daily briefing" },
+] as const;
+
+function BackIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="transition-transform group-hover:-translate-x-0.5">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+// ── Progress stepper: segmented bar + counter + back affordance ──────────────
+function ProgressHeader({ step, onBack }: { step: number; onBack: () => void }) {
+  const total = STEP_META.length;
+  return (
+    <div>
+      <div className="flex h-6 items-center justify-between">
+        {step > 1 ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="group -ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm font-medium text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+          >
+            <BackIcon />
+            Back
+          </button>
+        ) : (
+          <span />
+        )}
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 tabular-nums">
+          Step {step} <span className="text-slate-300">/ {total}</span>
+        </span>
+      </div>
+      <div className="mt-3.5 flex gap-2" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`Step ${step} of ${total}`}>
+        {Array.from({ length: total }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-2.5 flex-1 border border-slate-200 transition-colors duration-300 ${
+              i < step - 1 ? "bg-black" : i === step - 1 ? "bg-[#FE7F2D]" : "bg-white"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+// Extra search terms so a zone is findable by its modern/legacy name or country,
+// regardless of which name the runtime's ICU lists (e.g. Calcutta vs Kolkata).
+const TZ_SYNONYMS: Record<string, string> = {
+  "asia/calcutta": "kolkata india mumbai delhi ist",
+  "asia/kolkata": "calcutta india mumbai delhi ist",
+  "asia/saigon": "ho chi minh vietnam",
+  "asia/ho_chi_minh": "saigon vietnam",
+  "asia/rangoon": "yangon myanmar",
+  "asia/yangon": "rangoon myanmar",
+  "asia/katmandu": "kathmandu nepal",
+  "asia/kathmandu": "katmandu nepal",
+  "europe/kiev": "kyiv ukraine",
+  "europe/kyiv": "kiev ukraine",
+  "america/godthab": "nuuk greenland",
+  "america/nuuk": "godthab greenland",
+};
+
+function tzSearchString(tz: string): string {
+  const extra = TZ_SYNONYMS[tz.toLowerCase()] ?? "";
+  return `${tz.replace(/[_/]/g, " ")} ${extra}`.toLowerCase();
+}
+
+// ── Searchable timezone picker (type to filter the IANA list) ────────────────
+function TimezoneCombobox({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (tz: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = (
+    q ? options.filter((tz) => tzSearchString(tz).includes(q)) : options
+  ).slice(0, 80);
+
+  function pick(tz: string) {
+    onChange(tz);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={wrapRef} className="relative mt-6">
+      <div className="flex h-[52px] items-center gap-2 border border-slate-200 bg-white px-4 transition focus-within:border-[#FE7F2D]">
+        <SearchIcon />
+        <input
+          value={open ? query : value}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!open) setOpen(true);
+          }}
+          onFocus={() => {
+            setQuery("");
+            setOpen(true);
+          }}
+          placeholder={open ? `Search — current: ${value}` : "Search your timezone…"}
+          className="h-full w-full bg-transparent text-base text-black outline-none placeholder:text-slate-400"
+          aria-label="Timezone"
+          autoComplete="off"
+        />
+      </div>
+
+      {open && (
+        <ul className="absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto border border-slate-200 bg-white shadow-xl">
+          {filtered.length === 0 ? (
+            <li className="px-4 py-3 text-sm text-slate-500">No timezone matches “{query}”.</li>
+          ) : (
+            filtered.map((tz) => {
+              const selected = tz === value;
+              return (
+                <li key={tz}>
+                  <button
+                    type="button"
+                    onClick={() => pick(tz)}
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                      selected ? "bg-black text-white" : "text-black hover:bg-[#FE7F2D]/10"
+                    }`}
+                  >
+                    <span>{tz.replace(/_/g, " ")}</span>
+                    {selected && <CheckIcon />}
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
     </div>
   );
 }
@@ -470,12 +624,18 @@ export function OnboardingClient() {
   const [timezone, setTimezone] = useState<string>("UTC");
   const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set());
   const [telegram, setTelegram] = useState<{ deepLink: string; qrCode: string } | null>(null);
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState(false);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [activeConnector, setActiveConnector] = useState<ConnectorItem | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSubmitting, setSetupSubmitting] = useState(false);
   const [skipLoading, setSkipLoading] = useState(false);
+  const [confirmSkipTelegram, setConfirmSkipTelegram] = useState(false);
+  const [connectorQuery, setConnectorQuery] = useState("");
+  const [connectorCategory, setConnectorCategory] = useState<"All" | (typeof CATEGORIES)[number]>("All");
+  const [searchOpen, setSearchOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timezoneOptions = getTimezoneOptions(timezone);
 
@@ -510,6 +670,21 @@ export function OnboardingClient() {
   }, [router]);
 
   const anyConnected = connectedProviders.size > 0;
+
+  const connectorQ = connectorQuery.trim().toLowerCase();
+  const visibleConnectors = CONNECTOR_CATALOG.filter((c) => {
+    const categoryOk = connectorCategory === "All" || c.category === connectorCategory;
+    const queryOk =
+      !connectorQ ||
+      c.title.toLowerCase().includes(connectorQ) ||
+      c.description.toLowerCase().includes(connectorQ) ||
+      c.provider.toLowerCase().includes(connectorQ);
+    return categoryOk && queryOk;
+  });
+
+  function goBack() {
+    setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
+  }
 
   function isConnected(provider: string) {
     return connectedProviders.has(provider) || connectedProviders.has("google");
@@ -589,15 +764,38 @@ export function OnboardingClient() {
     }
   }
 
+  // Fetch the Telegram deep-link/QR. Surfaces a clear error + retry instead of
+  // hanging on "Generating…" when the bot isn't configured or the call fails.
+  const loadTelegramLink = useCallback(async () => {
+    setTelegramLoading(true);
+    setTelegramError(null);
+    try {
+      const res = await fetch("/api/onboarding/telegram/token", { method: "POST" });
+      const data = (await res.json().catch(() => null)) as
+        | { deepLink?: string; qrCode?: string; message?: string }
+        | null;
+      if (res.ok && data?.deepLink && data?.qrCode) {
+        setTelegram({ deepLink: data.deepLink, qrCode: data.qrCode });
+      } else {
+        setTelegram(null);
+        setTelegramError(
+          data?.message ??
+            "We couldn't generate your Telegram link. You can retry, or skip this and set it up later from the dashboard.",
+        );
+      }
+    } catch {
+      setTelegram(null);
+      setTelegramError("We couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setTelegramLoading(false);
+    }
+  }, []);
+
   // Step 4: request Telegram link and poll for it.
   useEffect(() => {
     if (step !== 4) return;
-    fetch("/api/onboarding/telegram/token", { method: "POST" })
-      .then((r) => r.json())
-      .then((data: { deepLink?: string; qrCode?: string }) => {
-        if (data.deepLink && data.qrCode) setTelegram({ deepLink: data.deepLink, qrCode: data.qrCode });
-      })
-      .catch(() => null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-enter
+    void loadTelegramLink();
 
     pollRef.current = setInterval(async () => {
       const res = await fetch("/api/onboarding/status");
@@ -612,7 +810,7 @@ export function OnboardingClient() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [step, router]);
+  }, [step, router, loadTelegramLink]);
 
   async function submitSource() {
     if (!source) return;
@@ -659,40 +857,76 @@ export function OnboardingClient() {
   }
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-[#020305] px-6 py-16 text-white">
-      <div className="w-full max-w-[560px]">
-        <p className="mb-8 text-base font-medium uppercase tracking-[0.12em] text-white/45">
-          Step {step} of 4
-        </p>
+    <main
+      className={`relative flex justify-center bg-white px-6 text-black ${
+        step === 3
+          ? "h-[100dvh] items-stretch overflow-hidden pt-16 pb-6"
+          : "min-h-screen items-start pt-16 pb-10"
+      }`}
+    >
+      {/* Floating brand mark — matches the login page */}
+      <Link
+        href="/"
+        className="fixed left-5 top-5 z-20 flex h-9 items-center sm:left-8 sm:top-7"
+        aria-label="rizly home"
+      >
+        <Image
+          src="/rizly_white.png"
+          alt="rizly"
+          width={112}
+          height={26}
+          className="h-8 w-auto object-contain"
+          priority
+        />
+      </Link>
 
+      <div className={`flex w-full flex-col ${step === 3 ? "max-w-[1200px]" : "max-w-[600px]"}`}>
+        <ProgressHeader step={step} onBack={goBack} />
+
+        <div
+          key={step}
+          className={`onb-enter ${step === 3 ? "mt-7 flex min-h-0 flex-1 flex-col" : "mt-11"}`}
+        >
         {/* Step 1 — source */}
         {step === 1 && (
           <section>
-            <h1 className="text-3xl font-semibold">Where did you hear about HeyRiz?</h1>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {SOURCE_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setSource(option)}
-                  className={`rounded-full border px-4 py-2 text-base font-medium transition ${
-                    source === option
-                      ? "border-white bg-white text-[#0f1419]"
-                      : "border-white/20 text-white/80 hover:border-white/50"
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+              {STEP_META[0].eyebrow}
+            </p>
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+              Where did you hear about rizly?
+            </h1>
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
+              A quick one — it helps us understand who rizly works best for.
+            </p>
+            <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {SOURCE_OPTIONS.map((option) => {
+                const selected = source === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setSource(option)}
+                    className={`flex items-center justify-between gap-3 border-2 border-black px-4 py-3.5 text-left text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                      selected
+                        ? "bg-black text-white shadow-[4px_4px_0px_0px_#000]"
+                        : "bg-white text-black hover:bg-[#FE7F2D]/5 hover:shadow-[4px_4px_0px_0px_#000]"
+                    }`}
+                  >
+                    {option}
+                    {selected && <CheckIcon />}
+                  </button>
+                );
+              })}
             </div>
             {sourceError && (
-              <p className="mt-4 text-sm text-red-400">{sourceError}</p>
+              <p className="mt-4 text-sm text-red-600">{sourceError}</p>
             )}
             <button
               type="button"
               disabled={!source || sourceLoading}
               onClick={() => void submitSource()}
-              className="mt-8 h-[52px] w-full rounded-full bg-white text-base font-semibold text-[#0f1419] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 inline-flex h-[52px] w-full items-center justify-center border-2 border-black bg-black text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-[4px_4px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:cursor-not-allowed disabled:border-black/20 disabled:bg-black/20 disabled:text-white disabled:shadow-none"
             >
               {sourceLoading ? "Saving…" : "Continue"}
             </button>
@@ -702,26 +936,34 @@ export function OnboardingClient() {
         {/* Step 2 — timezone */}
         {step === 2 && (
           <section>
-            <h1 className="text-3xl font-semibold">What's your timezone?</h1>
-            <p className="mt-2 text-base text-white/60">
-              HeyRiz uses this for reminders and meeting times. We've guessed yours from your
-              browser — change it if it's wrong.
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+              {STEP_META[1].eyebrow}
             </p>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="mt-6 h-[52px] w-full rounded-2xl border border-white/15 bg-[#0f1419] px-4 text-base text-white"
-            >
-              {timezoneOptions.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+              What&rsquo;s your timezone?
+            </h1>
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
+              rizly uses this for reminders and meeting times. We&rsquo;ve guessed yours from your
+              browser — change it if it&rsquo;s wrong.
+            </p>
+            <TimezoneCombobox value={timezone} options={timezoneOptions} onChange={setTimezone} />
+            <p className="mt-3 text-sm text-slate-500">
+              Selected: <span className="font-semibold text-black">{timezone.replace(/_/g, " ")}</span>
+              {" — it's "}
+              <span className="font-semibold text-black">
+                {new Date().toLocaleTimeString("en-US", {
+                  timeZone: timezone,
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
+              </span>
+              {" there right now."}
+            </p>
             <button
               type="button"
               onClick={() => void submitTimezone()}
-              className="mt-8 h-[52px] w-full rounded-full bg-white text-base font-semibold text-[#0f1419]"
+              className="mt-8 inline-flex h-[52px] w-full items-center justify-center bg-black text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
             >
               Continue
             </button>
@@ -730,95 +972,195 @@ export function OnboardingClient() {
 
         {/* Step 3 — connectors */}
         {step === 3 && (
-          <section>
-            <h1 className="text-3xl font-semibold">Connect your tools</h1>
-            <p className="mt-2 text-base text-white/60">
-              Connect what you use — you can always add more from the dashboard later.
-            </p>
+          <section className="flex min-h-0 flex-1 flex-col">
+            {/* Fixed header: title + search + category tabs */}
+            <div className="shrink-0">
+              <div className="flex items-baseline justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+                    {STEP_META[2].eyebrow}
+                  </p>
+                  <h1 className="mt-2 text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-slate-950">
+                    Connect your tools
+                  </h1>
+                </div>
+                <span className="shrink-0 border border-slate-200 px-2.5 py-1 text-[11px] font-bold uppercase tracking-tight text-black tabular-nums">
+                  {connectedProviders.size} connected
+                </span>
+              </div>
+              <p className="mt-2 text-[14px] leading-6 text-slate-500">
+                The more rizly can see, the more it can handle. Add more anytime from the dashboard.
+              </p>
 
-            <div className="mt-8 flex flex-col gap-6">
-              {CATEGORIES.map((category) => {
-                const items = CONNECTOR_CATALOG.filter((c) => c.category === category);
-                return (
-                  <div key={category}>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/35">
-                      {category}
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {items.map((item) => {
-                        const connected = isConnected(item.provider);
-                        const Icon = item.icon;
-                        return (
-                          <div
-                            key={item.provider}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                                <Icon className="size-5" />
-                              </span>
-                              <div>
-                                <p className="text-sm font-semibold">{item.title}</p>
-                                <p className="mt-0.5 text-xs text-white/50">{item.description}</p>
-                              </div>
-                            </div>
+              {/* Toolbar: category tabs + a search icon that opens the field on click */}
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex flex-1 flex-wrap gap-2">
+                  {(["All", ...CATEGORIES] as const).map((cat) => {
+                    const active = connectorCategory === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setConnectorCategory(cat)}
+                        className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                          active
+                            ? "bg-black text-white"
+                            : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen((o) => {
+                      if (o) setConnectorQuery("");
+                      return !o;
+                    });
+                  }}
+                  aria-label={searchOpen ? "Close search" : "Search integrations"}
+                  aria-expanded={searchOpen}
+                  className={`flex size-9 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                    searchOpen
+                      ? "bg-black text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                </button>
+              </div>
 
-                            <div className="flex shrink-0 items-center gap-2">
-                              {connected ? (
-                                <>
-                                  <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-medium text-emerald-300">
-                                    Connected
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => void unlinkConnector(item.provider)}
-                                    className="text-xs font-medium text-white/35 underline-offset-2 hover:text-white/60 hover:underline"
-                                  >
-                                    Unlink
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => { setActiveConnector(item); setSetupError(null); }}
-                                  className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-[#0f1419]"
-                                >
-                                  {item.authType === "oauth" ? "Connect" : "Setup"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Search field — revealed when the icon is tapped */}
+              {searchOpen && (
+                <div className="mt-2.5 flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-[#FE7F2D]">
+                  <SearchIcon />
+                  <input
+                    value={connectorQuery}
+                    onChange={(e) => setConnectorQuery(e.target.value)}
+                    placeholder="Search integrations…"
+                    className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
+                    aria-label="Search integrations"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConnectorQuery("");
+                      setSearchOpen(false);
+                    }}
+                    aria-label="Close search"
+                    className="text-black/40 transition-colors hover:text-black"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              disabled={!anyConnected}
-              onClick={() => setStep(4)}
-              className="mt-8 h-[52px] w-full rounded-full bg-white text-base font-semibold text-[#0f1419] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Continue
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(4)}
-              className="mt-3 w-full text-center text-sm font-medium text-white/45 underline-offset-2 hover:text-white/70 hover:underline"
-            >
-              Skip for now
-            </button>
+            {/* Scrollable grid */}
+            <div className="mt-4 flex-1 overflow-y-auto border-t border-slate-200 pt-4">
+              {visibleConnectors.length === 0 ? (
+                <p className="py-12 text-center text-sm text-slate-500">
+                  No integrations match “{connectorQuery}”.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleConnectors.map((item) => {
+                    const connected = isConnected(item.provider);
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.provider}
+                        className="flex flex-col justify-between border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-slate-300 hover:bg-[#FE7F2D]/5 hover:shadow-md"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex size-9 shrink-0 items-center justify-center border border-slate-200 bg-white">
+                              <Icon className="size-5" />
+                            </span>
+                            <p className="text-sm font-semibold text-black">{item.title}</p>
+                          </div>
+                          <p className="mt-2.5 text-xs leading-5 text-slate-500 line-clamp-3">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        <div className="mt-4">
+                          {connected ? (
+                            <div className="flex items-center justify-between">
+                              <span className="border border-slate-200 bg-emerald-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-tight text-white">
+                                Connected
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void unlinkConnector(item.provider)}
+                                className="text-xs font-semibold text-black/40 underline-offset-2 hover:text-black hover:underline"
+                              >
+                                Unlink
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => { setActiveConnector(item); setSetupError(null); }}
+                              className="w-full bg-black px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+                            >
+                              {item.authType === "oauth" ? "Connect" : "Setup"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Pinned footer: Continue + Skip */}
+            <div className="shrink-0 border-t border-slate-200 bg-white pt-4">
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  className="shrink-0 text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                >
+                  Skip for now
+                </button>
+                <button
+                  type="button"
+                  disabled={!anyConnected}
+                  onClick={() => setStep(4)}
+                  className="inline-flex h-[52px] items-center justify-center gap-2 bg-black px-10 text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-white disabled:shadow-none"
+                >
+                  Continue
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
         {/* Step 4 — Telegram */}
         {step === 4 && (
           <section>
-            <h1 className="text-3xl font-semibold">Your briefing, in your pocket</h1>
-            <p className="mt-2 text-base text-white/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+              {STEP_META[3].eyebrow}
+            </p>
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+              Your briefing, in your pocket
+            </h1>
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
               Link Telegram and Riz texts you every morning — what needs action, who to follow up
               with, what your numbers look like. Reply to act. No app to open.
             </p>
@@ -828,37 +1170,95 @@ export function OnboardingClient() {
                   <img
                     src={telegram.qrCode}
                     alt="Telegram link QR code"
-                    className="h-[200px] w-[200px] shrink-0 rounded-lg bg-white p-2"
+                    className="h-[200px] w-[200px] shrink-0 border border-slate-200 bg-white p-2"
                   />
                   <div className="flex flex-col gap-3">
-                    <p className="text-sm text-white/55">
+                    <p className="text-sm text-slate-600">
                       Scan the QR code from your phone, or tap the button below to open the bot.
                       Start the bot to complete the link.
                     </p>
                     <a
                       href={telegram.deepLink}
-                      className="inline-flex h-[44px] items-center justify-center rounded-full bg-white px-6 text-sm font-semibold text-[#0f1419]"
+                      className="inline-flex h-[44px] items-center justify-center bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
                     >
                       Open Telegram bot
                     </a>
                   </div>
                 </div>
-                <p className="mt-6 text-sm text-white/35">
+                <p className="mt-6 inline-flex items-center gap-2 text-sm text-slate-500">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FE7F2D] opacity-60" />
+                    <span className="relative inline-flex size-2 rounded-full bg-[#FE7F2D]" />
+                  </span>
                   Waiting for you to start the bot…
                 </p>
               </>
+            ) : telegramError ? (
+              <div className="mt-8">
+                <div className="border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-sm font-semibold text-black">Couldn&rsquo;t generate your link</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">{telegramError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadTelegramLink()}
+                  disabled={telegramLoading}
+                  className="mt-4 inline-flex h-11 items-center justify-center bg-black px-6 text-sm font-semibold text-white transition-colors hover:bg-[#FE7F2D] active:scale-[0.99] disabled:opacity-50"
+                >
+                  {telegramLoading ? "Retrying…" : "Try again"}
+                </button>
+              </div>
             ) : (
-              <p className="mt-8 text-base text-white/45">Generating your link…</p>
+              <p className="mt-8 inline-flex items-center gap-2 text-base text-slate-500">
+                <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
+                Generating your link…
+              </p>
             )}
-            <button
-              type="button"
-              disabled={skipLoading}
-              onClick={() => void skipTelegram()}
-              className="mt-8 text-sm font-medium text-white/40 underline-offset-2 hover:text-white/65 hover:underline disabled:opacity-50"
-            >
-              {skipLoading ? "Saving…" : "I'll set up Telegram later"}
-            </button>
+            {confirmSkipTelegram ? (
+              <div className="mt-8 border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Sure? Riz mostly lives on Telegram.</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Reminders, morning briefs, and approvals won&apos;t reach you until you link it.
+                  You can do it later from the dashboard.
+                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmSkipTelegram(false)}
+                    className="inline-flex h-9 items-center justify-center bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]"
+                  >
+                    Keep linking
+                  </button>
+                  <button
+                    type="button"
+                    disabled={skipLoading}
+                    onClick={() => void skipTelegram()}
+                    className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline disabled:opacity-50"
+                  >
+                    {skipLoading ? "Saving…" : "Skip anyway"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmSkipTelegram(true)}
+                className="mt-8 text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+              >
+                I&apos;ll set up Telegram later
+              </button>
+            )}
           </section>
+        )}
+        </div>
+
+        {/* Step 3 fills the viewport with its own pinned footer, so the trust line
+            would overflow the page there — show it on the shorter steps only. */}
+        {step !== 3 && (
+          <p className="mt-14 flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
+            <LockIcon />
+            Encrypted end to end. Nothing sends without your approval.
+          </p>
         )}
       </div>
 

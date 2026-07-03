@@ -1,10 +1,19 @@
 name: heyriz-prod
 
+# Pin outbound services to public resolvers so external fetches (Google/OpenAI/
+# Anthropic/Resend/Razorpay) don't depend on the host's DNS staying constant —
+# a changed host resolver would otherwise leave a stale nameserver cached and
+# every outbound call would fail with EAI_AGAIN ("fetch failed").
+x-external-dns: &external-dns
+  - 8.8.8.8
+  - 1.1.1.1
+
 services:
   gateway:
     build:
       context: ..
       dockerfile: apps/gateway/Dockerfile
+    dns: *external-dns
     env_file:
       - path: ../.env.production
         required: false
@@ -31,6 +40,7 @@ services:
     build:
       context: ..
       dockerfile: apps/billing/Dockerfile
+    dns: *external-dns
     env_file:
       - path: ../.env.production
         required: false
@@ -49,6 +59,7 @@ services:
     build:
       context: ..
       dockerfile: apps/ai-core/Dockerfile
+    dns: *external-dns
     env_file:
       - path: ../.env.production
         required: false
@@ -70,6 +81,7 @@ services:
     build:
       context: ..
       dockerfile: apps/worker/Dockerfile
+    dns: *external-dns
     env_file:
       - path: ../.env.production
         required: false

@@ -1,7 +1,7 @@
 import { ApprovalsClient } from "./approvals-client";
 
 export const metadata = {
-  title: "Approvals | HeyRiz",
+  title: "Approvals | rizly",
 };
 
 export default function ApprovalsPage() {

@@ -13,6 +13,7 @@ import {
   Query,
   Res,
 } from "@nestjs/common";
+import { APPROVAL_STORE, type ApprovalStore } from "./approval-store";
 import { AuthRepository } from "./auth/auth.repository";
 import { CONVERSATION_STORE, type ConversationStore } from "./conversation-store";
 import { GatewayService } from "./gateway.service";
@@ -25,6 +26,19 @@ import { setTelegramWebhook } from "@heyriz/shared/telegram";
 import { requireInternalSecret, safeEqual, sanitizeReturnPath } from "./internal-auth";
 
 type ProxyPayload = Record<string, unknown>;
+type ChatHttpBody = {
+  userId?: string;
+  message?: string;
+  history?: unknown;
+  approve?: boolean;
+  /** Only ever an opaque id from a prior response — never trust tool/payload from the client. */
+  pendingApprovalId?: string;
+};
+type ChatResult = {
+  reply: string;
+  pendingApproval?: { tool: string; payload: Record<string, unknown>; preview: string };
+  [key: string]: unknown;
+};
 type RedirectResponse = {
   redirect(url: string): void;
   status(code: number): {
@@ -44,6 +58,8 @@ export class GatewayController {
     private readonly authRepo: AuthRepository,
     @Inject(CONVERSATION_STORE)
     private readonly conversations: ConversationStore,
+    @Inject(APPROVAL_STORE)
+    private readonly approvals: ApprovalStore,
   ) {}
 
   @Post("api/telegram/webhook")
@@ -52,6 +68,12 @@ export class GatewayController {
     @Headers("x-telegram-bot-api-secret-token") secret: string | undefined,
     @Body() body: TelegramUpdate,
   ) {
+    // Never accept an unauthenticated webhook in production: without a configured
+    // secret anyone could POST forged Telegram updates. (Polling deployments don't
+    // reach this endpoint, so requiring the secret here doesn't affect them.)
+    if (env.NODE_ENV === "production" && !env.TELEGRAM_WEBHOOK_SECRET) {
+      return { ok: false };
+    }
     if (env.TELEGRAM_WEBHOOK_SECRET && !safeEqual(secret, env.TELEGRAM_WEBHOOK_SECRET)) {
       return { ok: false };
     }
@@ -77,12 +99,39 @@ export class GatewayController {
   }
 
   @Post("api/ai/chat")
-  chat(
+  async chat(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: ProxyPayload,
+    @Body() body: ChatHttpBody,
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("chat.message", body);
+    const userId = body.userId;
+    if (!userId) throw new BadRequestException("userId is required");
+
+    // Approval is resolved server-side by opaque id — a client can never smuggle
+    // its own tool/payload in as an "approved" action (see approval-store.ts).
+    let approval: { tool: string; payload: unknown } | undefined;
+    if (body.approve && body.pendingApprovalId) {
+      const pending = await this.approvals.get(userId, body.pendingApprovalId);
+      if (pending) {
+        approval = { tool: pending.tool, payload: pending.payload };
+        await this.approvals.remove(userId, body.pendingApprovalId);
+      }
+      // Missing/expired/forged id: fall through with no approval rather than error,
+      // so the agent just treats the message as a normal turn.
+    }
+
+    const result = await this.gatewayService.sendToAiCore<ChatResult>("chat.message", {
+      userId,
+      message: body.message,
+      history: body.history,
+      ...(approval ? { approve: true, pendingApproval: approval } : {}),
+    });
+
+    if (result.pendingApproval) {
+      const record = await this.approvals.add(userId, result.pendingApproval);
+      return { ...result, pendingApproval: { id: record.id, preview: record.preview } };
+    }
+    return result;
   }
 
   @Post("api/tasks/:id/done")
@@ -90,9 +139,11 @@ export class GatewayController {
   markTaskDone(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Param("id") id: string,
+    @Body() body: { userId?: string },
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("task.markDone", { id });
+    if (!body.userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("task.markDone", { id, userId: body.userId });
   }
 
   @Delete("api/reminders/:id")
@@ -100,9 +151,11 @@ export class GatewayController {
   cancelReminder(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Param("id") id: string,
+    @Query("userId") userId: string | undefined,
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("reminder.cancel", { id });
+    if (!userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("reminder.cancel", { id, userId });
   }
 
   @Post("api/tasks/reminders")

@@ -1,7 +1,7 @@
 import { UsageClient } from "./usage-client";
 
 export const metadata = {
-  title: "Usage | HeyRiz",
+  title: "Usage | rizly",
 };
 
 export default function UsagePage() {

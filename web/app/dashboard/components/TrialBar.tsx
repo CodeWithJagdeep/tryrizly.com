@@ -38,7 +38,7 @@ export function TrialBar() {
 
   // Skeleton — same height so layout doesn't shift
   if (!status?.access) {
-    return <div className="sticky top-0 z-40 h-9 w-full border-b border-white/[0.05] bg-[#161615]" />;
+    return <div className="sticky top-0 z-40 h-14 w-full border-b-2 border-[#FE7F2D] bg-black" />;
   }
 
   const { state, expiresAt } = status.access;
@@ -48,13 +48,13 @@ export function TrialBar() {
   // Paid & active — minimal dark bar, no CTA
   if (isPaid && !expiresAt) {
     return (
-      <div className="sticky top-0 z-40 flex h-9 w-full items-center justify-between border-b border-white/[0.05] bg-[#161615] px-4">
-        <div className="flex items-center gap-2 text-xs text-[#5d5d58]">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span className="font-medium text-[#7a7a72]">{planName} plan</span>
+      <div className="sticky top-0 z-40 flex min-h-11 w-full items-center justify-between gap-4 border-b-2 border-[#FE7F2D] bg-black px-5 py-2.5">
+        <div className="flex items-center gap-2 text-left text-xs text-white/60">
+          <span className="h-2 w-2 bg-emerald-400" />
+          <span className="font-semibold text-white">{planName} plan</span>
           <span>· Active</span>
         </div>
-        <Link href="/dashboard/upgrade" className="text-xs text-[#4a4a46] transition hover:text-[#9a9990]">
+        <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
           Manage
         </Link>
       </div>
@@ -65,13 +65,13 @@ export function TrialBar() {
   if (isPaid && expiresAt) {
     const days = daysRemaining(expiresAt);
     return (
-      <div className="sticky top-0 z-40 flex h-9 w-full items-center justify-between border-b border-white/[0.05] bg-[#161615] px-4">
-        <div className="flex items-center gap-2 text-xs text-[#5d5d58]">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span className="font-medium text-[#7a7a72]">{planName} plan</span>
+      <div className="sticky top-0 z-40 flex min-h-11 w-full items-center justify-between gap-4 border-b-2 border-[#FE7F2D] bg-black px-5 py-2.5">
+        <div className="flex items-center gap-2 text-left text-xs text-white/60">
+          <span className="h-2 w-2 bg-emerald-400" />
+          <span className="font-semibold text-white">{planName} plan</span>
           <span>· Renews {days > 0 ? `in ${days} day${days === 1 ? "" : "s"}` : `on ${shortDate(expiresAt)}`}</span>
         </div>
-        <Link href="/dashboard/upgrade" className="text-xs text-[#4a4a46] transition hover:text-[#9a9990]">
+        <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
           Manage
         </Link>
       </div>
@@ -81,20 +81,20 @@ export function TrialBar() {
   // Free plan — soft light blue banner
   if (state === "free") {
     return (
-      <div className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#dbeafe] to-[#e0e7ff] px-4 py-2">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+      <div className="sticky top-0 z-40 w-full border-b-2 border-[#FE7F2D] bg-black px-5 py-3">
+        <div className="flex w-full items-center justify-between gap-4 text-left">
           <div className="flex items-center gap-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-700">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-white/20 bg-white/10 text-white">
               <InfoIcon />
             </span>
             <div>
-              <p className="text-sm font-semibold text-[#1e3a8a]">You&apos;re on the free plan</p>
-              <p className="text-xs text-[#3b5fc0]">Upgrade to unlock unlimited messages, connectors, and AI features.</p>
+              <p className="text-sm font-semibold text-white">You&apos;re on the free plan</p>
+              <p className="text-xs text-white/60">Upgrade to unlock unlimited messages, connectors, and AI features.</p>
             </div>
           </div>
           <Link
             href="/dashboard/upgrade"
-            className="shrink-0 rounded-md bg-[#2563eb] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
+            className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
           >
             Upgrade
           </Link>
@@ -112,20 +112,20 @@ export function TrialBar() {
     // Expired — soft red banner
     if (expired) {
       return (
-        <div className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#fee2e2] to-[#fecdd3] px-4 py-2">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <div className="sticky top-0 z-40 w-full border-b-2 border-[#FE7F2D] bg-black px-5 py-3">
+          <div className="flex w-full items-center justify-between gap-4 text-left">
             <div className="flex items-center gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-red-700">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-red-400/50 bg-red-500/20 text-red-200">
                 <InfoIcon />
               </span>
               <div>
-                <p className="text-sm font-semibold text-[#991b1b]">Your free trial has ended</p>
-                <p className="text-xs text-[#b91c1c]">Choose a plan to restore access to all features.</p>
+                <p className="text-sm font-semibold text-white">Your free trial has ended</p>
+                <p className="text-xs text-white/60">Choose a plan to restore access to all features.</p>
               </div>
             </div>
             <Link
               href="/dashboard/upgrade"
-              className="shrink-0 rounded-md bg-[#dc2626] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#b91c1c]"
+              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
             >
               Choose a plan
             </Link>
@@ -137,24 +137,24 @@ export function TrialBar() {
     // Urgent (≤3 days) — soft amber banner
     if (urgent) {
       return (
-        <div className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#fef3c7] to-[#fde68a] px-4 py-2">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <div className="sticky top-0 z-40 w-full border-b-2 border-[#FE7F2D] bg-black px-5 py-3">
+          <div className="flex w-full items-center justify-between gap-4 text-left">
             <div className="flex items-center gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-amber-300/50 bg-amber-500/20 text-amber-100">
                 <InfoIcon />
               </span>
               <div>
-                <p className="text-sm font-semibold text-[#92400e]">
+                <p className="text-sm font-semibold text-white">
                   Your trial ends in {days} day{days === 1 ? "" : "s"}
                 </p>
-                <p className="text-xs text-[#b45309]">
+                <p className="text-xs text-white/60">
                   Upgrade before {shortDate(expiresAt)} to keep all features.
                 </p>
               </div>
             </div>
             <Link
               href="/dashboard/upgrade"
-              className="shrink-0 rounded-md bg-[#d97706] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#b45309]"
+              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
             >
               Upgrade now
             </Link>
@@ -165,19 +165,19 @@ export function TrialBar() {
 
     // Healthy trial — soft lavender banner (Zapier-style)
     return (
-      <div className="sticky top-0 z-40 w-full bg-gradient-to-r from-[#ede9fe] via-[#f3e8ff] to-[#e0e7ff] px-4 py-2">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+      <div className="sticky top-0 z-40 w-full border-b-2 border-[#FE7F2D] bg-black px-5 py-3">
+        <div className="flex w-full items-center justify-between gap-4 text-left">
           <div className="flex items-center gap-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-violet-700">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-white/20 bg-white/10 text-white">
               <InfoIcon />
             </span>
             <div>
-              <p className="text-sm font-semibold text-[#4c1d95]">
-                Welcome to your free trial!
+              <p className="text-sm font-semibold text-white">
+                Welcome to your free trial
               </p>
-              <p className="text-xs text-[#6d28d9]">
+              <p className="text-xs text-white/60">
                 You have {days} day{days === 1 ? "" : "s"} to try all features.{" "}
-                <Link href="/dashboard/upgrade" className="font-semibold underline underline-offset-2 hover:text-[#4c1d95]">
+                <Link href="/dashboard/upgrade" className="font-semibold text-white underline underline-offset-2 hover:text-[#FE7F2D]">
                   Upgrade
                 </Link>{" "}
                 anytime to keep access.
@@ -186,7 +186,7 @@ export function TrialBar() {
           </div>
           <Link
             href="/dashboard/upgrade"
-            className="shrink-0 rounded-md bg-[#7c3aed] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#6d28d9]"
+            className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
           >
             Upgrade now
           </Link>
@@ -196,5 +196,5 @@ export function TrialBar() {
   }
 
   // Fallback
-  return <div className="sticky top-0 z-40 h-9 w-full border-b border-white/[0.05] bg-[#161615]" />;
+  return <div className="sticky top-0 z-40 h-14 w-full border-b-2 border-[#FE7F2D] bg-black" />;
 }

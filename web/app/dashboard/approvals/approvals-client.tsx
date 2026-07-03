@@ -53,36 +53,36 @@ export function ApprovalsClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#1a1a19] text-[#f2f1ec]">
+    <main className="min-h-screen bg-white text-slate-900">
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 py-8 sm:px-8">
-        <header className="flex flex-col gap-3 border-b border-[#2e2e2c] pb-6">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6b63]">
-            heyriz
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-6">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+            rizly
           </p>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[#f2f1ec] sm:text-3xl">Approvals</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#a8a399]">
-              Actions HeyRiz wants to run on your behalf — sending an email, moving a
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Approvals</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+              Actions rizly wants to run on your behalf — sending an email, moving a
               meeting — and is waiting on your yes or no.
             </p>
           </div>
         </header>
 
         {loadError ? (
-          <p className="rounded-lg border border-[#5c2626] bg-[#241616] px-4 py-3 text-sm text-[#f87171]">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-500">
             {loadError}
           </p>
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-[#a8a399]">Loading…</p>
+          <p className="text-sm text-slate-400">Loading…</p>
         ) : approvals.length === 0 ? (
-          <p className="rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] px-5 py-8 text-center text-sm text-[#a8a399]">
+          <p className="rounded-xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-400">
             Nothing waiting on you right now.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[#2e2e2c] bg-[#1f1f1e]">
-            <div className="divide-y divide-[#2e2e2c]">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="divide-y divide-slate-200">
               {approvals.map((approval) => (
                 <ApprovalRow
                   approval={approval}
@@ -112,22 +112,22 @@ function ApprovalRow({
   onReject: () => void;
 }) {
   return (
-    <article className="grid gap-4 px-5 py-5 transition hover:bg-[#232321]/60 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <article className="grid gap-4 px-5 py-5 transition hover:bg-white/60 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-[#242422] px-2.5 py-1 text-xs font-medium text-[#a8a399]">
+          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-400">
             {approval.tool}
           </span>
-          <span className="text-xs text-[#6b6b63]">#{approval.id}</span>
+          <span className="text-xs text-slate-500">#{approval.id}</span>
         </div>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#f2f1ec]">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-900">
           {approval.preview}
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <button
-          className="h-10 rounded-lg border border-[#2e2e2c] px-4 text-sm font-medium text-[#a8a399] transition hover:bg-[#242422] hover:text-[#f2f1ec] disabled:opacity-50"
+          className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-400 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
           disabled={deciding}
           onClick={onReject}
           type="button"
@@ -135,7 +135,7 @@ function ApprovalRow({
           No
         </button>
         <button
-          className="h-10 rounded-lg bg-[#2563eb] px-4 text-sm font-medium text-white transition hover:bg-[#1d4ed8] disabled:opacity-50"
+          className="h-10 rounded-lg bg-[#FE7F2D] px-4 text-sm font-medium text-white transition hover:brightness-105 disabled:opacity-50"
           disabled={deciding}
           onClick={onApprove}
           type="button"

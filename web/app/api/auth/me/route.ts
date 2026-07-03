@@ -1,16 +1,10 @@
-import { cookies } from "next/headers";
-import { verifyAuthToken } from "../_lib/auth-store";
+import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 export async function GET() {
-  const token = (await cookies()).get("auth_token")?.value;
-  if (!token) {
+  const session = await requireSession();
+  if (!session) {
     return Response.json({ message: "Unauthenticated" }, { status: 401 });
   }
 
-  const user = verifyAuthToken(token);
-  if (!user) {
-    return Response.json({ message: "Unauthenticated" }, { status: 401 });
-  }
-
-  return Response.json({ email: user.email, name: user.name });
+  return Response.json({ email: session.email, name: session.name });
 }

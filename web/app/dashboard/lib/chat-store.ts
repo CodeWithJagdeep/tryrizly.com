@@ -1,6 +1,6 @@
 export type PendingApproval = {
-  tool: string;
-  payload: unknown;
+  /** Opaque server-side id — the real tool/payload never reach the client. */
+  id: string;
   preview: string;
   resolved?: "approved" | "rejected";
 };
@@ -20,10 +20,10 @@ export type ChatSession = {
   updatedAt: string;
 };
 
-const SESSIONS_KEY = "heyriz.chat.sessions";
-const CONTEXT_KEY = "heyriz.chat.context-paused";
-const SESSIONS_EVENT = "heyriz:chat-sessions-changed";
-const OPEN_SEARCH_EVENT = "heyriz:open-chat-search";
+const SESSIONS_KEY = "rizly.chat.sessions";
+const CONTEXT_KEY = "rizly.chat.context-paused";
+const SESSIONS_EVENT = "rizly:chat-sessions-changed";
+const OPEN_SEARCH_EVENT = "rizly:open-chat-search";
 
 function readSessions(): ChatSession[] {
   if (typeof window === "undefined") return [];

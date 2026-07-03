@@ -111,7 +111,7 @@ export function BlogPostClient({ post, allPosts }: { post: BlogPost; allPosts: B
               <h4 className="text-base font-bold text-slate-900">Written by {post.authorName}</h4>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-0.5">{post.authorRole}</p>
               <p className="mt-2 text-xs md:text-sm text-slate-500 leading-normal">
-                Jagdeep designs proactive workflows and system models for HeyRiz. Catch him writing about background AI scheduling and calendar security guards.
+                Jagdeep designs proactive workflows and system models for rizly. Catch him writing about background AI scheduling and calendar security guards.
               </p>
             </div>
             <Link

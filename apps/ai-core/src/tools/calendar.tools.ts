@@ -125,7 +125,9 @@ export function createCreateCalendarEventTool(
         description: payload.description,
         location: payload.location,
         attendees: payload.attendees,
-        timeZone: payload.timeZone,
+        // Fall back to the principal's saved timezone — never UTC — so a naive
+        // local time ("10am") lands in their zone, not off by their offset.
+        timeZone: payload.timeZone ?? context.timezone,
       });
 
       if (!res.connected) {
@@ -200,6 +202,7 @@ type RescheduleEventPayload = {
   newStart?: string;
   newEnd?: string;
   notifyAttendee?: boolean;
+  timeZone?: string;
   approved?: boolean;
 };
 
@@ -233,6 +236,8 @@ export function createRescheduleCalendarEventTool(
         start: payload.newStart,
         end: payload.newEnd,
         notifyAttendee: payload.notifyAttendee,
+        // Same as create: a naive new time is the principal's local time, not UTC.
+        timeZone: payload.timeZone ?? context.timezone,
       });
 
       if (!res.connected) {

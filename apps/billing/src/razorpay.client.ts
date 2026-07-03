@@ -90,6 +90,13 @@ export class RazorpayClient {
     });
   }
 
+  async fetchSubscription(providerSubscriptionId: string): Promise<RazorpaySubscriptionResponse> {
+    return this.request<RazorpaySubscriptionResponse>(
+      `/v1/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+      { method: "GET" },
+    );
+  }
+
   async cancelSubscription(providerSubscriptionId: string) {
     return this.request<RazorpaySubscriptionResponse>(
       `/v1/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`,
@@ -139,7 +146,7 @@ export class RazorpayClient {
 
   private async request<T>(
     path: string,
-    options: { method: "POST"; body: Record<string, unknown> },
+    options: { method: "GET" | "POST"; body?: Record<string, unknown> },
   ): Promise<T> {
     if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
       throw new Error("razorpay_not_configured");
@@ -154,7 +161,7 @@ export class RazorpayClient {
         authorization: `Basic ${auth}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(options.body),
+      body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
     if (!res.ok) {

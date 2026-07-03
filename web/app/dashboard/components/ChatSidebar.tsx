@@ -14,6 +14,7 @@ import {
   LogoutIcon,
   MailIcon,
   PlugIcon,
+  PlusIcon,
   UsersIcon,
 } from "./icons";
 import {
@@ -154,23 +155,23 @@ export function ChatSidebar({
   ];
 
   return (
-    <aside className="fixed bottom-0 left-0 top-10 hidden w-64 flex-col border-r border-white/[0.05] bg-[#1a1a1a] lg:flex">
+    <aside className="fixed bottom-0 left-0 top-14 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
 
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#3784ff] text-[13px] font-semibold text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[13px] font-semibold text-white">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
             ) : initial}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-white leading-none">
+            <p className="truncate text-[15px] font-semibold text-slate-900 leading-none">
               {displayName}
             </p>
-            <p className="truncate text-[11px] text-white/30 leading-none mt-0.5">
-              HeyRiz workspace
+            <p className="truncate text-[11px] text-slate-400 leading-none mt-0.5">
+              rizly workspace
             </p>
           </div>
         </div>
@@ -179,19 +180,20 @@ export function ChatSidebar({
           onClick={handleSignOut}
           disabled={signingOut}
           title="Sign out"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/25 transition-colors hover:bg-white/5 hover:text-white/60 disabled:opacity-40"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
         >
           <LogoutIcon className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* New chat button */}
+      {/* New chat button — prominent orange CTA */}
       <div className="shrink-0 px-3 pb-3">
         <button
           type="button"
           onClick={handleNewChat}
-          className="flex w-full items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[15px] font-medium text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#FE7F2D] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.99]"
         >
+          <PlusIcon className="h-4 w-4" />
           New chat
         </button>
       </div>
@@ -204,7 +206,7 @@ export function ChatSidebar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search chats…"
-            className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[15px] text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FE7F2D]/30"
           />
         </div>
       )}
@@ -226,18 +228,18 @@ export function ChatSidebar({
                   href={item.href}
                   className={`group flex items-center justify-between rounded-md px-2.5 py-1.5 text-[15px] transition-colors ${
                     isActive
-                      ? "bg-white/[0.07] text-white"
-                      : "text-white/90 hover:bg-white/[0.04] hover:text-white"
+                      ? "bg-[#FE7F2D]/10 font-medium text-slate-900"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   <span className="flex items-center gap-2.5">
-                    <span className={isActive ? "text-white/70" : "text-white/40 group-hover:text-white/60"}>
+                    <span className={isActive ? "text-[#FE7F2D]" : "text-slate-400 group-hover:text-slate-600"}>
                       {item.icon}
                     </span>
                     {item.label}
                   </span>
                   {item.badge && (
-                    <span className="rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/60">
+                    <span className="rounded-sm bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#FE7F2D]">
                       {item.badge}
                     </span>
                   )}
@@ -264,7 +266,7 @@ export function ChatSidebar({
                 <SessionRow key={s.id} session={s} active={s.id === activeId} />
               ))
             ) : (
-                <p className="px-2.5 py-1 text-[13px] text-white/20">
+                <p className="px-2.5 py-1 text-[13px] text-slate-400">
                 {query.trim() ? "No results" : "No chats yet"}
               </p>
             )}
@@ -273,12 +275,12 @@ export function ChatSidebar({
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 border-t border-white/[0.05] px-3 py-3">
+      <div className="shrink-0 border-t border-slate-200 px-3 py-3">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-medium text-white/60">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-medium text-slate-600">
             {initial}
           </span>
-          <span className="truncate text-[13px] text-white/30">{email}</span>
+          <span className="truncate text-[13px] text-slate-400">{email}</span>
         </div>
       </div>
     </aside>
@@ -287,7 +289,7 @@ export function ChatSidebar({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-0.5 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/25">
+    <p className="mb-0.5 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
       {children}
     </p>
   );
@@ -298,10 +300,10 @@ function SessionRow({ session, active }: { session: ChatSession; active: boolean
     <Link
       href={`/dashboard?session=${session.id}`}
       className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] transition-colors ${
-        active ? "bg-white/[0.07] text-white" : "text-white/90 hover:bg-white/[0.04] hover:text-white"
+        active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
       }`}
     >
-      <ChatIcon className="h-3.5 w-3.5 shrink-0 text-white/20" />
+      <ChatIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       <span className="truncate">{session.title}</span>
     </Link>
   );

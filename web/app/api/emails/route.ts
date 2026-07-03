@@ -30,6 +30,17 @@ type ConnectorRow = {
   provider: string;
 };
 
+const DEMO_EMAIL_DOMAINS = ["northstar.vc", "ledgerflow.io", "brightdesk.co"];
+const DEMO_EMAIL_NAMES = ["arjun mehta", "maya kapoor", "sarah chen"];
+
+function isDemoEmail(row: MemoryRow) {
+  const person = row.metadata.person?.toLowerCase() ?? "";
+  const summary = row.summary.toLowerCase();
+  const mentionsDemoName = DEMO_EMAIL_NAMES.some((name) => person === name || summary.includes(name));
+  const mentionsDemoDomain = DEMO_EMAIL_DOMAINS.some((domain) => summary.includes(domain));
+  return mentionsDemoName || mentionsDemoDomain;
+}
+
 
 export type ProcessedEmail = {
   id: string;
@@ -91,9 +102,9 @@ export async function GET() {
     callGateway<ConnectorRow[]>(`/api/connectors?userId=${encodeURIComponent(session.userId)}`).catch(() => null),
   ]);
 
-  const gmailConnected = (connectorsRaw ?? []).some((c) => c.provider === "google");
+  const gmailConnected = (connectorsRaw ?? []).some((c) => c.provider === "google" || c.provider === "gmail");
 
-  const emails: ProcessedEmail[] = (memoriesRaw ?? []).map((m) => {
+  const emails: ProcessedEmail[] = (memoriesRaw ?? []).filter((m) => !isDemoEmail(m)).map((m) => {
     const category = m.metadata.category ?? "general_medium";
     return {
       id: m.id,

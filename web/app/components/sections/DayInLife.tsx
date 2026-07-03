@@ -1,65 +1,85 @@
 import { Reveal } from '../Reveal';
 
+function SunriseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v4M4.93 10.93l1.41 1.41M2 18h2M20 18h2M17.66 12.34l1.41-1.41" />
+      <path d="M6 18a6 6 0 0 1 12 0" />
+      <path d="M2 22h20" />
+    </svg>
+  );
+}
+
+function CalendarClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+      <path d="M12 13v3l2 1.5" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+    </svg>
+  );
+}
+
 const moments = [
   {
     time: '7:40 AM',
     title: 'Before you open your laptop',
     detail:
       'Riz already triaged overnight email. Three newsletters archived, one investor reply flagged, a Telegram message waiting with a suggested response.',
-    bg: 'bg-white',
-    timeCls: 'text-[#3784ff]',
-    border: 'border-slate-200',
-    titleCls: 'text-slate-950',
-    bodyCls: 'text-slate-500',
+    Icon: SunriseIcon,
   },
   {
     time: '11:15 AM',
     title: 'A meeting request lands mid-focus',
     detail:
-      'It checks your calendar, sees the conflict, and asks in Telegram whether to reschedule - so you can stay in flow instead of context-switching.',
-    bg: 'bg-slate-50',
-    timeCls: 'text-[#3784ff]',
-    border: 'border-slate-200',
-    titleCls: 'text-slate-950',
-    bodyCls: 'text-slate-500',
+      'It checks your calendar, sees the conflict, and asks in Telegram whether to reschedule, so you can stay in flow instead of context-switching.',
+    Icon: CalendarClockIcon,
   },
   {
     time: '9:05 PM',
     title: 'The day closes with one message, not twelve tabs',
     detail:
-      'Revenue movement from Stripe, a renewal risk that needs a nudge, and tomorrow\'s first meeting prepped and ready - all in one brief.',
-    bg: 'bg-[#0f172a]',
-    timeCls: 'text-emerald-400',
-    border: 'border-slate-800',
-    titleCls: 'text-white',
-    bodyCls: 'text-slate-400',
+      "Revenue movement from Stripe, a renewal risk that needs a nudge, and tomorrow's first meeting prepped and ready, all in one brief.",
+    Icon: MoonIcon,
   },
 ];
 
 export function DayInLife() {
   return (
-    <section className="bg-white py-20 md:py-28">
+    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <h2 className="font-neue-haas max-w-lg text-3xl font-normal tracking-tight text-[#0f172a] md:text-4xl">
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">A day in the life</p>
+          <h2 className="mt-4 max-w-lg text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             A day with Riz running in the background.
           </h2>
         </Reveal>
 
-        <div className="mt-12 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200 md:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
           {moments.map((moment, index) => (
-            <Reveal
-              key={moment.time}
-              delay={index * 0.07}
-              className={`${moment.bg} border-0 p-7`}
-            >
-              <span className={`font-mono text-xs font-semibold tracking-widest uppercase ${moment.timeCls}`}>
-                {moment.time}
-              </span>
-              <h3 className={`mt-4 text-lg font-semibold leading-snug ${moment.titleCls}`}>
-                {moment.title}
-              </h3>
-              <p className={`mt-3 text-sm leading-relaxed ${moment.bodyCls}`}>{moment.detail}</p>
+            <Reveal key={moment.time} delay={index * 0.07}>
+              <div className="group relative flex h-full flex-col border-2 border-black bg-white p-7 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)]">
+                <div className="flex items-center justify-between">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D] transition-transform duration-300 group-hover:-translate-y-0.5">
+                    <moment.Icon />
+                  </span>
+                  <span className="font-mono text-xs font-bold tracking-widest uppercase text-gray-400">
+                    {moment.time}
+                  </span>
+                </div>
+                <h3 className="mt-5 text-lg font-black uppercase leading-snug tracking-tight text-black">
+                  {moment.title}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-gray-500">{moment.detail}</p>
+              </div>
             </Reveal>
           ))}
         </div>

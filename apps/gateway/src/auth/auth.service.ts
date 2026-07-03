@@ -1,13 +1,19 @@
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { env } from "@heyriz/shared/env";
+import { sendEmail } from "@heyriz/shared/email";
 import { AuthRepository, type StoredUser } from "./auth.repository";
 import { GatewayService } from "../gateway.service";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-export type AuthIdentity = { email: string; name?: string };
+export type AuthIdentity = {
+  email: string;
+  name?: string;
+  needsOnboarding?: boolean;
+  tokenVersion?: number;
+};
 
 @Injectable()
 export class AuthService {
@@ -56,6 +62,7 @@ export class AuthService {
       passwordHash: hash,
       passwordSalt: salt,
       provider: "password",
+      emailVerified: false,
     });
 
     await this.syncDisplayName(normalized, name);
@@ -66,12 +73,30 @@ export class AuthService {
     return { conflict: false as const, email: normalized };
   }
 
-  async login(email: string, password: string): Promise<AuthIdentity | null> {
+  async login(email: string, password: string): Promise<AuthIdentity | "unverified" | null> {
     const normalized = normalizeEmail(email);
     const user = await this.repo.getUser(normalized);
     if (!user?.passwordHash || !user.passwordSalt) return null;
     if (!verifyPassword(password, user.passwordSalt, user.passwordHash)) return null;
-    return { email: normalized, name: user.name };
+    // Ownership of the mailbox must be proven before password login is honoured.
+    // Without this gate the registration OTP is decorative and an attacker could
+    // pre-seed an account under someone else's email.
+    if (!user.emailVerified) return "unverified";
+    return {
+      email: normalized,
+      name: user.name,
+      needsOnboarding: !user.onboarding?.completedAt,
+      tokenVersion: user.tokenVersion ?? 0,
+    };
+  }
+
+  async getTokenVersion(email: string): Promise<number> {
+    return this.repo.getTokenVersion(normalizeEmail(email));
+  }
+
+  /** Invalidates every outstanding session for the user (logout everywhere). */
+  async logout(email: string): Promise<void> {
+    await this.repo.incrementTokenVersion(normalizeEmail(email));
   }
 
   async sendVerification(email: string) {
@@ -84,8 +109,14 @@ export class AuthService {
   async verifyOtp(email: string, otp: string): Promise<AuthIdentity | null> {
     const normalized = normalizeEmail(email);
     if (!(await this.repo.consumeOtp(normalized, otp))) return null;
+    await this.repo.markEmailVerified(normalized);
     const user = await this.repo.getUser(normalized);
-    return { email: normalized, name: user?.name };
+    return {
+      email: normalized,
+      name: user?.name,
+      needsOnboarding: !user?.onboarding?.completedAt,
+      tokenVersion: user?.tokenVersion ?? 0,
+    };
   }
 
   async createOAuthState(provider: string, returnTo: string): Promise<string> {
@@ -134,9 +165,24 @@ export class AuthService {
     }
 
     const normalizedEmail = normalizeEmail(profile.email);
+    const existing = await this.repo.getUser(normalizedEmail);
     await this.repo.upsertUser(normalizedEmail, { name: profile.name, provider: "google" });
+    // A Google sign-in proves the mailbox. If a password had been pre-seeded on
+    // this address without ever being verified, it belongs to whoever registered
+    // it — not necessarily this Google account holder — so drop it.
+    await this.repo.markEmailVerified(normalizedEmail, {
+      clearPassword: Boolean(existing?.passwordHash && !existing.emailVerified),
+    });
     await this.syncDisplayName(normalizedEmail, profile.name);
-    return { identity: { email: normalizedEmail, name: profile.name }, returnTo: stateRecord.returnTo };
+    return {
+      identity: {
+        email: normalizedEmail,
+        name: profile.name,
+        needsOnboarding: !existing?.onboarding?.completedAt,
+        tokenVersion: existing?.tokenVersion ?? 0,
+      },
+      returnTo: stateRecord.returnTo,
+    };
   }
 
   async completeLinkedInOAuth(code: string, state: string): Promise<{ identity: AuthIdentity; returnTo: string } | null> {
@@ -190,9 +236,23 @@ export class AuthService {
     const name =
       profile.name || [profile.given_name, profile.family_name].filter(Boolean).join(" ") || undefined;
     const normalizedEmail = normalizeEmail(profile.email);
+    const existing = await this.repo.getUser(normalizedEmail);
     await this.repo.upsertUser(normalizedEmail, { name, provider: "linkedin" });
+    // See completeGoogleOAuth: an OAuth sign-in proves the mailbox and neutralises
+    // any unverified password another party may have pre-seeded on this address.
+    await this.repo.markEmailVerified(normalizedEmail, {
+      clearPassword: Boolean(existing?.passwordHash && !existing.emailVerified),
+    });
     await this.syncDisplayName(normalizedEmail, name);
-    return { identity: { email: normalizedEmail, name }, returnTo: stateRecord.returnTo };
+    return {
+      identity: {
+        email: normalizedEmail,
+        name,
+        needsOnboarding: !existing?.onboarding?.completedAt,
+        tokenVersion: existing?.tokenVersion ?? 0,
+      },
+      returnTo: stateRecord.returnTo,
+    };
   }
 
   async getOnboardingStatus(email: string): Promise<StoredUser["onboarding"] | null> {
@@ -249,31 +309,15 @@ function sanitizeReturnPath(value: string | undefined): string {
 }
 
 async function sendVerificationEmail(email: string, code: string) {
-  const resendKey = env.RESEND_API_KEY;
-  const from = env.RESEND_FROM;
-
-  if (!resendKey || !from) {
-    console.log(`[HeyRiz Auth] OTP Code for ${email} is "${code}"`);
-    return;
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${resendKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: email,
-      subject: "Your HeyRiz verification code",
-      text: `Your HeyRiz verification code is ${code}. It expires in 10 minutes.`,
-      html: `<p>Your HeyRiz verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes.</p>`,
-    }),
+  const sent = await sendEmail({
+    to: email,
+    subject: "Your Rizly verification code",
+    text: `Your Rizly verification code is ${code}. It expires in 10 minutes.`,
+    html: `<p>Your Rizly verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes.</p>`,
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Resend email failed: ${text.slice(0, 240)}`);
+  // Dev fallback (no Resend configured) logs and returns false silently — fine.
+  // A configured-but-failed send should surface to the caller.
+  if (!sent && env.RESEND_API_KEY) {
+    throw new Error("Failed to send verification email");
   }
 }

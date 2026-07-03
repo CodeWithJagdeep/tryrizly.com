@@ -6,7 +6,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 export const metadata: Metadata = {
   title: "Pricing | Rizly",
   description:
-    "Transparent AI automation pricing for professionals. Start your 14-day free trial. Simple plans with no hidden fees.",
+    "Transparent AI automation pricing for professionals. Start your 15-day free trial. Simple plans with no hidden fees.",
   alternates: { canonical: `${SITE_URL}/pricing` },
   openGraph: {
     title: "Pricing | Rizly",

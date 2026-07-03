@@ -11,7 +11,8 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "smoke:telegram": "tsx src/dev/telegram-check.ts",
-    "smoke:conversation": "tsx src/dev/conversation-check.ts"
+    "smoke:conversation": "tsx src/dev/conversation-check.ts",
+    "backfill:email-verified": "tsx src/dev/backfill-email-verified.ts"
   },
   "dependencies": {
     "@heyriz/shared": "*",
@@ -19,6 +20,7 @@
     "@nestjs/core": "^11.1.27",
     "@nestjs/microservices": "^11.1.27",
     "@nestjs/platform-express": "^11.1.27",
+    "@nestjs/throttler": "^6.5.0",
     "ioredis": "^5.11.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"

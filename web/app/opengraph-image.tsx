@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "HeyRiz - Proactive AI Operator for Founders";
+export const alt = "rizly - Proactive AI Operator for Founders";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -42,7 +42,7 @@ export default function OgImage() {
               textTransform: "uppercase",
             }}
           >
-            HeyRiz
+            rizly
           </div>
           <div
             style={{
@@ -78,7 +78,7 @@ export default function OgImage() {
           }}
         >
           <div style={{ fontSize: 18, color: "#4a5568", fontWeight: 500 }}>
-            heyriz.co
+            getrizly.com
           </div>
           <div
             style={{

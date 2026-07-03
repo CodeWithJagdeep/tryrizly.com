@@ -9,10 +9,13 @@ import type {
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
+import { sendEmail } from "@heyriz/shared/email";
 
 async function resolveChatId(userId: string): Promise<string | undefined> {
   const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
   const secret = env.AUTH_INTERNAL_SECRET;
+  // Global-chat fallback is single-user dev only. With a gateway configured we
+  // never fall back: sending user A's notification to a shared chat is a leak.
   if (!gatewayUrl) return env.TELEGRAM_CHAT_ID;
 
   try {
@@ -22,12 +25,35 @@ async function resolveChatId(userId: string): Promise<string | undefined> {
       `${gatewayUrl}/api/telegram/resolve?userId=${encodeURIComponent(userId)}`,
       { headers },
     );
-    if (!res.ok) return env.TELEGRAM_CHAT_ID;
+    if (!res.ok) return undefined;
     const data = (await res.json()) as { chatId?: string | null };
-    return data.chatId ?? env.TELEGRAM_CHAT_ID;
+    return data.chatId ?? undefined;
   } catch {
-    return env.TELEGRAM_CHAT_ID;
+    return undefined;
   }
+}
+
+// userIds are normalized email addresses (see web require-user), so an unlinked
+// user can still be reached by email — but validate before trusting that.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function sendEmailFallback(userId: string, message: string): Promise<boolean> {
+  if (!EMAIL_RE.test(userId)) return false;
+  const telegramUrl = `${env.WEB_APP_URL}/dashboard/telegram`;
+  return sendEmail({
+    to: userId,
+    subject: "A message from Riz",
+    text: `${message}\n\nGet these instantly on Telegram instead: ${telegramUrl}\n\n— Rizly`,
+    html: `<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p><p><a href="${telegramUrl}">Link Telegram</a> to get these instantly on your phone.</p><p>— Rizly</p>`,
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // Maps the job source to a connector provider name used for notification gating.
@@ -100,6 +126,17 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
         ]);
 
         if (!chatId) {
+          if (allowed && job.data.emailFallback !== false) {
+            const emailed = await sendEmailFallback(job.data.userId, job.data.message);
+            if (emailed) {
+              void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
+              logger.info("notification delivered by email — no Telegram linked", {
+                jobId: job.id,
+                userId: job.data.userId,
+              });
+              return;
+            }
+          }
           logger.warn("notification job skipped — no chatId resolved", {
             jobId: job.id,
             userId: job.data.userId,

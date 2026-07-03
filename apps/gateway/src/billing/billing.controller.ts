@@ -74,6 +74,12 @@ export class BillingController {
     return this.billingService.send("billing.subscription.cancel", body);
   }
 
+  @Post("sweep")
+  runSweep(@Headers("x-heyriz-internal-secret") secret: string | undefined) {
+    this.requireInternal(secret);
+    return this.billingService.send("billing.sweep");
+  }
+
   @Post("webhooks/razorpay")
   @HttpCode(200)
   razorpayWebhook(

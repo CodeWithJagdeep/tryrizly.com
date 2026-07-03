@@ -3,6 +3,43 @@ import { EntityRepository, type AliasInput, type EntityType } from "./entity.rep
 
 const FUZZY_THRESHOLD = 0.45;
 const CACHE_MAX = 5000;
+const ROLE_LOCAL_PARTS = new Set([
+  "admin",
+  "alerts",
+  "billing",
+  "careers",
+  "contact",
+  "hello",
+  "help",
+  "hr",
+  "info",
+  "jobs",
+  "mail",
+  "marketing",
+  "newsletter",
+  "no-reply",
+  "noreply",
+  "notification",
+  "notifications",
+  "recruiting",
+  "recruitment",
+  "security",
+  "support",
+  "team",
+]);
+const PERSONAL_LOCAL_RE = /^[a-z][a-z]+[._-][a-z][a-z]+(?:[._-]\d+)?$/i;
+const FREE_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "me.com",
+  "yahoo.com",
+  "proton.me",
+  "protonmail.com",
+]);
 
 export type ResolveInput = {
   name?: string;
@@ -67,10 +104,16 @@ export class EntityResolverService {
     if (!this.repo.hasDb()) return undefined;
 
     const emailNorm = input.email ? normalizeEmail(input.email) : undefined;
-    const nameNorm = input.name ? normalizeName(input.name) : undefined;
+    const emailParts = emailNorm ? splitEmail(emailNorm) : undefined;
+    const inferredName = input.name?.trim() || inferPersonNameFromEmail(emailNorm);
+    const nameNorm = inferredName ? normalizeName(inferredName) : undefined;
     if (!emailNorm && !nameNorm) return undefined;
 
-    const canonicalName = input.name?.trim() || input.email!;
+    if (!input.type && emailParts && isRoleLocalPart(emailParts.local) && !input.name) {
+      return this.resolveCompanyFromEmail(userId, emailNorm!, input.source);
+    }
+
+    const canonicalName = inferredName || input.email!;
     const type = input.type ?? "person";
 
     const cacheKey = emailNorm ? `${userId}:email:${emailNorm}` : undefined;
@@ -122,9 +165,9 @@ export class EntityResolverService {
         confidence: 1,
       });
     }
-    if (nameNorm && input.name) {
+    if (nameNorm && inferredName) {
       await this.repo.upsertAlias(userId, entityId, {
-        alias: input.name,
+        alias: inferredName,
         normalized: nameNorm,
         kind: "name",
         source: input.source,
@@ -132,12 +175,16 @@ export class EntityResolverService {
       });
     }
 
+    if (!input.type && emailNorm) {
+      await this.ensureCompanyFromEmail(userId, emailNorm, input.source).catch(() => undefined);
+    }
+
     if (cacheKey) this.remember(cacheKey, entityId);
     return { entityId, created, canonicalName };
   }
 
   listPeople(userId: string, limit = 50) {
-    return this.repo.listEntities(userId, limit, "person");
+    return this.repo.listEntities(userId, limit);
   }
 
   /** Attach a phone/url/name alias directly to a known entity id. */
@@ -148,6 +195,50 @@ export class EntityResolverService {
   private remember(key: string, entityId: string) {
     if (this.cache.size >= CACHE_MAX) this.cache.clear();
     this.cache.set(key, entityId);
+  }
+
+  private async resolveCompanyFromEmail(
+    userId: string,
+    email: string,
+    source: string,
+  ): Promise<ResolveResult | undefined> {
+    const company = await this.ensureCompanyFromEmail(userId, email, source);
+    if (!company) return undefined;
+    return company;
+  }
+
+  private async ensureCompanyFromEmail(
+    userId: string,
+    email: string,
+    source: string,
+  ): Promise<{ entityId: string; created: boolean; canonicalName: string } | undefined> {
+    const parts = splitEmail(email);
+    if (!parts || FREE_EMAIL_DOMAINS.has(parts.domain)) return undefined;
+    const companyName = companyNameFromDomain(parts.domain);
+    if (!companyName) return undefined;
+    const domainUrl = `https://${parts.domain}`;
+    const result = await this.resolve(userId, {
+      name: companyName,
+      email: undefined,
+      type: "company",
+      source,
+    });
+    if (!result) return undefined;
+    await this.repo.upsertAlias(userId, result.entityId, {
+      alias: domainUrl,
+      normalized: domainUrl,
+      kind: "url",
+      source,
+      confidence: 0.9,
+    });
+    await this.repo.upsertAlias(userId, result.entityId, {
+      alias: parts.domain,
+      normalized: parts.domain,
+      kind: "url",
+      source,
+      confidence: 0.8,
+    });
+    return result;
   }
 }
 
@@ -161,6 +252,39 @@ function normalizeName(raw: string): string {
     .toLowerCase()
     .replace(/["']/g, "")
     .replace(/\s+/g, " ");
+}
+
+function splitEmail(email: string): { local: string; domain: string } | undefined {
+  const [local, domain] = email.toLowerCase().split("@");
+  if (!local || !domain) return undefined;
+  return { local, domain };
+}
+
+function isRoleLocalPart(local: string): boolean {
+  const normalized = local.replace(/[_.+].*$/, "").toLowerCase();
+  return ROLE_LOCAL_PARTS.has(local.toLowerCase()) || ROLE_LOCAL_PARTS.has(normalized);
+}
+
+function inferPersonNameFromEmail(email: string | undefined): string | undefined {
+  const parts = email ? splitEmail(email) : undefined;
+  if (!parts || isRoleLocalPart(parts.local) || !PERSONAL_LOCAL_RE.test(parts.local)) return undefined;
+  const name = parts.local
+    .replace(/[+].*$/, "")
+    .split(/[._-]/)
+    .filter((part) => part && !/^\d+$/.test(part))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+  return name.includes(" ") ? name : undefined;
+}
+
+function companyNameFromDomain(domain: string): string | undefined {
+  const base = domain.split(".").filter(Boolean)[0];
+  if (!base || base.length < 2) return undefined;
+  return base
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 /** Pulls a name and/or email out of a "From"-style header. */

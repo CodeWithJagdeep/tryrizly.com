@@ -1,7 +1,7 @@
 import { CalendarClient } from "./calendar-client";
 
 export const metadata = {
-  title: "Calendar | HeyRiz",
+  title: "Calendar | rizly",
 };
 
 export default function CalendarPage() {

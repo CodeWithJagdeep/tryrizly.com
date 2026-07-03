@@ -36,9 +36,17 @@ type Task = {
 
 type DialogTab = "reminder" | "meeting" | "mail";
 
+type CalendarPayload = {
+  connected: boolean;
+  events: CalendarEvent[];
+  reminders: Reminder[];
+  tasks: Task[];
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const CALENDAR_CACHE_PREFIX = "riz:calendar-dashboard:v1";
 
 // AI-generated system reminders (morning briefs, meeting pre-alerts) should not
 // appear as calendar items — those are internal Telegram notifications, not
@@ -101,6 +109,44 @@ function toISO(date: string, time: string) {
   return new Date(`${date}T${time || "00:00"}:00`).toISOString();
 }
 
+function calendarCacheKey(year: number, month: number) {
+  return `${CALENDAR_CACHE_PREFIX}:${year}:${month}`;
+}
+
+function readCalendarCache(year: number, month: number): CalendarPayload | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(calendarCacheKey(year, month));
+    if (!raw) return null;
+    return JSON.parse(raw) as CalendarPayload;
+  } catch {
+    return null;
+  }
+}
+
+function writeCalendarCache(year: number, month: number, payload: CalendarPayload) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(calendarCacheKey(year, month), JSON.stringify(payload));
+  } catch {
+    // Ignore storage failures; the live fetch still keeps the page correct.
+  }
+}
+
+function clearCalendarCache() {
+  if (typeof window === "undefined") return;
+  try {
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i);
+      if (key?.startsWith(CALENDAR_CACHE_PREFIX)) {
+        window.sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Non-critical cache cleanup.
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function CalendarClient() {
@@ -147,10 +193,15 @@ export function CalendarClient() {
 
   // ── Data fetching ───────────────────────────────────────────────────────────
 
-  function loadData(y = year, m = month) {
-    setLoading(true);
-    setLoadError(null);
-    Promise.all([
+  function applyCalendarPayload(payload: CalendarPayload) {
+    setConnected(payload.connected);
+    setEvents(payload.events);
+    setReminders(payload.reminders);
+    setTasks(payload.tasks);
+  }
+
+  async function fetchCalendarPayload(y: number, m: number): Promise<CalendarPayload> {
+    const [calData, schedData] = await Promise.all([
       fetch(`/api/calendar?year=${y}&month=${m}`).then((r) => r.json()) as Promise<{
         connected?: boolean;
         events?: CalendarEvent[];
@@ -159,12 +210,31 @@ export function CalendarClient() {
         reminders?: Reminder[];
         tasks?: Task[];
       }>,
-    ])
-      .then(([calData, schedData]) => {
-        setConnected(calData.connected ?? true);
-        setEvents(calData.events ?? []);
-        setReminders(filterUserReminders(schedData.reminders ?? []));
-        setTasks(schedData.tasks ?? []);
+    ]);
+
+    return {
+      connected: calData.connected ?? true,
+      events: calData.events ?? [],
+      reminders: filterUserReminders(schedData.reminders ?? []),
+      tasks: schedData.tasks ?? [],
+    };
+  }
+
+  function loadData(y = year, m = month, options: { force?: boolean } = {}) {
+    const cached = options.force ? null : readCalendarCache(y, m);
+    if (cached) {
+      applyCalendarPayload(cached);
+      setLoading(false);
+      setLoadError(null);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
+    fetchCalendarPayload(y, m)
+      .then((payload) => {
+        writeCalendarCache(y, m, payload);
+        applyCalendarPayload(payload);
       })
       .catch((err: unknown) => {
         setLoadError(err instanceof Error ? err.message : "Failed to load calendar");
@@ -183,25 +253,21 @@ export function CalendarClient() {
 
   useEffect(() => {
     let cancelled = false;
+    const cached = readCalendarCache(year, month);
+    if (cached) {
+      applyCalendarPayload(cached);
+      setLoading(false);
+      setLoadError(null);
+      return () => { cancelled = true; };
+    }
+
     setLoading(true);
     setLoadError(null);
-
-    Promise.all([
-      fetch(`/api/calendar?year=${year}&month=${month}`).then((r) => r.json()) as Promise<{
-        connected?: boolean;
-        events?: CalendarEvent[];
-      }>,
-      fetch("/api/scheduled").then((r) => r.json()) as Promise<{
-        reminders?: Reminder[];
-        tasks?: Task[];
-      }>,
-    ])
-      .then(([calData, schedData]) => {
+    fetchCalendarPayload(year, month)
+      .then((payload) => {
         if (cancelled) return;
-        setConnected(calData.connected ?? true);
-        setEvents(calData.events ?? []);
-        setReminders(filterUserReminders(schedData.reminders ?? []));
-        setTasks(schedData.tasks ?? []);
+        writeCalendarCache(year, month, payload);
+        applyCalendarPayload(payload);
       })
       .catch((err: unknown) => {
         if (!cancelled)
@@ -234,7 +300,8 @@ export function CalendarClient() {
       if (!res.ok || data.error) throw new Error(data.error ?? "Failed to set reminder");
       setSubmitSuccess(data.reply ?? "Reminder saved.");
       setRemMessage(""); setRemWhen("");
-      loadData();
+      clearCalendarCache();
+      loadData(year, month, { force: true });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -266,7 +333,8 @@ export function CalendarClient() {
       setSubmitSuccess(`Meeting created.${linkNote}`);
       setMtgTitle(""); setMtgDate(""); setMtgStartTime(""); setMtgEndTime("");
       setMtgAttendees([]); setMtgAttendeeInput(""); setMtgDescription("");
-      loadData();
+      clearCalendarCache();
+      loadData(year, month, { force: true });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -299,7 +367,8 @@ export function CalendarClient() {
       }
       setSubmitSuccess("Email scheduled — Riz will send it then.");
       setMailTo(""); setMailSubject(""); setMailBody(""); setMailDate(""); setMailTime("");
-      loadData();
+      clearCalendarCache();
+      loadData(year, month, { force: true });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -384,12 +453,12 @@ export function CalendarClient() {
   const totalSelectedItems = selectedEvents.length + selectedReminders.length;
 
   return (
-    <main className="flex min-h-screen flex-col bg-[#1a1a19] text-[#f2f1ec]">
+    <main className="flex min-h-screen flex-col bg-white text-slate-900">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between gap-4 border-b border-[#2e2e2c] px-6 py-4">
+      <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold tracking-tight">
-            {monthName} <span className="text-[#6b6b63]">{year}</span>
+            {monthName} <span className="text-slate-500">{year}</span>
           </h1>
           <div className="flex items-center gap-1">
             <NavButton onClick={prevMonth} label="Previous month"><ChevronLeft /></NavButton>
@@ -398,7 +467,7 @@ export function CalendarClient() {
           <button
             type="button"
             onClick={goToday}
-            className="rounded-lg border border-[#2e2e2c] px-3 py-1 text-xs font-medium text-[#a8a399] transition hover:border-[#3e3e3c] hover:text-[#f2f1ec]"
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-400 transition hover:border-slate-300 hover:text-slate-900"
           >
             Today
           </button>
@@ -411,18 +480,18 @@ export function CalendarClient() {
             <LegendDot color="bg-violet-400" label="Tasks" />
           </div>
           {loading && (
-            <span className="inline-flex items-center gap-2 text-xs font-medium text-white/65">
+            <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
               <span className="size-1.5 animate-pulse rounded-full bg-blue-300" />
               Loading meetings
             </span>
           )}
-          {loadError && <span className="text-xs text-[#f87171]">{loadError}</span>}
+          {loadError && <span className="text-xs text-red-500">{loadError}</span>}
 
           {/* New button */}
           <button
             type="button"
             onClick={openDialog}
-            className="flex items-center gap-1.5 rounded-lg bg-[#f2f1ec] px-3 py-1.5 text-sm font-semibold text-[#1a1a19] transition hover:bg-[#e2e1da]"
+            className="flex items-center gap-1.5 rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
           >
             <PlusIcon />
             New
@@ -465,10 +534,10 @@ export function CalendarClient() {
       {!connected ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
           <CalendarOffIcon />
-          <p className="text-sm text-[#a8a399]">Google Calendar isn&apos;t connected yet.</p>
+          <p className="text-sm text-slate-400">Google Calendar isn&apos;t connected yet.</p>
           <Link
             href="/dashboard/connectors"
-            className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1d4ed8]"
+            className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-medium text-white transition hover:brightness-105"
           >
             Connect Google
           </Link>
@@ -476,16 +545,19 @@ export function CalendarClient() {
       ) : (
         <div className="relative flex flex-1 overflow-hidden">
           {loading && (
-            <div className="absolute left-0 right-0 top-0 z-20 border-b border-blue-400/15 bg-blue-500/10 px-6 py-2.5 text-xs font-medium text-blue-200 backdrop-blur">
-              Syncing Google Calendar, reminders, and follow-ups...
+            <div className="absolute left-0 right-0 top-0 z-20 border-b border-[#FE7F2D]/35 bg-[#FE7F2D]/12 px-6 py-3 text-sm font-semibold text-[#9A3D0E] backdrop-blur">
+              <span className="inline-flex items-center gap-2 rounded-md border border-[#FE7F2D]/30 bg-white/80 px-3 py-1.5 shadow-sm">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#FE7F2D]" />
+                Syncing Google Calendar, reminders, and follow-ups...
+              </span>
             </div>
           )}
 
           {/* ── Month grid ──────────────────────────────────────────────── */}
           <div className={`flex min-w-0 flex-1 flex-col overflow-auto ${loading ? "pt-10" : ""}`}>
-            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-[#2e2e2c] bg-[#1a1a19]">
+            <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-slate-200 bg-white">
               {DAY_LABELS.map((d) => (
-                <div key={d} className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6b6b63]">
+                <div key={d} className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                   {d}
                 </div>
               ))}
@@ -500,7 +572,7 @@ export function CalendarClient() {
                     return (
                       <div
                         key={`empty-${idx}`}
-                        className={`border-b border-r border-[#2e2e2c] bg-[#161615] ${idx % 7 === 6 ? "border-r-0" : ""}`}
+                        className={`border-b border-r border-slate-200 bg-white ${idx % 7 === 6 ? "border-r-0" : ""}`}
                       />
                     );
                   }
@@ -518,15 +590,15 @@ export function CalendarClient() {
                       key={key}
                       type="button"
                       onClick={() => setSelectedDay(isSelected ? null : key)}
-                      className={`group flex flex-col gap-1 border-b border-r border-[#2e2e2c] p-2 text-left transition ${
+                      className={`group flex flex-col gap-1 border-b border-r border-slate-200 p-2 text-left transition ${
                         idx % 7 === 6 ? "border-r-0" : ""
-                      } ${isSelected ? "bg-[#232321]" : "hover:bg-[#1f1f1e]"} ${!isCurrentMonth ? "opacity-35" : ""}`}
+                      } ${isSelected ? "bg-white" : "hover:bg-white"} ${!isCurrentMonth ? "opacity-35" : ""}`}
                     >
                       <span
                         className={`mb-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-xs font-semibold ${
                           isToday
-                            ? "bg-[#f2f1ec] text-[#1a1a19]"
-                            : "text-[#8a8578] group-hover:text-[#f2f1ec]"
+                            ? "bg-[#FE7F2D] text-white"
+                            : "text-slate-500 group-hover:text-slate-900"
                         }`}
                       >
                         {day.getDate()}
@@ -555,7 +627,7 @@ export function CalendarClient() {
                       ))}
 
                       {totalItems > 3 && (
-                        <span className="px-1 text-[10px] text-[#6b6b63]">
+                        <span className="px-1 text-[10px] text-slate-500">
                           +{totalItems - 3} more
                         </span>
                       )}
@@ -570,9 +642,9 @@ export function CalendarClient() {
           {selectedDay && showInitialCalendarLoading ? (
             <CalendarAgendaSkeleton />
           ) : selectedDay && (
-            <aside className="hidden w-72 shrink-0 flex-col border-l border-[#2e2e2c] lg:flex">
-              <div className="border-b border-[#2e2e2c] px-5 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6b6b63]">
+            <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 lg:flex">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                   {new Date(selectedDay + "T12:00:00").toLocaleDateString("default", {
                     weekday: "long",
                     month: "long",
@@ -588,18 +660,18 @@ export function CalendarClient() {
 
               <div className="flex-1 overflow-y-auto px-4 py-3">
                 {totalSelectedItems === 0 ? (
-                  <p className="mt-6 text-center text-sm text-[#6b6b63]">Clear day</p>
+                  <p className="mt-6 text-center text-sm text-slate-500">Clear day</p>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedEvents.map((ev) => (
-                      <div key={ev.id} className="rounded-xl border border-[#2e2e2c] bg-[#1f1f1e] px-4 py-3">
+                      <div key={ev.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                         <div className="flex items-start gap-2">
                           <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-blue-500/15">
                             <CalDot />
                           </span>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium leading-snug text-[#f2f1ec]">{ev.title}</p>
-                            <p className="mt-0.5 text-xs text-[#6b6b63]">
+                            <p className="text-sm font-medium leading-snug text-slate-900">{ev.title}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">
                               {ev.allDay ? "All day" : `${formatTime(ev.start)} – ${formatTime(ev.end)}`}
                               {ev.location ? ` · ${ev.location}` : ""}
                             </p>
@@ -627,9 +699,9 @@ export function CalendarClient() {
                           </span>
                           <div className="min-w-0">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-500/70">Reminder from Riz</p>
-                            <p className="mt-0.5 text-sm leading-snug text-[#f2f1ec]">{r.message}</p>
+                            <p className="mt-0.5 text-sm leading-snug text-slate-900">{r.message}</p>
                             {r.runAt && (
-                              <p className="mt-0.5 text-xs text-[#6b6b63]">
+                              <p className="mt-0.5 text-xs text-slate-500">
                                 {new Date(r.runAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                                 {r.tz ? ` · ${r.tz}` : ""}
                               </p>
@@ -643,25 +715,25 @@ export function CalendarClient() {
 
                 {tasks.length > 0 && (
                   <div className="mt-4">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6b6b63]">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                       Open follow-ups
                     </p>
                     <div className="flex flex-col gap-1.5">
                       {tasks.slice(0, 5).map((task) => (
                         <div
                           key={task.id}
-                          className="flex items-start gap-2 rounded-lg border border-[#2e2e2c] bg-[#1f1f1e] px-3 py-2.5"
+                          className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
                         >
                           <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-violet-500/40 bg-violet-500/10">
                             <TaskDot />
                           </span>
-                          <p className="text-xs leading-5 text-[#a8a399]">{task.summary}</p>
+                          <p className="text-xs leading-5 text-slate-400">{task.summary}</p>
                         </div>
                       ))}
                       {tasks.length > 5 && (
                         <Link
                           href="/dashboard/scheduled"
-                          className="mt-1 text-center text-xs text-[#6b6b63] hover:text-[#a8a399]"
+                          className="mt-1 text-center text-xs text-slate-500 hover:text-slate-400"
                         >
                           +{tasks.length - 5} more in Scheduled
                         </Link>
@@ -681,21 +753,21 @@ export function CalendarClient() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) closeDialog(); }}
         >
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#2e2e2c] bg-[#1f1f1e] shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
             {/* Dialog header */}
-            <div className="flex items-center justify-between border-b border-[#2e2e2c] px-6 py-4">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <h2 className="text-base font-semibold">Schedule something</h2>
               <button
                 type="button"
                 onClick={closeDialog}
-                className="flex size-7 items-center justify-center rounded-lg text-[#6b6b63] transition hover:bg-[#2a2a28] hover:text-[#f2f1ec]"
+                className="flex size-7 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 <CloseIcon />
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-[#2e2e2c] px-6">
+            <div className="flex gap-0 border-b border-slate-200 px-6">
               {(["reminder", "meeting", "mail"] as DialogTab[]).map((tab) => (
                 <button
                   key={tab}
@@ -703,8 +775,8 @@ export function CalendarClient() {
                   onClick={() => { setDialogTab(tab); setSubmitError(null); setSubmitSuccess(null); }}
                   className={`-mb-px border-b-2 px-4 py-3 text-sm font-medium capitalize transition ${
                     dialogTab === tab
-                      ? "border-[#f2f1ec] text-[#f2f1ec]"
-                      : "border-transparent text-[#6b6b63] hover:text-[#a8a399]"
+                      ? "border-slate-900 text-slate-900"
+                      : "border-transparent text-slate-500 hover:text-slate-400"
                   }`}
                 >
                   {tab === "mail" ? "Scheduled Mail" : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -750,7 +822,7 @@ export function CalendarClient() {
                     placeholder="e.g. Follow up with Priya about the invoice"
                     value={remMessage}
                     onChange={(e) => setRemMessage(e.target.value)}
-                    className="w-full resize-none rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
                 <Field label="When?">
@@ -759,10 +831,10 @@ export function CalendarClient() {
                     placeholder="e.g. every day at 7pm · tomorrow at 9am · next Friday"
                     value={remWhen}
                     onChange={(e) => setRemWhen(e.target.value)}
-                    className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
-                <p className="text-xs text-[#6b6b63]">
+                <p className="text-xs text-slate-500">
                   Riz understands plain English — just say when you want to be reminded.
                 </p>
                 <DialogFooter onCancel={closeDialog} onSubmit={submitReminder} submitting={submitting} label="Set Reminder" />
@@ -778,7 +850,7 @@ export function CalendarClient() {
                     placeholder="e.g. Q3 review with design team"
                     value={mtgTitle}
                     onChange={(e) => setMtgTitle(e.target.value)}
-                    className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
                 <div className="grid grid-cols-3 gap-3">
@@ -787,7 +859,7 @@ export function CalendarClient() {
                       type="date"
                       value={mtgDate}
                       onChange={(e) => setMtgDate(e.target.value)}
-                      className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] outline-none transition focus:border-[#4a4a48] [color-scheme:dark]"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-300 [color-scheme:dark]"
                     />
                   </Field>
                   <Field label="Start">
@@ -795,7 +867,7 @@ export function CalendarClient() {
                       type="time"
                       value={mtgStartTime}
                       onChange={(e) => setMtgStartTime(e.target.value)}
-                      className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] outline-none transition focus:border-[#4a4a48] [color-scheme:dark]"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-300 [color-scheme:dark]"
                     />
                   </Field>
                   <Field label="End">
@@ -803,21 +875,21 @@ export function CalendarClient() {
                       type="time"
                       value={mtgEndTime}
                       onChange={(e) => setMtgEndTime(e.target.value)}
-                      className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] outline-none transition focus:border-[#4a4a48] [color-scheme:dark]"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-300 [color-scheme:dark]"
                     />
                   </Field>
                 </div>
 
                 {/* Attendees */}
                 <Field label="Attendees">
-                  <div className="min-h-[42px] w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2 flex flex-wrap gap-1.5">
+                  <div className="min-h-[42px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 flex flex-wrap gap-1.5">
                     {mtgAttendees.map((a) => (
-                      <span key={a} className="flex items-center gap-1 rounded-full border border-[#3e3e3c] bg-[#2a2a28] px-2.5 py-0.5 text-xs text-[#f2f1ec]">
+                      <span key={a} className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs text-slate-900">
                         {a}
                         <button
                           type="button"
                           onClick={() => setMtgAttendees((prev) => prev.filter((x) => x !== a))}
-                          className="ml-0.5 text-[#6b6b63] hover:text-[#f2f1ec]"
+                          className="ml-0.5 text-slate-500 hover:text-slate-900"
                         >
                           ×
                         </button>
@@ -835,7 +907,7 @@ export function CalendarClient() {
                         }
                       }}
                       onBlur={() => { if (mtgAttendeeInput.includes("@")) addAttendee(mtgAttendeeInput); }}
-                      className="min-w-[140px] flex-1 bg-transparent text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none"
+                      className="min-w-[140px] flex-1 bg-transparent text-sm text-slate-900 placeholder-slate-400 outline-none"
                     />
                   </div>
                 </Field>
@@ -846,11 +918,11 @@ export function CalendarClient() {
                     placeholder="Agenda, links, notes…"
                     value={mtgDescription}
                     onChange={(e) => setMtgDescription(e.target.value)}
-                    className="w-full resize-none rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
 
-                <p className="text-xs text-[#6b6b63]">
+                <p className="text-xs text-slate-500">
                   A Google Meet link will be created and attendees emailed automatically. Riz will send you a Telegram reminder 15 min before.
                 </p>
 
@@ -867,7 +939,7 @@ export function CalendarClient() {
                     placeholder="recipient@example.com"
                     value={mailTo}
                     onChange={(e) => setMailTo(e.target.value)}
-                    className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
                 <Field label="Subject">
@@ -876,7 +948,7 @@ export function CalendarClient() {
                     placeholder="Email subject line"
                     value={mailSubject}
                     onChange={(e) => setMailSubject(e.target.value)}
-                    className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
                 <Field label="Body">
@@ -885,7 +957,7 @@ export function CalendarClient() {
                     placeholder="Write the email body…"
                     value={mailBody}
                     onChange={(e) => setMailBody(e.target.value)}
-                    className="w-full resize-none rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] placeholder-[#4a4a48] outline-none transition focus:border-[#4a4a48]"
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-300"
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
@@ -894,7 +966,7 @@ export function CalendarClient() {
                       type="date"
                       value={mailDate}
                       onChange={(e) => setMailDate(e.target.value)}
-                      className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] outline-none transition focus:border-[#4a4a48] [color-scheme:dark]"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-300 [color-scheme:dark]"
                     />
                   </Field>
                   <Field label="At">
@@ -902,11 +974,11 @@ export function CalendarClient() {
                       type="time"
                       value={mailTime}
                       onChange={(e) => setMailTime(e.target.value)}
-                      className="w-full rounded-lg border border-[#2e2e2c] bg-[#161615] px-3 py-2.5 text-sm text-[#f2f1ec] outline-none transition focus:border-[#4a4a48] [color-scheme:dark]"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-300 [color-scheme:dark]"
                     />
                   </Field>
                 </div>
-                <p className="text-xs text-[#6b6b63]">
+                <p className="text-xs text-slate-500">
                   Riz will draft and send this email at the scheduled time via your connected Gmail.
                 </p>
                 <DialogFooter onCancel={closeDialog} onSubmit={submitMail} submitting={submitting} label="Schedule Email" />
@@ -945,20 +1017,20 @@ function DailyBriefing({
     : null;
 
   return (
-    <div className="border-b border-[#2e2e2c] bg-gradient-to-r from-[#1f1d2e] via-[#1e1c2a] to-[#1a1a19] px-6 py-4">
+    <div className="border-b border-slate-200 bg-gradient-to-r from-slate-100 via-slate-100 to-slate-100 px-6 py-4">
       <div className="mx-auto flex max-w-none items-start justify-between gap-6">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 text-xl leading-none" aria-hidden="true">
             {greetingEmoji()}
           </span>
           <div>
-            <p className="text-base font-semibold text-[#f2f1ec]">
+            <p className="text-base font-semibold text-slate-900">
               {greeting()} —{" "}
               {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
             </p>
 
             {totalItems === 0 ? (
-              <p className="mt-0.5 text-sm text-[#6b6b63]">Nothing on your calendar today. Enjoy the clear day.</p>
+              <p className="mt-0.5 text-sm text-slate-500">Nothing on your calendar today. Enjoy the clear day.</p>
             ) : (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 {/* Today's event count */}
@@ -966,7 +1038,7 @@ function DailyBriefing({
                   <button
                     type="button"
                     onClick={onSelectToday}
-                    className="flex items-center gap-1.5 text-sm text-[#a8a399] transition hover:text-[#f2f1ec]"
+                    className="flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-slate-900"
                   >
                     <span className="h-2 w-2 rounded-full bg-blue-400" />
                     {todayEvents.length} meeting{todayEvents.length > 1 ? "s" : ""} today
@@ -978,7 +1050,7 @@ function DailyBriefing({
                   <button
                     type="button"
                     onClick={onSelectToday}
-                    className="flex items-center gap-1.5 text-sm text-[#a8a399] transition hover:text-[#f2f1ec]"
+                    className="flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-slate-900"
                   >
                     <span className="h-2 w-2 rounded-full bg-amber-400" />
                     {todayReminders.length} reminder{todayReminders.length > 1 ? "s" : ""}
@@ -1003,10 +1075,10 @@ function DailyBriefing({
                 {todayEvents.slice(0, 4).map((ev) => (
                   <span
                     key={ev.id}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#2e2e2c] bg-[#242422] px-2.5 py-1 text-xs text-[#c8c5bc]"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-400"
                   >
                     {!ev.allDay && ev.start && (
-                      <span className="text-[#6b6b63]">{formatTime(ev.start)}</span>
+                      <span className="text-slate-500">{formatTime(ev.start)}</span>
                     )}
                     <span className="truncate max-w-[140px]">{ev.title}</span>
                     {ev.hangoutLink && (
@@ -1027,7 +1099,7 @@ function DailyBriefing({
                   <button
                     type="button"
                     onClick={onSelectToday}
-                    className="rounded-lg border border-[#2e2e2c] bg-[#242422] px-2.5 py-1 text-xs text-[#6b6b63] transition hover:text-[#a8a399]"
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500 transition hover:text-slate-400"
                   >
                     +{todayEvents.length - 4} more
                   </button>
@@ -1040,7 +1112,7 @@ function DailyBriefing({
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#4a4a46] transition hover:bg-[#2a2a28] hover:text-[#a8a399]"
+          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-400"
           title="Dismiss"
         >
           <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" aria-hidden="true">
@@ -1058,11 +1130,11 @@ function CalendarGridSkeleton({ cells }: { cells: number }) {
       {Array.from({ length: cells }, (_, idx) => (
         <div
           key={`calendar-loading-${idx}`}
-          className={`min-h-[100px] border-b border-r border-[#2e2e2c] bg-[#161615] p-2 ${
+          className={`min-h-[100px] border-b border-r border-slate-200 bg-white p-2 ${
             idx % 7 === 6 ? "border-r-0" : ""
           }`}
         >
-          <div className="mb-4 h-5 w-5 animate-pulse rounded-full bg-white/10" />
+          <div className="mb-4 h-5 w-5 animate-pulse rounded-full bg-slate-100" />
           <div className="space-y-2">
             {idx % 3 !== 0 && <div className="h-4 w-4/5 animate-pulse rounded-sm bg-blue-300/15" />}
             {idx % 4 === 0 && <div className="h-4 w-2/3 animate-pulse rounded-sm bg-amber-300/15" />}
@@ -1076,19 +1148,19 @@ function CalendarGridSkeleton({ cells }: { cells: number }) {
 
 function CalendarAgendaSkeleton() {
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-l border-[#2e2e2c] lg:flex">
-      <div className="border-b border-[#2e2e2c] px-5 py-4">
-        <div className="h-3 w-32 animate-pulse rounded-sm bg-white/10" />
+    <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 lg:flex">
+      <div className="border-b border-slate-200 px-5 py-4">
+        <div className="h-3 w-32 animate-pulse rounded-sm bg-slate-100" />
         <div className="mt-3 h-6 w-40 animate-pulse rounded-sm bg-white/15" />
       </div>
       <div className="flex-1 space-y-3 px-4 py-3">
         {Array.from({ length: 4 }, (_, idx) => (
-          <div key={`agenda-loading-${idx}`} className="border border-[#2e2e2c] bg-[#1f1f1e] px-4 py-3">
+          <div key={`agenda-loading-${idx}`} className="border border-slate-200 bg-white px-4 py-3">
             <div className="flex gap-3">
               <div className="size-5 shrink-0 animate-pulse rounded-sm bg-blue-300/15" />
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="h-4 w-4/5 animate-pulse rounded-sm bg-white/15" />
-                <div className="h-3 w-1/2 animate-pulse rounded-sm bg-white/10" />
+                <div className="h-3 w-1/2 animate-pulse rounded-sm bg-slate-100" />
               </div>
             </div>
           </div>
@@ -1103,7 +1175,7 @@ function CalendarAgendaSkeleton() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-[#a8a399]">{label}</label>
+      <label className="text-xs font-medium text-slate-400">{label}</label>
       {children}
     </div>
   );
@@ -1125,7 +1197,7 @@ function DialogFooter({
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-lg border border-[#2e2e2c] px-4 py-2 text-sm font-medium text-[#a8a399] transition hover:border-[#3e3e3c] hover:text-[#f2f1ec]"
+        className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-slate-300 hover:text-slate-900"
       >
         Cancel
       </button>
@@ -1133,7 +1205,7 @@ function DialogFooter({
         type="button"
         onClick={onSubmit}
         disabled={submitting}
-        className="rounded-lg bg-[#f2f1ec] px-4 py-2 text-sm font-semibold text-[#1a1a19] transition hover:bg-[#e2e1da] disabled:opacity-50"
+        className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
       >
         {submitting ? "Saving…" : label}
       </button>
@@ -1149,7 +1221,7 @@ function NavButton({ onClick, label, children }: { onClick: () => void; label: s
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8a8578] transition hover:bg-[#2a2a28] hover:text-[#f2f1ec]"
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
     >
       {children}
     </button>
@@ -1158,7 +1230,7 @@ function NavButton({ onClick, label, children }: { onClick: () => void; label: s
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-xs text-[#6b6b63]">
+    <span className="flex items-center gap-1.5 text-xs text-slate-500">
       <span className={`size-2 rounded-full ${color}`} />
       {label}
     </span>
@@ -1230,7 +1302,7 @@ function TaskDot() {
 }
 function CalendarOffIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#3e3e3c]" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300" aria-hidden="true">
       <path d="M4.2 4.2A2 2 0 0 0 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 1.82-1.18" /><path d="M8 2v4" /><path d="M16 2v4" /><path d="M3 10h4.93" /><path d="M21 10H11" /><path d="m21 21-18-18" />
     </svg>
   );

@@ -46,7 +46,7 @@ const groups = [
 
 export function Capabilities() {
   return (
-    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas" id="capabilities">
+    <section className="border-t-2 border-black/10 bg-white py-20 md:py-28 font-neue-haas" id="capabilities">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">Capabilities</p>

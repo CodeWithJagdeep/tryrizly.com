@@ -23,7 +23,7 @@ const faqs = [
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. Cancelling takes effect immediately, no lock-in.",
+    a: "Yes, from the dashboard with no lock-in. Cancellation takes effect at the end of the current billing period, so you keep everything you paid for.",
   },
 ];
 
@@ -31,7 +31,7 @@ export function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas">
+    <section className="border-t-2 border-black/10 bg-white py-20 md:py-28 font-neue-haas">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">FAQ</p>
@@ -87,6 +87,28 @@ export function Faq() {
             );
           })}
         </div>
+
+        <Reveal>
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t-2 border-black/10 pt-8">
+            <p className="text-sm text-gray-500">Still curious? There&apos;s a longer list.</p>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              <a
+                href="/faq"
+                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+              >
+                Read all FAQs
+                <span className="transition-transform group-hover:translate-x-0.5">→</span>
+              </a>
+              <a
+                href="/contact"
+                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+              >
+                Ask us directly
+                <span className="transition-transform group-hover:translate-x-0.5">→</span>
+              </a>
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

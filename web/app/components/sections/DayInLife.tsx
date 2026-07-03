@@ -63,7 +63,22 @@ export function DayInLife() {
           </h2>
         </Reveal>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* timeline rail (desktop) */}
+        <div className="mt-12 hidden md:block" aria-hidden="true">
+          <div className="relative grid grid-cols-3 gap-6">
+            <span className="absolute left-0 right-0 top-[5px] border-t-2 border-dashed border-black/15" />
+            {moments.map((moment) => (
+              <div key={moment.time} className="relative flex items-center gap-3">
+                <span className="relative z-10 h-3 w-3 border-2 border-black bg-[#FE7F2D]" />
+                <span className="font-mono text-xs font-bold uppercase tracking-widest text-gray-400">
+                  {moment.time}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
           {moments.map((moment, index) => (
             <Reveal key={moment.time} delay={index * 0.07}>
               <div className="group relative flex h-full flex-col border-2 border-black bg-white p-7 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)]">
@@ -71,7 +86,7 @@ export function DayInLife() {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D] transition-transform duration-300 group-hover:-translate-y-0.5">
                     <moment.Icon />
                   </span>
-                  <span className="font-mono text-xs font-bold tracking-widest uppercase text-gray-400">
+                  <span className="font-mono text-xs font-bold tracking-widest uppercase text-gray-400 md:hidden">
                     {moment.time}
                   </span>
                 </div>

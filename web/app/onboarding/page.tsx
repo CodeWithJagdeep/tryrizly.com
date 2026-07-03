@@ -1,7 +1,8 @@
 import { OnboardingClient } from "./onboarding-client";
 
 export const metadata = {
-  title: "Get started | rizly",
+  title: "Get started",
+  robots: { index: false, follow: false },
 };
 
 export default function OnboardingPage() {

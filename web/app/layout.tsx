@@ -66,11 +66,11 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "rizly - Proactive AI Operator for Founders",
-    template: "%s | rizly",
+    default: "Rizly — Proactive AI Operator for Founders",
+    template: "%s | Rizly",
   },
   description:
-    "rizly is a proactive AI operator that lives in Telegram, monitors your inbox, calendar, and business tools, and triggers actions with your consent. Built for founders who need less noise and more clarity.",
+    "Rizly is a proactive AI operator that lives in Telegram, monitors your inbox, calendar, and business tools, and triggers actions with your consent. Built for founders who need less noise and more clarity.",
   keywords: [
     "AI assistant for founders",
     "proactive AI operator",
@@ -82,8 +82,8 @@ export const metadata: Metadata = {
     "calendar AI",
   ],
   authors: [{ name: "Jagdeep Singh", url: SITE_URL }],
-  creator: "rizly",
-  publisher: "rizly",
+  creator: "Rizly",
+  publisher: "Rizly",
   robots: {
     index: true,
     follow: true,
@@ -96,30 +96,30 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: SITE_URL,
-    siteName: "rizly",
-    title: "rizly - Proactive AI Operator for Founders",
+    siteName: "Rizly",
+    title: "Rizly — Proactive AI Operator for Founders",
     description:
-      "rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
+      "Rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "rizly - Proactive AI Operator for Founders",
+        alt: "Rizly — Proactive AI Operator for Founders",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "rizly - Proactive AI Operator for Founders",
+    title: "Rizly — Proactive AI Operator for Founders",
     description:
-      "rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
+      "Rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
     images: ["/opengraph-image"],
     creator: "@rizly",
   },
-  alternates: {
-    canonical: SITE_URL,
-  },
+  // No root-level alternates.canonical: it cascades to child pages that don't
+  // set their own, wrongly declaring the homepage as their canonical URL.
+  // The homepage canonical lives in app/page.tsx.
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

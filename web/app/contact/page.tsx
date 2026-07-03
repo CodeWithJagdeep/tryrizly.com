@@ -4,11 +4,11 @@ import { ContactForm } from "./ContactForm";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Contact Us | Rizly",
+  title: "Contact Us",
   description: "Get in touch with the Rizly team.",
   alternates: { canonical: `${SITE_URL}/contact` },
   openGraph: {
-    title: "Contact Us | Rizly",
+    title: "Contact Us",
     description: "Get in touch with the Rizly team.",
     url: `${SITE_URL}/contact`,
     type: "website",

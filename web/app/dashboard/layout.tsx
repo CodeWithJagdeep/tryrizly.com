@@ -5,6 +5,12 @@ import { ChatSidebar } from "./components/ChatSidebar";
 import { TelegramBanner } from "./components/TelegramBanner";
 import { TrialBar } from "./components/TrialBar";
 
+// Auth-gated app surface — keep the whole tree out of search indexes
+// (robots.txt disallow alone doesn't prevent indexing of externally linked URLs).
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   if (!session) redirect("/login");

@@ -1,7 +1,7 @@
 import { UsageClient } from "./usage-client";
 
 export const metadata = {
-  title: "Usage | rizly",
+  title: "Usage",
 };
 
 export default function UsagePage() {

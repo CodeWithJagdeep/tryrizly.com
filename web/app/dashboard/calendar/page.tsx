@@ -1,7 +1,7 @@
 import { CalendarClient } from "./calendar-client";
 
 export const metadata = {
-  title: "Calendar | rizly",
+  title: "Calendar",
 };
 
 export default function CalendarPage() {

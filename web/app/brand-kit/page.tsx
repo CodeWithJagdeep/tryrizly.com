@@ -4,11 +4,11 @@ import Image from "next/image";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Brand Kit | Rizly",
+  title: "Brand Kit",
   description: "Download Rizly brand assets and explore our visual guidelines.",
   alternates: { canonical: `${SITE_URL}/brand-kit` },
   openGraph: {
-    title: "Brand Kit | Rizly",
+    title: "Brand Kit",
     description: "Rizly brand assets and visual guidelines.",
     url: `${SITE_URL}/brand-kit`,
     type: "website",

@@ -4,11 +4,11 @@ import { Trust } from "../components/sections/Trust";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Trust & Security | Rizly",
+  title: "Trust & Security",
   description: "See how approval-first automation works and how Rizly keeps your data safe.",
   alternates: { canonical: `${SITE_URL}/trust` },
   openGraph: {
-    title: "Trust & Security | Rizly",
+    title: "Trust & Security",
     description: "See how approval-first automation works and how Rizly keeps your data safe.",
     url: `${SITE_URL}/trust`,
     type: "website",

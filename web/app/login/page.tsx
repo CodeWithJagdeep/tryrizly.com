@@ -5,18 +5,18 @@ import { AuthFlow } from "../components/auth/AuthFlow";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Log In | Rizly",
+  title: "Log In",
   description: "Sign in to your Rizly workspace to review approvals, drafts, and your daily brief.",
   alternates: { canonical: `${SITE_URL}/login` },
   openGraph: {
-    title: "Log In | Rizly",
+    title: "Log In",
     description: "Sign in to your Rizly workspace.",
     url: `${SITE_URL}/login`,
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Log In | Rizly",
+    title: "Log In",
     description: "Sign in to your Rizly workspace.",
   },
   robots: { index: false, follow: true },

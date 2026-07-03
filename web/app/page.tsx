@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "rizly",
+  name: "Rizly",
   url: SITE_URL,
   logo: `${SITE_URL}/rizly.png`,
   description:
@@ -31,7 +31,7 @@ const organizationSchema = {
 const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "rizly",
+  name: "Rizly",
   url: SITE_URL,
   potentialAction: {
     "@type": "SearchAction",
@@ -46,7 +46,7 @@ const websiteSchema = {
 const softwareSchema = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "rizly",
+  name: "Rizly",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web, Telegram",
   description:

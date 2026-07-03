@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Notes, guides, and technical updates from the rizly team on building a proactive AI operator for founders.",
   alternates: { canonical: `${SITE_URL}/blog` },
   openGraph: {
-    title: "Blog | rizly",
+    title: "Blog",
     description:
       "Notes, guides, and technical updates on building a proactive AI operator for founders.",
     url: `${SITE_URL}/blog`,
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blog | rizly",
+    title: "Blog",
     description:
       "Notes, guides, and technical updates on building a proactive AI operator for founders.",
   },

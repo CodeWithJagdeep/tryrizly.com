@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Integrations | Rizly",
+  title: "Integrations",
   description: "Connect Rizly to your existing stack — Gmail, Calendar, Stripe, Telegram, Slack, and more.",
   alternates: { canonical: `${SITE_URL}/integrations` },
   openGraph: {
-    title: "Integrations | Rizly",
+    title: "Integrations",
     description: "Connect Rizly to your existing stack.",
     url: `${SITE_URL}/integrations`,
     type: "website",

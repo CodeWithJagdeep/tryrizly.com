@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Meet Riz | Rizly",
+  title: "Meet Riz",
   description: "Riz is the AI agent behind Rizly — it watches, reasons, drafts, and waits for your approval.",
   alternates: { canonical: `${SITE_URL}/agent` },
   openGraph: {
-    title: "Meet Riz | Rizly",
+    title: "Meet Riz",
     description: "Riz is the AI agent behind Rizly — it watches, reasons, drafts, and waits for your approval.",
     url: `${SITE_URL}/agent`,
     type: "website",

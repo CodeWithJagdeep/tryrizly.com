@@ -4,12 +4,12 @@ import { PricingClient } from "./PricingClient";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Pricing | Rizly",
+  title: "Pricing",
   description:
     "Transparent AI automation pricing for professionals. Start your 15-day free trial. Simple plans with no hidden fees.",
   alternates: { canonical: `${SITE_URL}/pricing` },
   openGraph: {
-    title: "Pricing | Rizly",
+    title: "Pricing",
     description:
       "Transparent AI automation pricing. Start free, upgrade when you're ready.",
     url: `${SITE_URL}/pricing`,
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pricing | Rizly",
+    title: "Pricing",
     description:
       "Transparent AI automation pricing for professionals and teams.",
   },

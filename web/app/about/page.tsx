@@ -5,11 +5,11 @@ import FAQSection from "./FAQSection";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "About Us | rizly",
+  title: "About Us",
   description: "Learn about rizly and our mission to build proactive AI for founders.",
   alternates: { canonical: `${SITE_URL}/about` },
   openGraph: {
-    title: "About Us | rizly",
+    title: "About Us",
     description: "Learn about rizly and our mission.",
     url: `${SITE_URL}/about`,
     type: "website",

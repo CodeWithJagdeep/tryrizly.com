@@ -1,7 +1,7 @@
 import { TelegramClient } from "./telegram-client";
 
 export const metadata = {
-  title: "Telegram | rizly",
+  title: "Telegram",
 };
 
 export default function TelegramPage() {

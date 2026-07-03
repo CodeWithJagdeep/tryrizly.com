@@ -2,7 +2,7 @@ import { SettingsClient } from "./settings-client";
 import { requireSession } from "../../api/onboarding/_lib/require-user";
 
 export const metadata = {
-  title: "Settings | rizly",
+  title: "Settings",
 };
 
 export default async function SettingsPage() {

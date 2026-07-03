@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Reveal } from '../Reveal';
 
 function ShieldIcon() {
@@ -62,7 +63,7 @@ const items = [
 
 export function Trust() {
   return (
-    <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas" id="trust">
+    <section className="border-t-2 border-black/10 bg-white py-20 md:py-28 font-neue-haas" id="trust">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="flex flex-wrap items-end justify-between gap-6 border-b-2 border-black/10 pb-8">
@@ -99,6 +100,32 @@ export function Trust() {
             </Reveal>
           ))}
         </div>
+
+        <Reveal>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t-2 border-black/10 pt-8">
+            <Link
+              href="/trust"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+            >
+              Visit the trust center
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+            <Link
+              href="/security-policy"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+            >
+              Read the security policy
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+            <Link
+              href="/privacy"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+            >
+              Privacy policy
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

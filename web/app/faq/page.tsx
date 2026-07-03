@@ -1,42 +1,165 @@
 import type { Metadata } from "next";
-import { Faq } from "../components/sections/Faq";
+import { FaqClient, type FaqCategory } from "./faq-client";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
   title: "FAQ",
-  description: "Answers on setup, billing, and controls for Rizly.",
+  description:
+    "Answers on setup, approvals, integrations, billing, and data security for Rizly — the approval-first AI operator.",
   alternates: { canonical: `${SITE_URL}/faq` },
   openGraph: {
     title: "FAQ",
-    description: "Answers on setup, billing, and controls for Rizly.",
+    description: "Answers on setup, approvals, integrations, billing, and data security for Rizly.",
     url: `${SITE_URL}/faq`,
     type: "website",
   },
 };
 
+const categories: FaqCategory[] = [
+  {
+    name: "Getting started",
+    items: [
+      {
+        q: "What do I need to get started?",
+        a: "A Google account and about five minutes. Sign in, connect Gmail and Calendar, link Telegram from the QR code, and Riz starts triaging. Your first morning brief lands the next day.",
+      },
+      {
+        q: "How does the free trial work?",
+        a: "Every new account gets 15 days of the full product — every feature, every connector, no credit card. If you don't subscribe when it ends, you move to the Free plan rather than losing access to your account.",
+      },
+      {
+        q: "Do I have to use Telegram?",
+        a: "It's where Rizly works best: reminders, morning briefs, and approvals are delivered there, and you can reply to act. Without it, Gmail and Calendar still get triaged and notifications fall back to email — but approvals wait for you in the dashboard instead of a chat.",
+      },
+      {
+        q: "Does Riz work in my timezone?",
+        a: "Yes. Your saved timezone drives the morning brief, reminders, and calendar handling — briefs arrive in your morning, not a global UTC hour.",
+      },
+    ],
+  },
+  {
+    name: "Approvals & control",
+    items: [
+      {
+        q: "Does Riz send anything without asking me first?",
+        a: "No. Every draft and action waits for your approval in Telegram, unless you've explicitly turned on auto-act for that category in your preferences.",
+      },
+      {
+        q: "What can Riz actually do once I approve?",
+        a: "Send the drafted email, create or move calendar events, set reminders and follow-ups, and log decisions. Each approval covers that one action — approving a draft never authorizes anything else.",
+      },
+      {
+        q: "Can I see a record of what it did?",
+        a: "Yes. The dashboard keeps a notification log and a decision log, so you can audit every message sent and every rule Riz applied — nothing happens off the books.",
+      },
+      {
+        q: "Can I turn on automatic behavior?",
+        a: "Per category, and only explicitly. For example, you can tell Riz to always archive newsletters — that rule is logged, visible, and reversible at any time.",
+      },
+    ],
+  },
+  {
+    name: "Integrations",
+    items: [
+      {
+        q: "What does Rizly connect to?",
+        a: "Gmail, Google Calendar, and Telegram as standard connectors, plus Stripe, Razorpay, PostgreSQL, and MongoDB for business data on Pro and Business plans.",
+      },
+      {
+        q: "What does connecting a business tool get me?",
+        a: "Riz folds revenue movement, failed payments, and renewal risk into your daily brief, and can draft the follow-up when a payment lapses or a client goes quiet.",
+      },
+      {
+        q: "Can I disconnect something later?",
+        a: "Anytime, from the dashboard. Disconnecting stops access immediately and deletes the stored credentials for that connector. You can also revoke access from the provider's own security settings.",
+      },
+    ],
+  },
+  {
+    name: "Billing & plans",
+    items: [
+      {
+        q: "What do the plans cost?",
+        a: "Starter is $49/month, Pro is $99/month, and Business is $199/month — all billed monthly in USD through Razorpay, all starting with the 15-day free trial. Free is $0 forever as the floor tier.",
+      },
+      {
+        q: "What happens if I go over my AI budget?",
+        a: "You get a warning at 80% of your plan's monthly allowance. At 100%, background features (decisions, memory, the daily brief) pause and chat switches to a lighter model. There are never surprise overage charges.",
+      },
+      {
+        q: "Can I cancel anytime?",
+        a: "Yes, from the dashboard, with no lock-in. Cancellation takes effect at the end of the current billing period, so you keep access to everything you paid for.",
+      },
+      {
+        q: "What happens to my account if I stop paying?",
+        a: "You move to the Free plan. Your data, connectors, and history stay intact — background AI features pause until you resubscribe.",
+      },
+    ],
+  },
+  {
+    name: "Data & security",
+    items: [
+      {
+        q: "Is my data used to train AI models?",
+        a: "No. Your content is processed only to run the product for you, under agreements that prohibit our AI providers from training on it. We don't sell data and we don't show ads.",
+      },
+      {
+        q: "How are my Google credentials stored?",
+        a: "OAuth tokens are encrypted at rest and used only server-side to make the API calls you authorized. Rizly's use of Google user data follows Google's Limited Use policy.",
+      },
+      {
+        q: "Can I delete my data?",
+        a: "Yes. Disconnecting a connector deletes its credentials immediately, and deleting your account removes or anonymizes your personal data within 30 days. You can also request an export at hello@getrizly.com.",
+      },
+      {
+        q: "Where can I read the details?",
+        a: "The Privacy Policy covers data handling, the Security Policy covers vulnerability reporting, and the Trust Center summarizes both — all linked in the footer.",
+      },
+    ],
+  },
+];
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: categories.flatMap((category) =>
+    category.items.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  ),
+};
+
 export default function FaqPage() {
   return (
     <main>
-      <section className="pt-32 pb-16 px-10 text-center relative border-b-2 border-black/10 overflow-hidden bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <section className="relative overflow-hidden border-b-2 border-black bg-white px-4 pt-24 pb-16 text-center font-neue-haas sm:px-6 md:pt-32 md:pb-20">
         <div
-          className="absolute inset-0 pointer-events-none -z-10 opacity-[0.05]"
-          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "40px 40px" }}
-        ></div>
-        <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-4 py-1.5 border-2 border-black bg-black text-white text-[11px] font-semibold uppercase tracking-[0.3em] mb-8">
-            Rizly / FAQ
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04]"
+          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
+          aria-hidden="true"
+        />
+        <div className="mx-auto max-w-4xl">
+          <span className="inline-block border-2 border-[#FE7F2D] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#FE7F2D]">
+            FAQ
           </span>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Answers on setup, <br /><span className="text-[#FE7F2D]">billing, and controls</span>
+          <h1 className="mt-8 text-balance font-neue-haas text-4xl font-medium leading-tight tracking-tight text-black md:text-5xl">
+            Answers on setup, <span className="text-[#FE7F2D]">billing, and control</span>
           </h1>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Everything you'd ask before connecting your inbox, calendar, and revenue to an AI operator.
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-500">
+            Everything you&apos;d ask before connecting your inbox, calendar, and revenue to an AI
+            operator — {categories.reduce((n, c) => n + c.items.length, 0)} questions, straight answers.
           </p>
         </div>
       </section>
 
-      <Faq />
+      <FaqClient categories={categories} />
     </main>
   );
 }

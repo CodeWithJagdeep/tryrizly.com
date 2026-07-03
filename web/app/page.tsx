@@ -10,6 +10,7 @@ import { HowItWorks } from './components/sections/HowItWorks';
 import { Trust } from './components/sections/Trust';
 import { Pricing } from './components/sections/Pricing';
 import { Faq } from './components/sections/Faq';
+import { FinalCta } from './components/sections/FinalCta';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
@@ -106,10 +107,10 @@ const faqSchema = {
     },
     {
       "@type": "Question",
-      name: "Can I cancel rizly anytime?",
+      name: "Can I cancel Rizly anytime?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Cancelling takes effect immediately with no lock-in.",
+        text: "Yes, from the dashboard with no lock-in. Cancellation takes effect at the end of the current billing period, so you keep everything you paid for.",
       },
     },
   ],
@@ -146,6 +147,7 @@ export default function Home() {
         <Trust />
         <Pricing />
         <Faq />
+        <FinalCta />
       </div>
     </>
   );

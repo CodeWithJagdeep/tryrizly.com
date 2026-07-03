@@ -189,7 +189,7 @@ export function ShowcaseBrutalist() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 md:py-28">
         <div className="mx-auto max-w-2xl text-center mb-20 lg:mb-24">
           <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D] mb-4">
-            How it works
+            See it in action
           </p>
           <h2 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black uppercase text-black leading-[1.15] tracking-tight">
             One operator. Every signal.

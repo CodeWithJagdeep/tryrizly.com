@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Reveal } from "../Reveal";
 
 type Plan = {
@@ -10,14 +11,15 @@ type Plan = {
   highlighted?: boolean;
 };
 
+// Mirrors apps/billing/src/plans.ts and /pricing — keep in sync.
 const plans: Plan[] = [
   {
     id: "free",
     name: "Free",
     price: "$0",
-    cadence: "15-day trial",
-    description: "Full features for 15 days, then choose a plan.",
-    features: ["Limited chat", "Basic memory", "Manual connector setup"],
+    cadence: "forever",
+    description: "The floor tier after your 15-day trial. Enough to stay connected.",
+    features: ["Limited chat with Riz", "Basic memory", "Telegram delivery"],
   },
   {
     id: "starter",
@@ -25,7 +27,7 @@ const plans: Plan[] = [
     price: "$49",
     cadence: "per month",
     description: "A founder-grade daily assistant with controlled background AI.",
-    features: ["Email triage", "Connector memory"],
+    features: ["Email triage & drafting", "Morning brief & reminders", "Connector memory"],
   },
   {
     id: "pro",
@@ -33,7 +35,7 @@ const plans: Plan[] = [
     price: "$99",
     cadence: "per month",
     description: "For a heavier inbox, more meetings, and proactive workflows.",
-    features: ["Priority agent runs", "Digest automation"],
+    features: ["Everything in Starter", "Priority agent runs", "Weekly digest automation"],
     highlighted: true,
   },
   {
@@ -41,8 +43,8 @@ const plans: Plan[] = [
     name: "Business",
     price: "$199",
     cadence: "per month",
-    description: "Deeper support for background work.",
-    features: ["Priority support", "Higher usage limits"],
+    description: "The highest AI budget for deep background work.",
+    features: ["Everything in Pro", "Business-system integrations", "Priority support"],
   },
 ];
 
@@ -107,6 +109,21 @@ export function Pricing() {
             </Reveal>
           ))}
         </div>
+
+        <Reveal>
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-gray-400">
+              Billed monthly through Razorpay. Cancel anytime — access runs to the end of the period.
+            </p>
+            <Link
+              href="/pricing"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+            >
+              Compare all plans in detail
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

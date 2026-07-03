@@ -380,13 +380,16 @@ export function FeatureBento() {
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
               <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-12 md:gap-14">
                 <Reveal className={`md:col-span-5 ${reversed ? 'md:order-2' : 'md:order-1'}`}>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-white text-[#FE7F2D]">
                       <item.Icon className="h-5 w-5" />
                     </span>
-                    <p className="font-mono text-[13px] font-bold uppercase tracking-wide text-[#FE7F2D]">
-                      {item.stat.value}
-                      {item.stat.unit ? ` ${item.stat.unit}` : ''} {item.stat.label}
+                    <p className="border-2 border-black bg-[#FE7F2D]/10 px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-wide text-black">
+                      <span className="text-[#FE7F2D]">
+                        {item.stat.value}
+                        {item.stat.unit ? ` ${item.stat.unit}` : ''}
+                      </span>{' '}
+                      {item.stat.label}
                     </p>
                   </div>
                   <h3 className="mt-5 text-2xl font-black uppercase leading-snug tracking-tight text-black">

@@ -65,11 +65,6 @@ const navGroups: DropdownGroup[] = [
     label: 'Learning',
     items: [
       {
-        label: 'Blog',
-        description: 'Read product notes and operator workflows.',
-        href: '/blog',
-      },
-      {
         label: 'Trust',
         description: 'See how approval-first automation works.',
         href: '/trust',

@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
       process.env.AUTH_JWT_SECRET ??
       "REDACTED",
     RESEND_API_KEY:
-      process.env.RESEND_API_KEY ?? "re_XGoKhDW3_K3eFDB6xYrQNWBUm1AZFYBZq",
+      process.env.RESEND_API_KEY ?? "REDACTED",
     RESEND_FROM: process.env.RESEND_FROM ?? "Rizly <noreply@getrizly.com>",
     TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME ?? "tryrizlybot",
     TELEGRAM_BOT_TOKEN:
@@ -29,11 +29,12 @@ const nextConfig: NextConfig = {
     GOOGLE_LOGIN_REDIRECT_URI:
       process.env.GOOGLE_LOGIN_REDIRECT_URI ??
       "https://getrizly.com/api/auth/google/callback",
-    LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID ?? "77q1dwz0kefw6u",
+    LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID ?? "86doutttnd7s6s",
     LINKEDIN_REDIRECT_URI:
       process.env.LINKEDIN_REDIRECT_URI ??
       "https://getrizly.com/api/auth/oauth/linkedin/callback",
-    LINKEDIN_SCOPES: process.env.LINKEDIN_SCOPES ?? "openid profile email",
+    LINKEDIN_SCOPES:
+      process.env.LINKEDIN_SCOPES ?? "openid profile email w_member_social",
     NEXT_PUBLIC_GATEWAY_URL:
       process.env.NEXT_PUBLIC_GATEWAY_URL ?? "https://api.getrizly.com",
     WEB_APP_URL: process.env.WEB_APP_URL ?? "https://getrizly.com",

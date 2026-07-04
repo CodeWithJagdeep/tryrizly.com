@@ -101,6 +101,9 @@ services:
       AI_CORE_TCP_PORT: 4100
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgres://heyriz:heyriz@postgres:5432/heyriz
+      # Without this the notification worker defaults to localhost:4000 (itself),
+      # chatId resolution fails, and every reminder falls back to email.
+      NEXT_PUBLIC_GATEWAY_URL: http://gateway:4000
     volumes:
       - ../apps/worker/src:/app/apps/worker/src
       - ../shared/src:/app/shared/src

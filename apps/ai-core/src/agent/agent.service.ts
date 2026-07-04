@@ -170,8 +170,27 @@ export class AgentService {
             toolResults,
           });
         }
-        // Model answered in prose instead of JSON — accept it as the final word.
-        return respond({ reply: raw.trim(), provider, steps, toolResults });
+        // Model answered in prose instead of JSON. Prose must clear the same
+        // stall guard as a parsed "say" — observed in prod: after a failed tool
+        // step the cheap model degrades to prose ("I'll check for conflicts…"),
+        // which used to ship verbatim, bypassing the guard entirely.
+        const prose = raw.trim();
+        if (await this.isStalledPromise(prose, toolResults.length, input.userId)) {
+          if (promiseNudges < 2) {
+            promiseNudges += 1;
+            escalated = true;
+            messages.push({ role: "assistant", content: prose });
+            messages.push({ role: "user", content: stallNudge(prose) });
+            continue;
+          }
+          return respond({
+            reply: honestMiss(input.context.honorific),
+            provider,
+            steps,
+            toolResults,
+          });
+        }
+        return respond({ reply: prose, provider, steps, toolResults });
       }
 
       if (looksLikeFabricatedObservation(raw)) {
@@ -186,27 +205,22 @@ export class AgentService {
         // stall, not an answer — returning it ends the turn with nothing executed
         // and the principal believes it happened. Bounce it back (twice at most —
         // observed stalls re-promise after one nudge), on the strong tier,
-        // demanding the actual tool step. The regex is the free fast path; when
-        // it misses AND no tool has run this turn, a cheap-tier LLM judge covers
-        // what the regex can't (non-English replies, novel phrasing).
-        const stalled =
-          say && promiseNudges < 2
-            ? promisesAction(say) ||
-              (toolResults.length === 0 &&
-                say.length < 240 &&
-                (await this.saysItIsActing(say, input.userId)))
-            : false;
-        if (say && stalled) {
-          promiseNudges += 1;
-          escalated = true;
-          messages.push(assistantOf(step));
-          messages.push({
-            role: "user",
-            content:
-              `OBSERVATION: nothing was executed. You said "${say.slice(0, 160)}" but emitted no tool step — the action did NOT happen. ` +
-              `If you intend to act, respond with the tool JSON now. Only "say" to report a real tool result or to ask the principal a question.`,
+        // demanding the actual tool step. Once retries are spent, admit the miss
+        // instead of shipping the lie.
+        if (say && (await this.isStalledPromise(say, toolResults.length, input.userId))) {
+          if (promiseNudges < 2) {
+            promiseNudges += 1;
+            escalated = true;
+            messages.push(assistantOf(step));
+            messages.push({ role: "user", content: stallNudge(say) });
+            continue;
+          }
+          return respond({
+            reply: honestMiss(input.context.honorific),
+            provider,
+            steps,
+            toolResults,
           });
-          continue;
         }
         const fallbackReply =
           toolResults.at(-1)?.message ??
@@ -235,7 +249,18 @@ export class AgentService {
       const payload = step.tool_input ?? {};
 
       // Approval gate: propose, then stop and wait for an explicit "yes".
-      if (tool.approvalRequired && !input.approval) {
+      // An approval covers exactly the action that was approved — a resume turn
+      // must NOT hold the gate open for every later tool (approving a calendar
+      // event must never silently send an email). One deliberate carve-out:
+      // after an approved send_email commits a meeting, the matching calendar
+      // write runs without a second round-trip — the send approval covered the
+      // meeting itself, and an event on the principal's own calendar is local
+      // and reversible.
+      const companionOfApprovedSend =
+        input.approval?.tool === "send_email" &&
+        (step.tool_name === "create_calendar_event" ||
+          step.tool_name === "reschedule_calendar_event");
+      if (tool.approvalRequired && !companionOfApprovedSend) {
         const preview = previewFor(
           step.tool_name,
           payload,
@@ -256,6 +281,12 @@ export class AgentService {
       steps.push(summarize(result));
       toolResults.push(result);
       toolCallsSoFar += 1;
+      // A failed tool step means the next step is RECOVERY (retry with fixed
+      // input, fall back, or report honestly) — observed in prod that the cheap
+      // model degrades to prose stalls here. Think with the strong one.
+      if (result.status !== "ok") {
+        escalated = true;
+      }
       messages.push(assistantOf(step));
       messages.push({
         role: "user",
@@ -272,6 +303,22 @@ export class AgentService {
       steps,
       toolResults,
     });
+  }
+
+  /**
+   * Would ending the turn with this text tell the principal an action happened
+   * that never ran? Regex is the free fast path; the cheap-tier LLM judge
+   * covers what it can't (non-English replies, novel phrasing), gated to
+   * zero-tool turns with short replies so it stays off the common path.
+   */
+  private async isStalledPromise(
+    text: string,
+    toolsRanThisTurn: number,
+    userId: string,
+  ): Promise<boolean> {
+    if (promisesAction(text)) return true;
+    if (toolsRanThisTurn > 0 || text.length >= 240) return false;
+    return this.saysItIsActing(text, userId);
   }
 
   /**
@@ -552,6 +599,19 @@ const PROMISE_RE =
 
 function promisesAction(say: string): boolean {
   return PROMISE_RE.test(say);
+}
+
+/** Bounce a stalled promise back to the model, demanding the real tool step. */
+function stallNudge(text: string): string {
+  return (
+    `OBSERVATION: nothing was executed. You said "${text.slice(0, 160)}" but emitted no tool step — the action did NOT happen. ` +
+    `If you intend to act, respond with the tool JSON now. Only "say" to report a real tool result or to ask the principal a question.`
+  );
+}
+
+/** Retries spent: admitting the miss beats telling the principal it happened. */
+function honestMiss(honorific: string): string {
+  return `I couldn't complete that action just now, ${honorific} — ask me once more and I'll run it directly.`;
 }
 
 function cleanSay(say?: string | null): string | undefined {

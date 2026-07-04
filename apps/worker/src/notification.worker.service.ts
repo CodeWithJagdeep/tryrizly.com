@@ -10,6 +10,7 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
 import { sendEmail } from "@heyriz/shared/email";
+import webpush from "web-push";
 
 async function resolveChatId(userId: string): Promise<string | undefined> {
   const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
@@ -31,6 +32,56 @@ async function resolveChatId(userId: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+// Web Push fallback: delivers to browser subscriptions when Telegram isn't
+// linked. Returns true if at least one push went out.
+async function sendWebPushFallback(userId: string, message: string): Promise<boolean> {
+  const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+  const secret = env.AUTH_INTERNAL_SECRET;
+  if (!gatewayUrl || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return false;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (secret) headers["x-heyriz-internal-secret"] = secret;
+
+  let subscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }>;
+  try {
+    const res = await fetch(
+      `${gatewayUrl}/api/push/subscriptions?userId=${encodeURIComponent(userId)}`,
+      { headers },
+    );
+    if (!res.ok) return false;
+    subscriptions = ((await res.json()) as { subscriptions?: typeof subscriptions }).subscriptions ?? [];
+  } catch {
+    return false;
+  }
+  if (subscriptions.length === 0) return false;
+
+  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  const payload = JSON.stringify({
+    title: "Riz",
+    body: message,
+    url: `${env.WEB_APP_URL}/dashboard/notifications`,
+  });
+
+  let delivered = false;
+  for (const subscription of subscriptions) {
+    try {
+      await webpush.sendNotification(subscription, payload);
+      delivered = true;
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number })?.statusCode;
+      // 404/410 mean the browser dropped the subscription — clean it up.
+      if (statusCode === 404 || statusCode === 410) {
+        void fetch(`${gatewayUrl}/api/push/unsubscribe`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        }).catch(() => undefined);
+      }
+    }
+  }
+  return delivered;
 }
 
 // userIds are normalized email addresses (see web require-user), so an unlinked
@@ -126,6 +177,18 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
         ]);
 
         if (!chatId) {
+          if (allowed) {
+            // Telegram not linked: browser push first, then email.
+            const pushed = await sendWebPushFallback(job.data.userId, job.data.message);
+            if (pushed) {
+              void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
+              logger.info("notification delivered by web push — no Telegram linked", {
+                jobId: job.id,
+                userId: job.data.userId,
+              });
+              return;
+            }
+          }
           if (allowed && job.data.emailFallback !== false) {
             const emailed = await sendEmailFallback(job.data.userId, job.data.message);
             if (emailed) {

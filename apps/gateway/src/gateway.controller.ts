@@ -247,6 +247,48 @@ export class GatewayController {
     return this.gatewayService.sendToAiCore("memory.remember", body);
   }
 
+  @Post("api/push/subscribe")
+  async pushSubscribe(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body()
+    body: {
+      userId?: string;
+      subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+    },
+  ) {
+    this.requireInternal(secret);
+    const sub = body.subscription;
+    if (!body.userId || !sub?.endpoint || !sub.keys?.p256dh || !sub.keys.auth) {
+      return { ok: false, error: "invalid_subscription" };
+    }
+    await this.authRepo.savePushSubscription(body.userId, {
+      endpoint: sub.endpoint,
+      keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+    });
+    return { ok: true };
+  }
+
+  @Post("api/push/unsubscribe")
+  async pushUnsubscribe(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { endpoint?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.endpoint) return { ok: false, error: "endpoint_required" };
+    await this.authRepo.deletePushSubscription(body.endpoint);
+    return { ok: true };
+  }
+
+  @Get("api/push/subscriptions")
+  async pushSubscriptions(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) return { subscriptions: [] };
+    return { subscriptions: await this.authRepo.getPushSubscriptions(userId) };
+  }
+
   @Get("api/telegram/resolve")
   async resolveTelegramChatId(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

@@ -14,7 +14,7 @@ import { UserPreferencesRepository } from "../preferences/user-preferences.repos
 import { zonedTimeToUtc } from "../lib/timezone";
 import { logger } from "@heyriz/shared/logger";
 
-const DATA_SOURCE_PROVIDERS = new Set(["postgres", "mongodb", "razorpay"]);
+const DATA_SOURCE_PROVIDERS = new Set(["postgres", "mongodb", "razorpay", "stripe"]);
 const LIVE_TIMEOUT_MS = 3000;
 
 @Injectable()

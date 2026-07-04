@@ -42,7 +42,7 @@ export function createBusinessSnapshotTool(
         return {
           tool: "business_snapshot",
           status: "needs_connection",
-          message: `No business data sources connected yet, ${context.honorific} — add Postgres, MongoDB, or Razorpay in the dashboard.`,
+          message: revenueConnectionMessage(context.honorific),
         };
       }
 
@@ -100,7 +100,7 @@ export function createBusinessSnapshotTool(
 
       const account = allConnected.find((c) => c.provider === provider);
       if (!account) {
-        return { tool: "business_snapshot", status: "needs_connection", message: `${provider} isn't connected, ${context.honorific}.` };
+        return { tool: "business_snapshot", status: "needs_connection", message: providerConnectionMessage(provider, context.honorific) };
       }
 
       return await answerFromAccount(connectors, postgres, mongo, razorpay, stripe, textToQuery, userId, account.id, provider, question, context.honorific);
@@ -126,7 +126,7 @@ async function answerFromAccount(
       const accounts = await connectors.getAllDataSourceSecrets(userId, provider);
       const account = accounts.find((a) => a.id === accountId) ?? accounts[0];
       if (!account) {
-        return { tool: "business_snapshot", status: "needs_connection", message: `${provider} isn't connected, ${honorific}.` };
+        return { tool: "business_snapshot", status: "needs_connection", message: providerConnectionMessage(provider, honorific) };
       }
       if (provider === "postgres") {
         return await answerFromPostgres(postgres, textToQuery, userId, account.connectionUrl, question, honorific);
@@ -135,7 +135,7 @@ async function answerFromAccount(
     }
     const secretResult = await connectors.getDataSourceSecret(userId, provider);
     if (!secretResult.connected) {
-      return { tool: "business_snapshot", status: "needs_connection", message: `${provider} isn't connected, ${honorific}.` };
+      return { tool: "business_snapshot", status: "needs_connection", message: providerConnectionMessage(provider, honorific) };
     }
     if (secretResult.provider === "stripe") {
       return await answerFromStripe(stripe, textToQuery, userId, secretResult.secret, question, honorific);
@@ -155,6 +155,27 @@ async function answerFromAccount(
 
 function isDataSourceProvider(provider: string): provider is DataSourceProvider {
   return provider === "postgres" || provider === "mongodb" || provider === "razorpay" || provider === "stripe";
+}
+
+function providerConnectionMessage(provider: DataSourceProvider, honorific: string): string {
+  if (provider === "stripe" || provider === "razorpay") {
+    return `${displayProvider(provider)} isn't connected yet, ${honorific}. Connect Stripe or Razorpay from /dashboard/connectors so I can check revenue.`;
+  }
+  return `${displayProvider(provider)} isn't connected yet, ${honorific}. Connect it from /dashboard/connectors so I can query it.`;
+}
+
+function revenueConnectionMessage(honorific: string): string {
+  return `No revenue platform is connected yet, ${honorific}. Connect Stripe or Razorpay from /dashboard/connectors, then ask me to check revenue again.`;
+}
+
+function displayProvider(provider: DataSourceProvider): string {
+  const names: Record<DataSourceProvider, string> = {
+    postgres: "Postgres",
+    mongodb: "MongoDB",
+    razorpay: "Razorpay",
+    stripe: "Stripe",
+  };
+  return names[provider];
 }
 
 function keywordGuess(

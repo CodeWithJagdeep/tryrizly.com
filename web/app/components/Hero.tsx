@@ -21,8 +21,8 @@ export function Hero() {
               Nothing sent without your <span className="text-[#FE7F2D]">yes</span>.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
-              Riz watches your inbox, calendar, and revenue around the clock, then puts drafted
-              decisions in Telegram. You approve, edit, or skip — in seconds, from your phone.
+              Riz watches your inbox, calendar, and revenue, then puts drafted decisions in
+              Telegram. You approve in seconds, from your phone.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -45,7 +45,6 @@ export function Hero() {
                 Sign up with email
               </a>
             </div>
-            <p className="mt-4 text-sm text-slate-400">No credit card required · 15-day free trial of the full product</p>
           </div>
 
           {/* Telegram approval mock */}
@@ -101,27 +100,6 @@ export function Hero() {
           </div>
         </div>
 
-        {/* Honest facts strip */}
-        <div className="grid grid-cols-1 border-2 border-black bg-white sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: 'Outbound approved by you', value: '100%', note: 'approval-first, always' },
-            { label: 'Free trial', value: '15 days', note: 'full product, no card' },
-            { label: 'Integrations', value: '7', note: 'Gmail to MongoDB' },
-            { label: 'Setup', value: '~5 min', note: 'Google sign-in to first brief' },
-          ].map((item, index) => (
-            <div
-              key={item.label}
-              className={`group px-6 py-9 text-center transition-colors hover:bg-[#FE7F2D]/5 ${
-                index > 0 ? 'border-t-2 border-black sm:border-t-0 sm:border-l-2' : ''
-              } ${index === 2 ? 'sm:border-t-2 lg:border-t-0' : ''} ${index === 3 ? 'sm:border-t-2 lg:border-t-0' : ''}`}
-            >
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FE7F2D]">{item.label}</p>
-              <p className="mt-3 text-4xl font-medium tracking-tight text-black tabular-nums">{item.value}</p>
-              <p className="mt-2 text-sm text-slate-500">{item.note}</p>
-            </div>
-          ))}
-        </div>
-        <div className="pb-16 md:pb-20" />
       </div>
     </section>
   );

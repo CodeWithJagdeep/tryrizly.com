@@ -66,19 +66,19 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Rizly — Proactive AI Operator for Founders",
+    default: "Rizly | The AI Assistant That Runs Your Day",
     template: "%s | Rizly",
   },
   description:
-    "Rizly is a proactive AI operator that lives in Telegram, monitors your inbox, calendar, and business tools, and triggers actions with your consent. Built for founders who need less noise and more clarity.",
+    "Rizly watches your email, calendar, and reminders, then sends you a short list of decisions to approve in Telegram or the dashboard. Built for anyone whose day runs on email and meetings.",
   keywords: [
-    "AI assistant for founders",
-    "proactive AI operator",
+    "AI personal assistant",
+    "AI daily assistant",
     "Telegram AI bot",
     "email triage automation",
-    "startup productivity tool",
+    "productivity tool",
     "AI inbox management",
-    "founder automation",
+    "AI reminders",
     "calendar AI",
   ],
   authors: [{ name: "Jagdeep Singh", url: SITE_URL }],
@@ -97,33 +97,22 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "Rizly",
-    title: "Rizly — Proactive AI Operator for Founders",
+    title: "Rizly | The AI Assistant That Runs Your Day",
     description:
-      "Rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: "Rizly — Proactive AI Operator for Founders",
-      },
-    ],
+      "Rizly watches your inbox, calendar, and reminders, and only speaks up when there is a decision worth making.",
+    // og:image comes from the app/opengraph-image.tsx file convention.
   },
   twitter: {
     card: "summary_large_image",
-    title: "Rizly — Proactive AI Operator for Founders",
+    title: "Rizly | The AI Assistant That Runs Your Day",
     description:
-      "Rizly monitors your inbox, calendar, and tools inside Telegram. It only speaks up when it matters.",
-    images: ["/opengraph-image"],
+      "Rizly watches your inbox, calendar, and reminders, and only speaks up when there is a decision worth making.",
     creator: "@rizly",
   },
   // No root-level alternates.canonical: it cascades to child pages that don't
   // set their own, wrongly declaring the homepage as their canonical URL.
   // The homepage canonical lives in app/page.tsx.
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-  },
+  // Icons come from the app/ file conventions: favicon.ico, icon.png, apple-icon.png.
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
   },

@@ -34,6 +34,12 @@ type Task = {
   createdAt: string;
 };
 
+type SubmitSuccess = {
+  message: string;
+  href?: string;
+  linkLabel?: string;
+};
+
 type DialogTab = "reminder" | "meeting" | "mail";
 
 type CalendarPayload = {
@@ -46,7 +52,7 @@ type CalendarPayload = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const CALENDAR_CACHE_PREFIX = "riz:calendar-dashboard:v1";
+const CALENDAR_CACHE_PREFIX = "riz:calendar-dashboard:v2";
 
 // AI-generated system reminders (morning briefs, meeting pre-alerts) should not
 // appear as calendar items — those are internal Telegram notifications, not
@@ -54,7 +60,9 @@ const CALENDAR_CACHE_PREFIX = "riz:calendar-dashboard:v1";
 function filterUserReminders(reminders: Reminder[]): Reminder[] {
   return reminders.filter((r) => {
     const kind = r.metadata?.kind;
-    if (kind === "morning_brief" || kind === "meeting_reminder") return false;
+    if (r.source === "calendar") return false;
+    if (kind === "morning_brief") return false;
+    if (typeof kind === "string" && kind.startsWith("meeting_")) return false;
     return true;
   });
 }
@@ -94,6 +102,14 @@ function formatTime(iso?: string) {
 
 function isoDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDialogDate(dateKey: string) {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString([], {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function eventDateKey(ev: CalendarEvent) {
@@ -168,7 +184,7 @@ export function CalendarClient() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogTab, setDialogTab] = useState<DialogTab>("reminder");
   const [submitting, setSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<SubmitSuccess | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Reminder form
@@ -196,7 +212,7 @@ export function CalendarClient() {
   function applyCalendarPayload(payload: CalendarPayload) {
     setConnected(payload.connected);
     setEvents(payload.events);
-    setReminders(payload.reminders);
+    setReminders(filterUserReminders(payload.reminders));
     setTasks(payload.tasks);
   }
 
@@ -298,7 +314,7 @@ export function CalendarClient() {
       });
       const data = (await res.json()) as { reply?: string; error?: string };
       if (!res.ok || data.error) throw new Error(data.error ?? "Failed to set reminder");
-      setSubmitSuccess(data.reply ?? "Reminder saved.");
+      setSubmitSuccess({ message: data.reply ?? "Reminder saved." });
       setRemMessage(""); setRemWhen("");
       clearCalendarCache();
       loadData(year, month, { force: true });
@@ -329,8 +345,13 @@ export function CalendarClient() {
       });
       const data = (await res.json()) as { ok?: boolean; hangoutLink?: string; message?: string };
       if (!res.ok) throw new Error(data.message ?? "Failed to create meeting");
-      const linkNote = data.hangoutLink ? " Google Meet link sent to attendees." : "";
-      setSubmitSuccess(`Meeting created.${linkNote}`);
+      setSubmitSuccess({
+        message: data.hangoutLink
+          ? "Meeting created. Google Meet link was added and sent to attendees."
+          : "Meeting created on your calendar.",
+        href: data.hangoutLink,
+        linkLabel: "Open Meet link",
+      });
       setMtgTitle(""); setMtgDate(""); setMtgStartTime(""); setMtgEndTime("");
       setMtgAttendees([]); setMtgAttendeeInput(""); setMtgDescription("");
       clearCalendarCache();
@@ -365,7 +386,7 @@ export function CalendarClient() {
         const data = (await res.json()) as { message?: string };
         throw new Error(data.message ?? "Failed to schedule mail");
       }
-      setSubmitSuccess("Email scheduled — Riz will send it then.");
+      setSubmitSuccess({ message: "Email scheduled — Riz will send it then." });
       setMailTo(""); setMailSubject(""); setMailBody(""); setMailDate(""); setMailTime("");
       clearCalendarCache();
       loadData(year, month, { force: true });
@@ -377,6 +398,17 @@ export function CalendarClient() {
   }
 
   function openDialog() {
+    setDialogOpen(true);
+    setSubmitSuccess(null);
+    setSubmitError(null);
+  }
+
+  function openDialogForDate(dateKey: string) {
+    setSelectedDay(dateKey);
+    setDialogTab("reminder");
+    setRemWhen(`on ${formatDialogDate(dateKey)}`);
+    setMtgDate(dateKey);
+    setMailDate(dateKey);
     setDialogOpen(true);
     setSubmitSuccess(null);
     setSubmitError(null);
@@ -455,7 +487,7 @@ export function CalendarClient() {
   return (
     <main className="flex min-h-screen flex-col bg-white text-slate-900">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
+      <header className="sticky top-14 z-30 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/85">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold tracking-tight">
             {monthName} <span className="text-slate-500">{year}</span>
@@ -491,7 +523,7 @@ export function CalendarClient() {
           <button
             type="button"
             onClick={openDialog}
-            className="flex items-center gap-1.5 rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
+            className="flex items-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-slate-800"
           >
             <PlusIcon />
             New
@@ -586,14 +618,33 @@ export function CalendarClient() {
                   const isCurrentMonth = day.getMonth() === month;
 
                   return (
-                    <button
+                    <div
                       key={key}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedDay(isSelected ? null : key)}
-                      className={`group flex flex-col gap-1 border-b border-r border-slate-200 p-2 text-left transition ${
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedDay(isSelected ? null : key);
+                        }
+                      }}
+                      className={`group relative flex cursor-pointer flex-col gap-1 border-b border-r border-slate-200 p-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900 ${
                         idx % 7 === 6 ? "border-r-0" : ""
                       } ${isSelected ? "bg-white" : "hover:bg-white"} ${!isCurrentMonth ? "opacity-35" : ""}`}
                     >
+                      <button
+                        type="button"
+                        aria-label={`Create item on ${formatDialogDate(key)}`}
+                        title={`Create on ${formatDialogDate(key)}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openDialogForDate(key);
+                        }}
+                        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black text-white opacity-0 shadow-sm transition hover:bg-slate-800 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <PlusIcon />
+                      </button>
                       <span
                         className={`mb-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-xs font-semibold ${
                           isToday
@@ -631,10 +682,95 @@ export function CalendarClient() {
                           +{totalItems - 3} more
                         </span>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
+            )}
+
+            {selectedDay && !showInitialCalendarLoading && (
+              <section className="border-t border-slate-200 bg-white px-4 py-4 lg:hidden">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                      {new Date(selectedDay + "T12:00:00").toLocaleDateString("default", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <p className="mt-0.5 text-base font-semibold">
+                      {totalSelectedItems === 0
+                        ? "Nothing scheduled"
+                        : `${totalSelectedItems} item${totalSelectedItems > 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openDialogForDate(selectedDay)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white"
+                    aria-label={`Create item on ${formatDialogDate(selectedDay)}`}
+                  >
+                    <PlusIcon />
+                  </button>
+                </div>
+
+                {totalSelectedItems === 0 ? (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+                    Clear day
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {selectedEvents.map((ev) => (
+                      <div key={ev.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-blue-500/15">
+                            <CalDot />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium leading-snug text-slate-900">{ev.title}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {ev.allDay ? "All day" : `${formatTime(ev.start)} - ${formatTime(ev.end)}`}
+                              {ev.location ? ` · ${ev.location}` : ""}
+                            </p>
+                            {ev.hangoutLink && (
+                              <a
+                                href={ev.hangoutLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                              >
+                                <VideoIcon />
+                                Join call
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {selectedReminders.map((r) => (
+                      <div key={r.id} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-500/15">
+                            <BellIcon />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700">Reminder from Riz</p>
+                            <p className="mt-0.5 text-sm leading-snug text-slate-900">{r.message}</p>
+                            {r.runAt && (
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                {new Date(r.runAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                {r.tz ? ` · ${r.tz}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
           </div>
 
@@ -786,8 +922,18 @@ export function CalendarClient() {
 
             {/* Success banner */}
             {submitSuccess && (
-              <div className="mx-6 mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                {submitSuccess}
+              <div className="mx-6 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <span>{submitSuccess.message}</span>
+                {submitSuccess.href && (
+                  <a
+                    href={submitSuccess.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-emerald-950 underline decoration-emerald-400 underline-offset-2"
+                  >
+                    {submitSuccess.linkLabel ?? "Open link"}
+                  </a>
+                )}
               </div>
             )}
 

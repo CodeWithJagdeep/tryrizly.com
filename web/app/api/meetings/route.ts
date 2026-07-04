@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       message: `⏰ Your meeting "${body.title}"${attendeeList} starts in 15 minutes.`,
       runAt: reminderAt.toISOString(),
       source: "calendar",
+      metadata: { kind: "meeting_t15" },
     }).catch(() => null); // non-fatal
   }
 

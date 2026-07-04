@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Fallbacks for deploys where env vars aren't configured (e.g. Vercel).
+  // Real env vars always take precedence. Only public-safe values belong
+  // here: the client ID and redirect URI appear in the OAuth URL anyway.
+  // GOOGLE_CLIENT_SECRET must stay a real env var and is never needed here.
+  env: {
+    GOOGLE_CLIENT_ID:
+      process.env.GOOGLE_CLIENT_ID ??
+      "927489744703-ipmeciigf234kkceflkatb0o6pg55tlu.apps.googleusercontent.com",
+    GOOGLE_LOGIN_REDIRECT_URI:
+      process.env.GOOGLE_LOGIN_REDIRECT_URI ??
+      "https://getrizly.com/api/auth/google/callback",
+  },
   images: {
     remotePatterns: [
       {

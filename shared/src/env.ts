@@ -39,6 +39,10 @@ const schema = z.object({
   MONGODB_URL: z.string().optional(),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   AI_PROVIDER: z.enum(["rules", "grok", "openai"]).default("rules"),
+  // Web Push (browser notifications for users without Telegram linked)
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default("mailto:hello@getrizly.com"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),

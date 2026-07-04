@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PushOptIn } from "../components/PushOptIn";
 
 type NotificationEntry = {
   id: string;
@@ -126,6 +127,9 @@ export function NotificationsClient() {
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
+      <div className="px-6 pt-5">
+        <PushOptIn />
+      </div>
       <header className="border-b border-slate-200 px-6 pt-5">
         <div className="flex items-center justify-between pb-4">
           <div>

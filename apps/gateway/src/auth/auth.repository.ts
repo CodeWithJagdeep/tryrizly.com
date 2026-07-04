@@ -218,6 +218,38 @@ export class AuthRepository {
     const db = await getDb();
     return db.collection("telegram_links").countDocuments();
   }
+
+  /** Web Push subscriptions — fallback notification channel for users without Telegram. */
+  async savePushSubscription(
+    userId: string,
+    subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  ): Promise<void> {
+    const db = await getDb();
+    await db.collection("push_subscriptions").updateOne(
+      { endpoint: subscription.endpoint },
+      { $set: { userId, endpoint: subscription.endpoint, keys: subscription.keys, updatedAt: new Date() } },
+      { upsert: true },
+    );
+  }
+
+  async deletePushSubscription(endpoint: string): Promise<void> {
+    const db = await getDb();
+    await db.collection("push_subscriptions").deleteOne({ endpoint });
+  }
+
+  async getPushSubscriptions(
+    userId: string,
+  ): Promise<Array<{ endpoint: string; keys: { p256dh: string; auth: string } }>> {
+    const db = await getDb();
+    return db
+      .collection<{ userId: string; endpoint: string; keys: { p256dh: string; auth: string } }>(
+        "push_subscriptions",
+      )
+      .find({ userId })
+      .limit(10)
+      .map(({ endpoint, keys }) => ({ endpoint, keys }))
+      .toArray();
+  }
 }
 
 /** Constant-time OTP comparison — avoids leaking correct digits via timing. */

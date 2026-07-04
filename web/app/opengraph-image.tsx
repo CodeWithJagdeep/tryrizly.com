@@ -1,56 +1,47 @@
 import { ImageResponse } from "next/og";
+import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 
-export const runtime = "edge";
-export const alt = "rizly - Proactive AI Operator for Founders";
+export const alt = "Rizly — Proactive AI Operator for Founders";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OgImage() {
+export default async function OgImage() {
+  const logoData = await readFile(
+    join(process.cwd(), "public", "rizly-wordmark-white.png"),
+    "base64",
+  );
+  const logoSrc = `data:image/png;base64,${logoData}`;
+
   return new ImageResponse(
     (
       <div
         style={{
           background: "#0a0f1e",
+          backgroundImage:
+            "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(55,132,255,0.18), transparent)",
           width: "100%",
           height: "100%",
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          padding: "72px 80px",
+          padding: "64px 80px",
           fontFamily: "system-ui, sans-serif",
         }}
       >
-        {/* top accent line */}
-        <div
-          style={{
-            width: 48,
-            height: 3,
-            background: "#3784ff",
-            borderRadius: 2,
-          }}
-        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoSrc} alt="" height={64} />
 
         {/* main content */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div
-            style={{
-              fontSize: 20,
-              fontWeight: 600,
-              color: "#3784ff",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            rizly
-          </div>
           <div
             style={{
               fontSize: 64,
               fontWeight: 700,
               color: "#ffffff",
               lineHeight: 1.1,
-              maxWidth: 800,
+              maxWidth: 820,
               letterSpacing: "-0.02em",
             }}
           >
@@ -64,7 +55,8 @@ export default function OgImage() {
               lineHeight: 1.5,
             }}
           >
-            Monitors your inbox, calendar, and tools inside Telegram. Only speaks up when it matters.
+            Monitors your inbox, calendar, and tools inside Telegram. Only
+            speaks up when it matters.
           </div>
         </div>
 

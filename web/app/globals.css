@@ -96,6 +96,73 @@
   --color-brand-ink: var(--brand-ink);
 }
 
+/* ─── Mintlify-style homepage tokens ─── */
+:root {
+  --ease-out-soft: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@theme {
+  --color-background-main: #ffffff;
+  --color-background-soft: #f5f4f1;
+  --color-background-invert: #0d0d0d;
+
+  --color-text-main: #141413;
+  --color-text-sub: #5d5d59;
+  --color-text-soft: #454542;
+  --color-text-invert: #ffffff;
+
+  --color-border-sub: rgba(20, 20, 19, 0.12);
+  --color-border-line: rgba(20, 20, 19, 0.08);
+
+  --color-foreground-primary: #141413;
+  --color-foreground-secondary: #5d5d59;
+  --color-foreground-tertiary: #8a8a85;
+  --color-foreground-muted: #a3a39e;
+
+  --color-brand: #0c8c5e;
+  --color-brand-base: #1fa77a;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-100: #f7f6f4;
+  --color-neutral-800: #262626;
+}
+
+/* Mintlify-style 24-column page grid */
+.grid-layout {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  max-width: 75rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .grid-layout {
+    padding-inline: 0;
+  }
+}
+
+.font-paper {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* Stats marquee */
+@keyframes stats-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="stats-scroll"] {
+    animation: none !important;
+  }
+}
+
 /* Base Styles */
 * {
   box-sizing: border-box;
@@ -440,6 +507,45 @@ body {
   animation: fading-arrow-scroll 1.6s infinite ease-in-out 0.8s;
 }
 
+/* ─── Homepage workflow pulse ─── */
+@keyframes rizly-flow-step {
+  0%, 100% { opacity: 0.42; transform: translateX(0); }
+  45%, 60% { opacity: 1; transform: translateX(6px); }
+}
+
+@keyframes rizly-flow-progress {
+  0% { transform: scaleX(0); }
+  85%, 100% { transform: scaleX(1); }
+}
+
+.rizly-flow-step {
+  animation: rizly-flow-step 4.8s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rizly-flow-step-1 { animation-delay: 0s; }
+.rizly-flow-step-2 { animation-delay: 0.6s; }
+.rizly-flow-step-3 { animation-delay: 1.2s; }
+.rizly-flow-step-4 { animation-delay: 1.8s; }
+
+.rizly-flow-progress {
+  transform-origin: left center;
+  animation: rizly-flow-progress 4.8s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rizly-hero-card {
+  0% { opacity: 0; transform: translateY(18px) scale(0.97); z-index: 1; }
+  4%, 17% { opacity: 1; transform: translateY(0) scale(1); z-index: 5; }
+  22%, 100% { opacity: 0; transform: translateY(-18px) scale(0.98); z-index: 1; }
+}
+
+.rizly-hero-card {
+  animation: rizly-hero-card 15s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rizly-hero-card-1 { animation-delay: 0s; }
+.rizly-hero-card-2 { animation-delay: 3s; }
+.rizly-hero-card-3 { animation-delay: 6s; }
+.rizly-hero-card-4 { animation-delay: 9s; }
+.rizly-hero-card-5 { animation-delay: 12s; }
+
 /* ─── Onboarding step entry (staggered fade-up) ─── */
 @keyframes onb-fade-up {
   from { opacity: 0; transform: translateY(14px); }
@@ -453,4 +559,13 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .onb-enter { animation: none; }
+  .rizly-flow-step,
+  .rizly-flow-progress,
+  .rizly-hero-card {
+    animation: none;
+  }
+
+  .rizly-hero-card:not(:first-child) {
+    display: none;
+  }
 }

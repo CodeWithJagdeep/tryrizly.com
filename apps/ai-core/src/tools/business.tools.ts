@@ -25,18 +25,14 @@ export function createBusinessSnapshotTool(
     name: "business_snapshot",
     category: "database",
     description:
-      "Answer an ad-hoc business question (transactions, signups, MRR, metrics) by querying the principal's connected Postgres, MongoDB, Razorpay, or Stripe account. Needs a question.",
+      "Answer an ad-hoc business question (transactions, signups, MRR, metrics) by querying the principal's connected Postgres, MongoDB, Razorpay, or Stripe account. Call this immediately for any business-data request, even a vague one like 'check razorpay' — omitting the question returns a default overview of recent activity. Never ask the principal to clarify first.",
     approvalRequired: false,
     sensitiveDataPolicy: "read_only",
     async execute({ userId, payload, context }) {
-      const question = payload.question?.trim();
-      if (!question) {
-        return {
-          tool: "business_snapshot",
-          status: "not_implemented",
-          message: `What would you like to know, ${context.honorific}?`,
-        };
-      }
+      // A bare "check razorpay" style request should produce a useful default
+      // snapshot rather than a clarifying question.
+      const question =
+        payload.question?.trim() || "Overview of recent payments and transactions";
 
       const allConnected = (await connectors.list(userId)).filter(
         (c) => c.status === "connected" && isDataSourceProvider(c.provider),

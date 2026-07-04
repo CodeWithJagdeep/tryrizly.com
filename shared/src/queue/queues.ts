@@ -1,6 +1,9 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
+import { safeJobId } from "./job-id";
+
+export { safeJobId } from "./job-id";
 import type { ReminderRequest } from "./types";
 
 let notificationQueue: Queue | undefined;
@@ -17,7 +20,7 @@ export async function enqueueReminder(request: ReminderRequest) {
   const taskId = request.taskId ?? crypto.randomUUID();
 
   if (request.repeat) {
-    const schedulerId = request.dedupeKey ?? `reminder:${taskId}`;
+    const schedulerId = safeJobId(request.dedupeKey ?? `reminder:${taskId}`);
     const job = await getNotificationQueue().upsertJobScheduler(
       schedulerId,
       { pattern: request.repeat.cron, tz: request.repeat.tz },
@@ -57,7 +60,7 @@ export async function enqueueReminder(request: ReminderRequest) {
   }
 
   const delay = Math.max(runAt.getTime() - Date.now(), 0);
-  const jobId = request.dedupeKey ?? `reminder:${taskId}`;
+  const jobId = safeJobId(request.dedupeKey ?? `reminder:${taskId}`);
 
   const job = await getNotificationQueue().add(
     "telegram-notification",

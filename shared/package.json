@@ -30,6 +30,10 @@
       "types": "./dist/db/mongo.d.ts",
       "default": "./dist/db/mongo.js"
     },
+    "./queue/job-id": {
+      "types": "./dist/queue/job-id.d.ts",
+      "default": "./dist/queue/job-id.js"
+    },
     "./queue/connection": {
       "types": "./dist/queue/connection.d.ts",
       "default": "./dist/queue/connection.js"

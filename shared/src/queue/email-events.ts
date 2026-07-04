@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
+import { safeJobId } from "./job-id";
 import type { EmailEventJobData } from "./types";
 
 let emailEventQueue: Queue<EmailEventJobData> | undefined;
@@ -13,7 +14,7 @@ export function getEmailEventQueue() {
 }
 
 export async function enqueueEmailEvent(data: EmailEventJobData) {
-  const jobId = `email-event:${data.userId}:${data.messageId}`;
+  const jobId = safeJobId(`email-event:${data.userId}:${data.messageId}`);
 
   const job = await getEmailEventQueue().add("email-event", data, {
     attempts: 2,

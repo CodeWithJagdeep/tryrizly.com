@@ -23,6 +23,7 @@ import {
   subscribeToOpenSearch,
   subscribeToSessions,
 } from "../lib/chat-store";
+import { isSidebarOpen, setSidebarOpen, subscribeToSidebar } from "../lib/sidebar-store";
 
 export function ChatSidebar({
   name,
@@ -43,7 +44,19 @@ export function ChatSidebar({
   const [telegramLinked, setTelegramLinked] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [emailBadge, setEmailBadge] = useState(0);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const sync = () => setMobileOpen(isSidebarOpen());
+    sync();
+    return subscribeToSidebar(sync);
+  }, []);
+
+  // Close the mobile drawer whenever navigation happens.
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname, activeId]);
 
   useEffect(() => {
     const sync = () => setSessions(getSessions());
@@ -155,7 +168,20 @@ export function ChatSidebar({
   ];
 
   return (
-    <aside className="fixed bottom-0 left-0 top-14 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        />
+      )}
+      <aside
+        className={`fixed bottom-0 left-0 top-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:top-14 lg:z-auto lg:w-64 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
 
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
@@ -283,7 +309,8 @@ export function ChatSidebar({
           <span className="truncate text-[13px] text-slate-400">{email}</span>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 

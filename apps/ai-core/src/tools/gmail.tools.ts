@@ -229,6 +229,22 @@ export function createSendEmailTool(
         };
       }
 
+      // Placeholder guard: models leave template tokens like "[Your Name]" in
+      // the body and still send. Fill the sign-off we know; refuse on the rest
+      // rather than putting a literal placeholder in front of a real recipient.
+      let body = payload.body;
+      if (context.principalName) {
+        body = body.replace(/\[\s*(?:your|my)?\s*name\s*\]/gi, context.principalName);
+      }
+      const leftoverPlaceholder = body.match(/\[[A-Za-z][^\]\n]{1,40}\]/);
+      if (leftoverPlaceholder) {
+        return {
+          tool: "send_email",
+          status: "not_implemented",
+          message: `The draft still has an unfilled placeholder ${leftoverPlaceholder[0]}, ${context.honorific} — tell me what goes there and I'll send it.`,
+        };
+      }
+
       // Server-side recovery net: don't trust the model to have carried these
       // forward from the draft step — a dropped threadId/inReplyTo silently
       // sends a brand-new, unthreaded email instead of a reply.
@@ -243,7 +259,7 @@ export function createSendEmailTool(
       const res = await google.sendMessage(userId, {
         to: payload.to,
         subject: payload.subject ?? "",
-        body: payload.body,
+        body,
         threadId,
         inReplyTo,
       });

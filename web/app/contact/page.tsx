@@ -111,7 +111,7 @@ export default function ContactPage() {
             <div className="p-10 border-2 border-black bg-[#FE7F2D]/5">
               <h4 className="text-lg font-semibold mb-4">Enterprise inquiries</h4>
               <p className="text-gray-500 leading-relaxed mb-6">
-                Need a custom demo, security questionnaire, or SOC2 report? Our team is ready to assist.
+                Need a custom demo or help with a security questionnaire? Our team is ready to assist.
               </p>
               <a href="mailto:sales@getrizly.com" className="text-[13px] font-semibold underline hover:text-[#FE7F2D] transition-colors">
                 Book a meeting

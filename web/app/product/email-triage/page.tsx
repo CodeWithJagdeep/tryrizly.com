@@ -3,11 +3,12 @@ import type { Metadata } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Email Triage",
-  description: "Classify, summarize, draft, and route important messages automatically.",
+  title: "AI Email Triage for Gmail",
+  description:
+    "Rizly classifies and summarizes Gmail threads, drafts replies in your tone, and sends only after you approve in Telegram.",
   alternates: { canonical: `${SITE_URL}/product/email-triage` },
   openGraph: {
-    title: "Email Triage",
+    title: "AI Email Triage for Gmail",
     description: "Classify, summarize, draft, and route important messages automatically.",
     url: `${SITE_URL}/product/email-triage`,
     type: "website",

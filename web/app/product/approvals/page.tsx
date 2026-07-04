@@ -3,11 +3,12 @@ import type { Metadata } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "Approvals",
-  description: "Approve outbound actions before anything is sent.",
+  title: "Approval-First AI Actions",
+  description:
+    "Every outbound email, calendar event, and reschedule waits for your explicit approval in Telegram or the dashboard before it runs.",
   alternates: { canonical: `${SITE_URL}/product/approvals` },
   openGraph: {
-    title: "Approvals",
+    title: "Approval-First AI Actions",
     description: "Approve outbound actions before anything is sent.",
     url: `${SITE_URL}/product/approvals`,
     type: "website",

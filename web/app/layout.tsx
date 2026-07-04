@@ -66,11 +66,11 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Rizly | The AI Assistant That Runs Your Day",
+    default: "Rizly | Telegram AI Assistant for Email, Calendar & Revenue",
     template: "%s | Rizly",
   },
   description:
-    "Rizly watches your email, calendar, and reminders, then sends you a short list of decisions to approve in Telegram or the dashboard. Built for anyone whose day runs on email and meetings.",
+    "Rizly is a Telegram-first AI operator. It triages Gmail, briefs your calendar, watches Stripe and your databases, then asks for approval before anything sends.",
   keywords: [
     "AI personal assistant",
     "AI daily assistant",
@@ -97,16 +97,16 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "Rizly",
-    title: "Rizly | The AI Assistant That Runs Your Day",
+    title: "Rizly | Telegram AI Assistant for Email, Calendar & Revenue",
     description:
-      "Rizly watches your inbox, calendar, and reminders, and only speaks up when there is a decision worth making.",
+      "A Telegram-first AI operator that triages Gmail, briefs your calendar, and asks before anything sensitive runs.",
     // og:image comes from the app/opengraph-image.tsx file convention.
   },
   twitter: {
     card: "summary_large_image",
-    title: "Rizly | The AI Assistant That Runs Your Day",
+    title: "Rizly | Telegram AI Assistant for Email, Calendar & Revenue",
     description:
-      "Rizly watches your inbox, calendar, and reminders, and only speaks up when there is a decision worth making.",
+      "A Telegram-first AI operator that triages Gmail, briefs your calendar, and asks before anything sensitive runs.",
     creator: "@rizly",
   },
   // No root-level alternates.canonical: it cascades to child pages that don't

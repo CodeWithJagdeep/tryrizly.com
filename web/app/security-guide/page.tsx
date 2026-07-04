@@ -53,9 +53,9 @@ export default function SecurityGuidePage() {
           </div>
 
           <div className="border-l-2 border-[#FE7F2D] pl-6">
-            <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Compliance</h2>
+            <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Data discipline</h2>
             <p className="text-slate-600 leading-relaxed">
-              GDPR compliant. CCPA compliant. SOC 2 in progress. We take regulatory requirements as seriously as we take your privacy.
+              Connector credentials are encrypted with AES-256-GCM, database and payment connections are read-only, and outbound actions always wait for your explicit approval.
             </p>
           </div>
 

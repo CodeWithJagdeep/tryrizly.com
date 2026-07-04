@@ -3,12 +3,13 @@ import type { Metadata } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
 export const metadata: Metadata = {
-  title: "AI Operator",
-  description: "Chat with Riz across your inbox, calendar, and business data.",
+  title: "Telegram AI Operator for Founders",
+  description:
+    "One AI operator across Gmail, Google Calendar, and revenue data, talking to you in Telegram and asking before anything sensitive runs.",
   alternates: { canonical: `${SITE_URL}/product/ai-operator` },
   openGraph: {
-    title: "AI Operator",
-    description: "Chat with Riz across your inbox, calendar, and business data.",
+    title: "Telegram AI Operator for Founders",
+    description: "One AI operator across your inbox, calendar, and business data, in Telegram.",
     url: `${SITE_URL}/product/ai-operator`,
     type: "website",
   },

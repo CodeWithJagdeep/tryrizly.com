@@ -180,8 +180,11 @@ export class AgentService {
       }
 
       if (step.action !== "tool" || !step.tool_name) {
+        const fallbackReply =
+          toolResults.at(-1)?.message ??
+          `I checked, ${input.context.honorific}, but I don't have a clear result.`;
         return respond({
-          reply: cleanSay(step.say) ?? `Done, ${input.context.honorific}.`,
+          reply: cleanSay(step.say) ?? fallbackReply,
           provider,
           steps,
           toolResults,
@@ -440,7 +443,7 @@ function ruleSelectTool(
   if (/(remember|recall|what did|note)/.test(text)) {
     return { name: "memory_recall", payload: { query: message } };
   }
-  if (/(mrr|revenue|razorpay|metric)/.test(text)) {
+  if (/(mrr|revenue|revue|razorpay|stripe|payment|payments|subscription|subscriptions|metric)/.test(text)) {
     return { name: "business_snapshot", payload: {} };
   }
   return undefined;

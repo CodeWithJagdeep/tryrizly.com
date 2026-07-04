@@ -18,8 +18,12 @@ export const scheduleReminderTool: HeyRizTool<ReminderRequest> = {
     "updates the schedule instead of duplicating it.",
   approvalRequired: false,
   sensitiveDataPolicy: "none",
-  async execute({ payload, context }) {
-    const normalized: ReminderRequest = { ...payload, source: payload.source ?? "ai-core" };
+  async execute({ userId, payload, context }) {
+    const normalized: ReminderRequest = {
+      ...payload,
+      userId,
+      source: payload.source ?? "ai-core",
+    };
 
     // A one-time reminder given as a naive local datetime ("2026-07-04T08:00")
     // is the principal's wall-clock time — convert it to a UTC instant in their

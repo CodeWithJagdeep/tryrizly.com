@@ -1179,6 +1179,8 @@ export function OnboardingClient() {
                     </p>
                     <a
                       href={telegram.deepLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex h-[44px] items-center justify-center bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
                     >
                       Open Telegram bot

@@ -226,6 +226,8 @@ function LinkTelegramPanel({ telegram }: { telegram: { deepLink: string; qrCode:
             />
             <a
               href={telegram.deepLink}
+              target="_blank"
+              rel="noopener noreferrer"
               className="mt-5 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
             >
               Open Telegram

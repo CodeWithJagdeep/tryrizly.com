@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
       process.env.LINKEDIN_REDIRECT_URI ??
       "https://getrizly.com/api/auth/oauth/linkedin/callback",
     LINKEDIN_SCOPES: process.env.LINKEDIN_SCOPES ?? "openid profile email",
+    NEXT_PUBLIC_GATEWAY_URL:
+      process.env.NEXT_PUBLIC_GATEWAY_URL ?? "https://api.getrizly.com",
+    WEB_APP_URL: process.env.WEB_APP_URL ?? "https://getrizly.com",
   },
   images: {
     remotePatterns: [

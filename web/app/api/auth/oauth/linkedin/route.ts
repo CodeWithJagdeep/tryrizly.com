@@ -13,10 +13,20 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
-  const { state } = await callGateway<{ state: string }>("/api/auth/oauth/state", {
-    provider: "linkedin",
-    returnTo,
-  });
+  let state: string | undefined;
+  try {
+    ({ state } = await callGateway<{ state: string }>("/api/auth/oauth/state", {
+      provider: "linkedin",
+      returnTo,
+    }));
+  } catch {
+    state = undefined;
+  }
+
+  if (!state) {
+    const baseUrl = process.env.WEB_APP_URL || new URL(request.url).origin;
+    return Response.redirect(`${baseUrl}/login?error=linkedin_state_init_failed`);
+  }
 
   const authUrl = new URL("https://www.linkedin.com/oauth/v2/authorization");
   authUrl.searchParams.set("response_type", "code");

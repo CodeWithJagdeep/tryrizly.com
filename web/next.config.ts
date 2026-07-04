@@ -2,11 +2,27 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // Fallbacks for deploys where env vars aren't configured (e.g. Vercel).
-  // Real env vars always take precedence. Only public-safe values belong
-  // here: the client ID and redirect URI appear in the OAuth URL anyway.
-  // GOOGLE_CLIENT_SECRET must stay a real env var and is never needed here.
+  // Fallbacks for deploys where env vars aren't configured (Cloud Run).
+  // Real env vars always take precedence. WARNING: this includes secrets
+  // baked into a private repo at the owner's request. If the repo ever
+  // goes public, rotate AUTH_*, RESEND_API_KEY, and TELEGRAM_BOT_TOKEN.
+  // AUTH_* values must match the gateway env on the production VM.
   env: {
+    NEXT_PUBLIC_SITE_URL:
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com",
+    AUTH_INTERNAL_SECRET:
+      process.env.AUTH_INTERNAL_SECRET ??
+      "Y78vEBQB8cNNqM6bSnv7w0GfSp6qomcAoNdJdY6o2/6fddxea1ZM8Q1cjcsb4eao",
+    AUTH_JWT_SECRET:
+      process.env.AUTH_JWT_SECRET ??
+      "2CAK52uRNuzrSxFrdRNRZexpB5Qqc/go44RNbF7CrvjKFoXAkmk24QueAv1p9G35",
+    RESEND_API_KEY:
+      process.env.RESEND_API_KEY ?? "re_XGoKhDW3_K3eFDB6xYrQNWBUm1AZFYBZq",
+    RESEND_FROM: process.env.RESEND_FROM ?? "Rizly <noreply@getrizly.com>",
+    TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME ?? "tryrizlybot",
+    TELEGRAM_BOT_TOKEN:
+      process.env.TELEGRAM_BOT_TOKEN ??
+      "8094927949:AAHaYrvy7bpMNUAFHhTvhPd0Jj8i-HUiq_4",
     GOOGLE_CLIENT_ID:
       process.env.GOOGLE_CLIENT_ID ??
       "927489744703-ipmeciigf234kkceflkatb0o6pg55tlu.apps.googleusercontent.com",

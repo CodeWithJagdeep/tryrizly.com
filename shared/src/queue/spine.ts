@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
+import { safeJobId } from "./job-id";
 import type { SpineJobData } from "./types";
 
 let spineQueue: Queue<SpineJobData> | undefined;
@@ -20,7 +21,7 @@ export function getSpineQueue() {
  * (user, message) via jobId.
  */
 export async function enqueueSpineIngest(data: SpineJobData) {
-  const jobId = `spine:${data.userId}:${data.messageId}`;
+  const jobId = safeJobId(`spine:${data.userId}:${data.messageId}`);
   const job = await getSpineQueue().add("spine-ingest-email", data, {
     attempts: 5,
     backoff: { type: "exponential", delay: 10_000 },

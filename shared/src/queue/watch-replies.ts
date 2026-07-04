@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
+import { safeJobId } from "./job-id";
 import type { WatchReplyJobData, WatchReplyRequest } from "./types";
 
 let watchReplyQueue: Queue<WatchReplyJobData> | undefined;
@@ -17,7 +18,7 @@ export async function enqueueWatchReply(request: WatchReplyRequest) {
   const attempt = request.attempt ?? 1;
   const maxAttempts = request.maxAttempts ?? 4;
   const delay = Math.max(request.delayMs ?? request.nextDelayMs, 0);
-  const jobId = `watch-reply:${request.userId}:${request.threadId}:${attempt}`;
+  const jobId = safeJobId(`watch-reply:${request.userId}:${request.threadId}:${attempt}`);
 
   const job = await getWatchReplyQueue().add(
     "watch-reply",

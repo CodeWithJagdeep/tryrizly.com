@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
+import { safeJobId } from "./job-id";
 import type { OutboundEmailJobData } from "./types";
 
 let queue: Queue<OutboundEmailJobData> | undefined;
@@ -17,7 +18,7 @@ export async function enqueueOutboundEmail(
   sendAt: Date,
 ) {
   const delay = Math.max(0, sendAt.getTime() - Date.now());
-  const jobId = `outbound-email:${data.userId}:${data.to}:${sendAt.getTime()}`;
+  const jobId = safeJobId(`outbound-email:${data.userId}:${data.to}:${sendAt.getTime()}`);
   return getQueue().add("outbound-email", data, {
     delay,
     jobId,

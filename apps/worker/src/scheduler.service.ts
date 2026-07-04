@@ -8,7 +8,7 @@ import { Queue, Worker } from "bullmq";
 import { firstValueFrom } from "rxjs";
 import { createRedisConnection } from "@heyriz/shared/queue/connection";
 import { queueNames } from "@heyriz/shared/queue/names";
-import { getNotificationQueue } from "@heyriz/shared/queue/queues";
+import { getNotificationQueue, safeJobId } from "@heyriz/shared/queue/queues";
 import { enqueueEmailEvent } from "@heyriz/shared/queue/email-events";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
@@ -194,7 +194,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             source: "gateway" as const,
             emailFallback: nudge.emailFallback,
           },
-          { jobId: `${nudge.kind}:${nudge.userId}:${new Date().toISOString().slice(0, 10)}` },
+          { jobId: safeJobId(`${nudge.kind}:${nudge.userId}:${new Date().toISOString().slice(0, 10)}`) },
         );
         logger.info("billing nudge enqueued", { userId: nudge.userId, kind: nudge.kind });
       } catch (err) {

@@ -9,7 +9,7 @@ const faqs = [
   },
   {
     question: "Is my data encrypted and secure?",
-    answer: "Yes. All data is encrypted with AES-256 and processed in isolated, ephemeral containers that are destroyed after each session. We're GDPR and CCPA compliant with zero data retention policies.",
+    answer: "Yes. Connector credentials are encrypted with AES-256-GCM, database and payment connections are read-only, and sensitive Gmail and Calendar content is fetched live when needed instead of being copied and stored. Outbound actions always wait for your approval.",
   },
   {
     question: "What happens if I don't approve something?",

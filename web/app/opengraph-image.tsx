@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 
-export const alt = "Rizly — Proactive AI Operator for Founders";
+export const alt = "Rizly, the Telegram-first AI operator";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -17,9 +17,9 @@ export default async function OgImage() {
     (
       <div
         style={{
-          background: "#0a0f1e",
+          background: "#0d0d0d",
           backgroundImage:
-            "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(55,132,255,0.18), transparent)",
+            "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(254,127,45,0.16), transparent)",
           width: "100%",
           height: "100%",
           display: "flex",
@@ -45,18 +45,18 @@ export default async function OgImage() {
               letterSpacing: "-0.02em",
             }}
           >
-            Proactive AI Operator for Founders
+            The Telegram-first AI operator
           </div>
           <div
             style={{
               fontSize: 24,
-              color: "#8b9cb8",
+              color: "#a3a39e",
               maxWidth: 680,
               lineHeight: 1.5,
             }}
           >
-            Monitors your inbox, calendar, and tools inside Telegram. Only
-            speaks up when it matters.
+            Triages Gmail, briefs your calendar, watches revenue, and asks
+            before anything sensitive runs.
           </div>
         </div>
 
@@ -69,12 +69,12 @@ export default async function OgImage() {
             width: "100%",
           }}
         >
-          <div style={{ fontSize: 18, color: "#4a5568", fontWeight: 500 }}>
+          <div style={{ fontSize: 18, color: "#8a8a85", fontWeight: 500 }}>
             getrizly.com
           </div>
           <div
             style={{
-              background: "#3784ff",
+              background: "#FE7F2D",
               color: "#ffffff",
               fontSize: 16,
               fontWeight: 600,
@@ -82,7 +82,7 @@ export default async function OgImage() {
               borderRadius: 8,
             }}
           >
-            Get Early Access
+            Start Free Trial
           </div>
         </div>
       </div>

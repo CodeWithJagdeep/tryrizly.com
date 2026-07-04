@@ -71,11 +71,23 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
     const next = sanitizeReturnPath(params.get("next"));
     api
       .get("/auth/me")
-      .then(() =>
+      .then(async () => {
+        // Already signed in. Users who never finished onboarding go there,
+        // not to the dashboard, otherwise they can never reach the flow again.
+        try {
+          const res = await fetch("/api/onboarding/status");
+          const data = (await res.json()) as { onboarding?: { completedAt?: string } };
+          if (res.ok && !data.onboarding?.completedAt) {
+            router.replace("/onboarding");
+            return;
+          }
+        } catch {
+          // fall through to the dashboard on status errors
+        }
         router.replace(
           next || (requestedPlan ? `/dashboard?plan=${requestedPlan}` : "/dashboard"),
-        ),
-      )
+        );
+      })
       .catch(() => null);
   }, [router, params, requestedPlan]);
 

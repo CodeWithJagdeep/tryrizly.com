@@ -54,7 +54,7 @@ export function ApprovalsClient() {
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 py-8 sm:px-8">
+      <section className="flex w-full flex-col gap-7 px-6 py-8">
         <header className="flex flex-col gap-3 border-b border-slate-200 pb-6">
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
             rizly

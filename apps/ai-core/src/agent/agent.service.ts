@@ -115,6 +115,7 @@ export class AgentService {
     }
 
     let escalated = false;
+    let promiseNudges = 0;
 
     for (let i = 0; i < env.AGENT_MAX_STEPS; i += 1) {
       const tier =
@@ -180,11 +181,38 @@ export class AgentService {
       }
 
       if (step.action !== "tool" || !step.tool_name) {
+        const say = cleanSay(step.say);
+        // A "say" that promises imminent action ("Creating the event now.") is a
+        // stall, not an answer — returning it ends the turn with nothing executed
+        // and the principal believes it happened. Bounce it back (twice at most —
+        // observed stalls re-promise after one nudge), on the strong tier,
+        // demanding the actual tool step. The regex is the free fast path; when
+        // it misses AND no tool has run this turn, a cheap-tier LLM judge covers
+        // what the regex can't (non-English replies, novel phrasing).
+        const stalled =
+          say && promiseNudges < 2
+            ? promisesAction(say) ||
+              (toolResults.length === 0 &&
+                say.length < 240 &&
+                (await this.saysItIsActing(say, input.userId)))
+            : false;
+        if (say && stalled) {
+          promiseNudges += 1;
+          escalated = true;
+          messages.push(assistantOf(step));
+          messages.push({
+            role: "user",
+            content:
+              `OBSERVATION: nothing was executed. You said "${say.slice(0, 160)}" but emitted no tool step — the action did NOT happen. ` +
+              `If you intend to act, respond with the tool JSON now. Only "say" to report a real tool result or to ask the principal a question.`,
+          });
+          continue;
+        }
         const fallbackReply =
           toolResults.at(-1)?.message ??
           `I checked, ${input.context.honorific}, but I don't have a clear result.`;
         return respond({
-          reply: cleanSay(step.say) ?? fallbackReply,
+          reply: say ?? fallbackReply,
           provider,
           steps,
           toolResults,
@@ -244,6 +272,37 @@ export class AgentService {
       steps,
       toolResults,
     });
+  }
+
+  /**
+   * LLM fallback for the promise-stall guard, for phrasings PROMISE_RE can't
+   * see (the principal may be spoken to in any language). Deliberately gated
+   * by the caller to zero-tool turns with short replies so it stays off the
+   * common path. Fails open: a judge error must never block a real answer.
+   */
+  private async saysItIsActing(say: string, userId: string): Promise<boolean> {
+    try {
+      const verdict = await this.llm.complete({
+        messages: [
+          {
+            role: "user",
+            content:
+              `An AI assistant ended its turn with the message below without performing any action. ` +
+              `Answer exactly YES or NO: does the message claim the assistant is currently performing ` +
+              `or about to perform a concrete action (sending, creating, scheduling, checking, etc.), ` +
+              `rather than reporting a finished result, answering, or asking the user a question? ` +
+              `The message may be in any language.\n\nMessage: "${say}"`,
+          },
+        ],
+        temperature: 0,
+        task: "agent",
+        provider: CHEAP_TIER,
+        userId,
+      });
+      return /^\s*yes\b/i.test(verdict ?? "");
+    } catch {
+      return false;
+    }
   }
 
   /** Appends a one-time-per-cycle "approaching your AI budget" note when warranted. */
@@ -482,6 +541,17 @@ function looksLikeFabricatedObservation(raw: string): boolean {
     if (!VALID_TOOL_STATUSES.has(match[1])) return true;
   }
   return false;
+}
+
+/**
+ * A reply that announces an action in progress or about to happen. These are
+ * only legitimate alongside a tool step; alone they mean the model stalled.
+ */
+const PROMISE_RE =
+  /\b(?:creating|scheduling|sending|adding|booking|drafting|saving|updating|cancelling|canceling|rescheduling|setting|checking|verifying)\b[^.!?]{0,80}\bnow\b|\b(?:i(?:'|’)?ll|i will|let me|going to)\s+(?:create|schedule|send|add|book|draft|save|update|cancel|reschedule|set|check|verify|look)\b/i;
+
+function promisesAction(say: string): boolean {
+  return PROMISE_RE.test(say);
 }
 
 function cleanSay(say?: string | null): string | undefined {

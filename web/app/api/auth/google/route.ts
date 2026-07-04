@@ -12,10 +12,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
-  const stateResult = await callGateway<{ state?: string; error?: string }>("/api/auth/oauth/state", {
-    provider: "google",
-    returnTo,
-  });
+  let stateResult: { state?: string; error?: string };
+  try {
+    stateResult = await callGateway<{ state?: string; error?: string }>("/api/auth/oauth/state", {
+      provider: "google",
+      returnTo,
+    });
+  } catch {
+    stateResult = {};
+  }
 
   if (!stateResult.state) {
     const baseUrl = process.env.WEB_APP_URL || new URL(request.url).origin;

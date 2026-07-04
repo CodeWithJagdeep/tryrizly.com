@@ -16,8 +16,8 @@ export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="grid grid-cols-5">
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden">
+      <div className="pointer-events-auto grid w-full max-w-sm grid-cols-5 rounded-full border border-slate-200 bg-white/95 px-2 shadow-[0_8px_30px_-8px_rgba(15,23,42,0.35)] backdrop-blur">
         {items.map((item) => {
           const isActive =
             item.href === "/dashboard"
@@ -28,7 +28,7 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 py-2 text-[10px] font-medium ${
+              className={`flex flex-col items-center gap-0.5 rounded-full py-2.5 text-[10px] font-medium ${
                 isActive ? "text-[#FE7F2D]" : "text-slate-500"
               }`}
             >
@@ -40,7 +40,7 @@ export function MobileNav() {
         <button
           type="button"
           onClick={toggleSidebar}
-          className="flex flex-col items-center gap-1 py-2 text-[10px] font-medium text-slate-500"
+          className="flex flex-col items-center gap-0.5 rounded-full py-2.5 text-[10px] font-medium text-slate-500"
         >
           <LayersIcon className="h-5 w-5" />
           Menu

@@ -223,7 +223,8 @@ export function ConnectorsClient() {
         throw new Error("Failed to load connectors");
       }
 
-      setConnectors((await response.json()) as ConnectorSummary[]);
+      const data = (await response.json()) as unknown;
+      setConnectors(Array.isArray(data) ? (data as ConnectorSummary[]) : []);
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to load connectors");

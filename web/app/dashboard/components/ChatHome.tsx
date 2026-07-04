@@ -197,10 +197,10 @@ export function ChatHome({ name }: { name?: string }) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-white">
+    <main className="flex min-h-0 flex-1 flex-col bg-white">
       {hasMessages ? (
         <>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8">
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-36 lg:pb-8">
             <div className="mx-auto flex max-w-2xl flex-col gap-3">
               {session!.messages.map((turn, index) => {
                 const isLast = index === session!.messages.length - 1;
@@ -250,7 +250,7 @@ export function ChatHome({ name }: { name?: string }) {
             </div>
           </div>
 
-          <div className="px-6 pb-8">
+          <div className="sticky bottom-0 bg-white px-6 pb-24 pt-3 lg:pb-8">
             <div className="mx-auto w-full max-w-2xl">
               {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
               <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
@@ -259,7 +259,7 @@ export function ChatHome({ name }: { name?: string }) {
         </>
       ) : (
         <div
-          className="relative flex flex-1 flex-col items-center overflow-y-auto px-6 pb-16"
+          className="relative flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pb-24 lg:pb-16"
           style={{
             background:
               "radial-gradient(60% 45% at 50% 0%, rgba(254,127,45,0.08), transparent 62%), radial-gradient(42% 34% at 88% 6%, rgba(96,165,250,0.06), transparent 60%), radial-gradient(42% 34% at 10% 12%, rgba(244,114,182,0.06), transparent 60%), #fbfbfa",
@@ -414,4 +414,3 @@ function SparkIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-

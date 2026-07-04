@@ -19,11 +19,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900">
       <TrialBar />
-      <div className="relative flex flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <Suspense fallback={null}>
           <ChatSidebar name={session.name} email={session.email} />
         </Suspense>
-        <div className="flex-1 pb-16 lg:pb-0 lg:pl-64">
+        <div className="flex min-h-0 flex-1 flex-col pb-16 lg:pb-0 lg:pl-64">
           <TelegramBanner />
           {children}
         </div>

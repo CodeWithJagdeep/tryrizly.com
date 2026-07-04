@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
     GOOGLE_LOGIN_REDIRECT_URI:
       process.env.GOOGLE_LOGIN_REDIRECT_URI ??
       "https://getrizly.com/api/auth/google/callback",
+    LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID ?? "77q1dwz0kefw6u",
+    LINKEDIN_REDIRECT_URI:
+      process.env.LINKEDIN_REDIRECT_URI ??
+      "https://getrizly.com/api/auth/oauth/linkedin/callback",
+    LINKEDIN_SCOPES: process.env.LINKEDIN_SCOPES ?? "openid profile email",
   },
   images: {
     remotePatterns: [

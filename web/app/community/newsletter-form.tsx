@@ -53,7 +53,13 @@ export function NewsletterSignup() {
           Subscription failed. Please try again.
         </p>
       )}
-      <p className="mt-2 text-xs text-gray-400">No spam, unsubscribe anytime.</p>
+      <p className="mt-2 text-xs text-gray-400">
+        No spam, unsubscribe anytime. See our{" "}
+        <a href="/privacy" className="underline">
+          Privacy Policy
+        </a>
+        .
+      </p>
     </form>
   );
 }

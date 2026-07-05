@@ -61,14 +61,14 @@ export function CreditsBadge() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+        className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/20"
       >
         <SparkleIcon />
         {unlimited ? "Unlimited" : remaining.toLocaleString()}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-lg">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-900">{PLAN_NAMES[usage.planId] ?? "Free"}</p>
             <Link

@@ -4,6 +4,10 @@ import { Transport } from "@nestjs/microservices";
 import { BillingModule } from "./billing.module";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { initSentry, captureException } from "@heyriz/shared/sentry";
+import { SentryRpcExceptionFilter } from "./sentry-exception.filter";
+
+initSentry("billing");
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice(BillingModule, {
@@ -14,6 +18,7 @@ async function bootstrap() {
     },
   });
 
+  app.useGlobalFilters(new SentryRpcExceptionFilter());
   await app.listen();
 
   logger.info("billing nest tcp listening", {
@@ -23,6 +28,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  captureException(error);
   logger.error("billing failed to start", {
     error: error instanceof Error ? error.message : String(error),
   });

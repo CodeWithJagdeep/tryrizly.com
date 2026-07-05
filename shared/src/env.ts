@@ -20,6 +20,8 @@ const schema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  // Error monitoring — inert (no Sentry.init call) when unset, in every service.
+  SENTRY_DSN: z.string().optional(),
   GATEWAY_PORT: z.coerce.number().int().positive().default(4000),
   AI_CORE_TCP_HOST: z.string().default("127.0.0.1"),
   AI_CORE_TCP_PORT: z.coerce.number().int().positive().default(4100),

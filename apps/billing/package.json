@@ -16,6 +16,7 @@
     "@nestjs/common": "^11.1.27",
     "@nestjs/core": "^11.1.27",
     "@nestjs/microservices": "^11.1.27",
+    "@sentry/node": "^10.63.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"

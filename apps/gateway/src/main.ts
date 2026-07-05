@@ -3,6 +3,10 @@ import { NestFactory } from "@nestjs/core";
 import { env } from "@heyriz/shared/env";
 import { GatewayModule } from "./gateway.module";
 import { logger } from "@heyriz/shared/logger";
+import { initSentry, captureException } from "@heyriz/shared/sentry";
+import { SentryExceptionFilter } from "./sentry-exception.filter";
+
+initSentry("gateway");
 
 function allowedOrigins(): Set<string> {
   const origins = new Set<string>();
@@ -25,6 +29,7 @@ async function bootstrap() {
     logger: ["error", "warn", "log"],
     rawBody: true,
   });
+  app.useGlobalFilters(new SentryExceptionFilter());
   const origins = allowedOrigins();
   app.enableCors({
     origin(origin, callback) {
@@ -50,6 +55,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  captureException(error);
   logger.error("gateway failed to start", {
     error: error instanceof Error ? error.message : String(error),
   });

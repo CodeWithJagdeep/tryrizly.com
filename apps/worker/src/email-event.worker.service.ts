@@ -11,6 +11,7 @@ import { queueNames } from "@heyriz/shared/queue/names";
 import type { EmailEventJobData, EmailEventJobName } from "@heyriz/shared/queue/types";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 
 @Injectable()
 export class EmailEventWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -52,6 +53,7 @@ export class EmailEventWorkerService implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on("failed", (job, error) => {
+      captureException(error, { job: "email-event", jobId: job?.id });
       logger.error("email event job failed", {
         jobId: job?.id,
         messageId: job?.data?.messageId,

@@ -7,6 +7,7 @@ import { queueNames } from "@heyriz/shared/queue/names";
 import type { OutboundEmailJobData, OutboundEmailJobName } from "@heyriz/shared/queue/types";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 
 @Injectable()
 export class OutboundEmailWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -38,6 +39,7 @@ export class OutboundEmailWorkerService implements OnModuleInit, OnModuleDestroy
     );
 
     this.worker.on("failed", (job, error) => {
+      captureException(error, { job: "outbound-email", jobId: job?.id });
       logger.error("outbound email job failed", {
         jobId: job?.id,
         to: job?.data?.to,

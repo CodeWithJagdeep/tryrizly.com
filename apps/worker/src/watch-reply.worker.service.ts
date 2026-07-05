@@ -15,6 +15,7 @@ import type {
 import { enqueueWatchReply } from "@heyriz/shared/queue/watch-replies";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
 
 type CheckThreadReplyResult = {
@@ -97,6 +98,7 @@ export class WatchReplyWorkerService implements OnModuleInit, OnModuleDestroy {
     );
 
     this.worker.on("failed", (job, error) => {
+      captureException(error, { job: "watch-reply", jobId: job?.id });
       logger.error("watch reply job failed", {
         jobId: job?.id,
         error: error.message,

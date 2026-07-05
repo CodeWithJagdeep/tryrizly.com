@@ -1,7 +1,10 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { logger } from "@heyriz/shared/logger";
+import { initSentry, captureException } from "@heyriz/shared/sentry";
 import { NotificationWorkerModule } from "./notification.module";
+
+initSentry("worker");
 
 async function bootstrap() {
   await NestFactory.createApplicationContext(NotificationWorkerModule, {
@@ -12,6 +15,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  captureException(error);
   logger.error("notification worker failed to start", {
     error: error instanceof Error ? error.message : String(error),
   });

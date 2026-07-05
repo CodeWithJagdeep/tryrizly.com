@@ -12,6 +12,7 @@ import { getNotificationQueue, safeJobId } from "@heyriz/shared/queue/queues";
 import { enqueueEmailEvent } from "@heyriz/shared/queue/email-events";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 
 /**
  * The cron heartbeat. It owns no intelligence: on each tick it asks ai-core to
@@ -93,9 +94,15 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         if (job.name === "meeting-sync") {
           await this.forEachActiveUser("calendar", async (userId) => {
             const result = await firstValueFrom(
-              this.aiCore.send("proactive.sync", { userId }),
+              this.aiCore.send("proactive.sync", { userId, source: "calendar" }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, result });
+            logger.info("scheduler tick handled", { job: job.name, userId, source: "calendar", result });
+          });
+          await this.forEachActiveUser("calcom", async (userId) => {
+            const result = await firstValueFrom(
+              this.aiCore.send("proactive.sync", { userId, source: "calcom" }),
+            );
+            logger.info("scheduler tick handled", { job: job.name, userId, source: "calcom", result });
           });
           return;
         }
@@ -134,6 +141,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     );
 
     worker.on("failed", (job, error) => {
+      captureException(error, { job: job?.name });
       logger.error("scheduler job failed", {
         job: job?.name,
         error: error.message,

@@ -262,7 +262,7 @@ export class AuthService {
 
   async patchOnboarding(
     email: string,
-    patch: { source?: string; googleConnected?: boolean; completedAt?: string },
+    patch: { source?: string; googleConnected?: boolean; completedAt?: string; dashboardTourSeenAt?: string },
   ) {
     const normalized = normalizeEmail(email);
     // Guard: if the DB was wiped but the JWT is still valid, the user document

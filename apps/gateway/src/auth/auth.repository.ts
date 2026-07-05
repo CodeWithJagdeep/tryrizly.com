@@ -7,6 +7,8 @@ export type OnboardingState = {
   googleConnected: boolean;
   telegramLinked: boolean;
   completedAt?: string;
+  /** Set once the dashboard's first-run welcome tour has been shown/dismissed. */
+  dashboardTourSeenAt?: string;
 };
 
 export type StoredUser = {

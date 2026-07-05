@@ -78,12 +78,27 @@ export class BudgetGateService {
   /** Budget check plus a per-task cost breakdown, for the dashboard's Usage view. */
   async summary(userId: string) {
     const cycleStart = currentCycleStart();
-    const [check, breakdown] = await Promise.all([
+    const [check, breakdown, planId, recentRaw] = await Promise.all([
       this.check(userId),
       this.usageLedger.breakdownSince(userId, cycleStart),
+      this.planBudget.getPlanId(userId),
+      this.usageLedger.recentEntries(userId, 15),
     ]);
     const creditsUsed = creditsForUsd(check.spendUsd);
     const creditsBudget = Number.isFinite(check.budgetUsd) ? creditsForUsd(check.budgetUsd) : Infinity;
-    return { ...check, creditsUsed, creditsBudget, cycleStart: cycleStart.toISOString(), breakdown };
+    const recent = recentRaw.map((r) => ({
+      task: r.task,
+      credits: creditsForUsd(r.costUsd),
+      createdAt: r.createdAt,
+    }));
+    return {
+      ...check,
+      creditsUsed,
+      creditsBudget,
+      planId,
+      cycleStart: cycleStart.toISOString(),
+      breakdown,
+      recent,
+    };
   }
 }

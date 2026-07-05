@@ -69,19 +69,19 @@ export function CreditsBadge() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+        className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
       >
         <SparkleIcon />
         {unlimited ? "Unlimited" : remaining.toLocaleString()}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-2 w-96 rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-lg">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-900">{PLAN_NAMES[usage.planId] ?? "Free"}</p>
+            <p className="text-base font-semibold text-slate-900">{PLAN_NAMES[usage.planId] ?? "Free"}</p>
             <Link
               href="/dashboard/upgrade"
-              className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#FE7F2D]"
+              className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#FE7F2D]"
             >
               Upgrade
             </Link>
@@ -90,8 +90,8 @@ export function CreditsBadge() {
           {!unlimited && (
             <>
               <div className="mt-3 flex items-baseline justify-between">
-                <p className="text-2xl font-semibold text-slate-900">{remaining.toLocaleString()}</p>
-                <p className="text-xs text-slate-400">of {usage.creditsBudget.toLocaleString()} credits</p>
+                <p className="text-3xl font-semibold text-slate-900">{remaining.toLocaleString()}</p>
+                <p className="text-sm text-slate-400">of {usage.creditsBudget.toLocaleString()} credits</p>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
@@ -99,24 +99,24 @@ export function CreditsBadge() {
             </>
           )}
 
-          <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent activity
           </p>
           {usage.recent.length === 0 ? (
-            <p className="py-4 text-center text-xs text-slate-400">No usage recorded yet.</p>
+            <p className="py-4 text-center text-sm text-slate-400">No usage recorded yet.</p>
           ) : (
             <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
               {groupByDay(usage.recent).map((group) => (
                 <div key={group.label}>
-                  <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     {group.label}
                   </p>
                   <div className="flex flex-col gap-0.5">
                     {group.items.map((r, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50">
+                      <div key={i} className="flex items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
                         <div className="min-w-0">
                           <p className="truncate text-slate-800">{taskLabel(r.task)}</p>
-                          <p className="text-[10px] text-slate-400">{timeAgo(r.createdAt)}</p>
+                          <p className="text-xs text-slate-400">{timeAgo(r.createdAt)}</p>
                         </div>
                         <p className="shrink-0 font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
                       </div>
@@ -130,7 +130,7 @@ export function CreditsBadge() {
           <Link
             href="/dashboard/usage"
             onClick={() => setOpen(false)}
-            className="mt-3 block w-full rounded-lg border border-slate-200 py-2 text-center text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            className="mt-3 block w-full rounded-lg border border-slate-200 py-2.5 text-center text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
           >
             View full usage & buy credits
           </Link>
@@ -142,7 +142,7 @@ export function CreditsBadge() {
 
 function SparkleIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 text-[#FE7F2D]" aria-hidden="true">
+    <svg viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 text-[#FE7F2D]" aria-hidden="true">
       <path d="M8 1.5l1.1 3.4L12.5 6l-3.4 1.1L8 10.5l-1.1-3.4L3.5 6l3.4-1.1L8 1.5Z" />
       <path d="M13 9.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5Z" />
     </svg>

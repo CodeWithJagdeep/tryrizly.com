@@ -49,6 +49,12 @@ import { PostgresIntrospectionService } from "../connectors/postgres-introspecti
 import { CalComService } from "../connectors/calcom.service";
 import { RazorpayService } from "../connectors/razorpay.service";
 import { StripeService } from "../connectors/stripe.service";
+import { PayPalService } from "../connectors/paypal.service";
+import { GitHubService } from "../connectors/github.service";
+import { MpesaService } from "../connectors/mpesa.service";
+import { createPayPalSnapshotTool } from "./paypal.tools";
+import { createGitHubBriefingTool } from "./github.tools";
+import { createMpesaStatusTool } from "./mpesa.tools";
 import { TextToQueryService } from "../connectors/text-to-query.service";
 import { TaskRepository } from "../tasks/task.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
@@ -87,6 +93,12 @@ export class ToolRegistryService {
     private readonly razorpay: RazorpayService,
     @Inject(StripeService)
     private readonly stripe: StripeService,
+    @Inject(PayPalService)
+    private readonly paypal: PayPalService,
+    @Inject(GitHubService)
+    private readonly github: GitHubService,
+    @Inject(MpesaService)
+    private readonly mpesa: MpesaService,
     @Inject(TextToQueryService)
     private readonly textToQuery: TextToQueryService,
     @Inject(TaskRepository)
@@ -123,6 +135,9 @@ export class ToolRegistryService {
       createRescheduleCalendarEventTool(this.google),
       createCalComBriefingTool(this.connectorService, this.calcom),
       createCalComBookTool(this.connectorService, this.calcom),
+      createPayPalSnapshotTool(this.connectorService, this.paypal),
+      createGitHubBriefingTool(this.connectorService, this.github),
+      createMpesaStatusTool(this.connectorService, this.mpesa),
       createBusinessSnapshotTool(
         this.connectorService,
         this.postgresIntrospection,

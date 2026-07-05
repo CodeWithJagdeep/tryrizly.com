@@ -705,7 +705,10 @@ export class AiCoreService {
 }
 
 function parseConnectorProvider(provider: string | undefined): ConnectorProvider | undefined {
-  const allowed = new Set(["google", "gmail", "calendar", "telegram", "postgres", "mongodb", "razorpay"]);
+  const allowed = new Set([
+    "google", "gmail", "calendar", "telegram", "postgres", "mongodb", "razorpay",
+    "stripe", "calcom", "slack", "notion", "custom_api", "paypal", "github", "mpesa",
+  ]);
   return provider && allowed.has(provider) ? (provider as ConnectorProvider) : undefined;
 }
 

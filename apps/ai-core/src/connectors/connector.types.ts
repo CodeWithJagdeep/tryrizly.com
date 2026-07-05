@@ -10,7 +10,10 @@ export type ConnectorProvider =
   | "slack"
   | "notion"
   | "custom_api"
-  | "telegram";
+  | "telegram"
+  | "paypal"
+  | "github"
+  | "mpesa";
 
 export type ConnectorAuthType = "oauth" | "manual";
 
@@ -94,6 +97,14 @@ export type MongoConnectorSecret = { connectionUrl: string };
 export type RazorpayConnectorSecret = { keyId: string; keySecret: string };
 export type StripeConnectorSecret = { secretKey: string };
 export type CalComConnectorSecret = { apiKey: string };
+export type PayPalConnectorSecret = { clientId: string; clientSecret: string };
+export type GitHubConnectorSecret = { token: string };
+export type MpesaConnectorSecret = {
+  consumerKey: string;
+  consumerSecret: string;
+  shortcode: string;
+  environment: "sandbox" | "production";
+};
 
 export type DataSourceSecretResult =
   | { connected: false }

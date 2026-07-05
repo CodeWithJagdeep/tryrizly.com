@@ -164,6 +164,47 @@ export class ConnectorService {
     return { apiKey };
   }
 
+  /** Decrypts the PayPal REST app credentials. Returns null if not connected. */
+  async getPayPalSecret(userId: string): Promise<{ clientId: string; clientSecret: string } | null> {
+    const account = await this.repository.find(userId, "paypal");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const { clientId, clientSecret } = payload;
+    if (typeof clientId !== "string" || !clientId || typeof clientSecret !== "string" || !clientSecret) {
+      return null;
+    }
+    return { clientId, clientSecret };
+  }
+
+  /** Decrypts the GitHub personal access token. Returns null if not connected. */
+  async getGitHubSecret(userId: string): Promise<{ token: string } | null> {
+    const account = await this.repository.find(userId, "github");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const token = payload.token;
+    if (typeof token !== "string" || !token) return null;
+    return { token };
+  }
+
+  /** Decrypts the M-Pesa Daraja credentials. Returns null if not connected. */
+  async getMpesaSecret(
+    userId: string,
+  ): Promise<{ consumerKey: string; consumerSecret: string; shortcode: string; environment: "sandbox" | "production" } | null> {
+    const account = await this.repository.find(userId, "mpesa");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const { consumerKey, consumerSecret, shortcode } = payload;
+    if (
+      typeof consumerKey !== "string" || !consumerKey ||
+      typeof consumerSecret !== "string" || !consumerSecret ||
+      typeof shortcode !== "string" || !shortcode
+    ) {
+      return null;
+    }
+    const environment = payload.environment === "sandbox" ? "sandbox" : "production";
+    return { consumerKey, consumerSecret, shortcode, environment };
+  }
+
   /** Returns all named accounts for a provider (for multi-account DB providers). */
   async getAllDataSourceSecrets(
     userId: string,
@@ -415,6 +456,9 @@ function providerLabel(provider: ConnectorProvider) {
     notion: "Notion",
     custom_api: "Custom API",
     telegram: "Telegram",
+    paypal: "PayPal",
+    github: "GitHub",
+    mpesa: "M-Pesa",
   };
 
   return labels[provider];

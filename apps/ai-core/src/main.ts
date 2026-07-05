@@ -4,6 +4,10 @@ import { Transport } from "@nestjs/microservices";
 import { AiCoreModule } from "./ai-core.module";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { initSentry, captureException } from "@heyriz/shared/sentry";
+import { SentryRpcExceptionFilter } from "./sentry-exception.filter";
+
+initSentry("ai-core");
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice(AiCoreModule, {
@@ -14,6 +18,7 @@ async function bootstrap() {
     },
   });
 
+  app.useGlobalFilters(new SentryRpcExceptionFilter());
   await app.listen();
 
   logger.info("ai-core nest tcp listening", {
@@ -23,6 +28,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  captureException(error);
   logger.error("ai-core failed to start", {
     error: error instanceof Error ? error.message : String(error),
   });

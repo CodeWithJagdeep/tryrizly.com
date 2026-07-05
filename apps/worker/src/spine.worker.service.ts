@@ -11,6 +11,7 @@ import { queueNames } from "@heyriz/shared/queue/names";
 import type { SpineJobData, SpineJobName } from "@heyriz/shared/queue/types";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 
 /**
  * Durable consumer for spine writes (timeline events + decision extraction).
@@ -59,6 +60,7 @@ export class SpineWorkerService implements OnModuleInit, OnModuleDestroy {
       const exhausted = job ? job.attemptsMade >= attempts : false;
       // exhausted === true means the job is now dead-lettered (retained 30d):
       // this is the signal worth paging on — memory that never got written.
+      if (exhausted) captureException(error, { job: "spine-ingest", jobId: job?.id });
       logger[exhausted ? "error" : "warn"](
         exhausted ? "spine ingest DEAD-LETTERED" : "spine ingest job failed (will retry)",
         {

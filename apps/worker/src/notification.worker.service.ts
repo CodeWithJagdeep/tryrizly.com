@@ -8,6 +8,7 @@ import type {
 } from "@heyriz/shared/queue/types";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { captureException } from "@heyriz/shared/sentry";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
 import { sendEmail } from "@heyriz/shared/email";
 import webpush from "web-push";
@@ -111,6 +112,7 @@ function escapeHtml(value: string): string {
 // "manual" = user-created reminder, always deliver. "gateway"/"ai-core" = system, always deliver.
 const SOURCE_TO_PROVIDER: Record<string, string | null> = {
   calendar: "calendar",
+  calcom: "calcom",
   gmail: "gmail",
   gateway: null,
   "ai-core": null,
@@ -233,6 +235,7 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
     );
 
     this.worker.on("failed", (job, error) => {
+      captureException(error, { job: "notification", jobId: job?.id });
       logger.error("notification job failed", {
         jobId: job?.id,
         userId: job?.data?.userId,

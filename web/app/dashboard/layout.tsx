@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireSession } from "../api/onboarding/_lib/require-user";
 import { ChatSidebar } from "./components/ChatSidebar";
+import { DashboardHeader } from "./components/DashboardHeader";
 import { MobileNav } from "./components/MobileNav";
 import { TelegramBanner } from "./components/TelegramBanner";
 import { TrialBar } from "./components/TrialBar";
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <ChatSidebar name={session.name} email={session.email} />
         </Suspense>
         <div className="flex min-h-0 flex-1 flex-col pb-16 lg:pb-0 lg:pl-64">
+          <DashboardHeader />
           <TelegramBanner />
           {children}
         </div>

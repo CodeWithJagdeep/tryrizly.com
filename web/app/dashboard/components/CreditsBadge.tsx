@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { taskLabel, timeAgo } from "../lib/usage-labels";
+import { groupByDay, taskLabel, timeAgo } from "../lib/usage-labels";
 
 type UsageSummary = {
   state: "ok" | "warn" | "exceeded";
@@ -69,7 +69,7 @@ export function CreditsBadge() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/20"
+        className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
       >
         <SparkleIcon />
         {unlimited ? "Unlimited" : remaining.toLocaleString()}
@@ -105,14 +105,23 @@ export function CreditsBadge() {
           {usage.recent.length === 0 ? (
             <p className="py-4 text-center text-xs text-slate-400">No usage recorded yet.</p>
           ) : (
-            <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
-              {usage.recent.map((r, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50">
-                  <div className="min-w-0">
-                    <p className="truncate text-slate-800">{taskLabel(r.task)}</p>
-                    <p className="text-[10px] text-slate-400">{timeAgo(r.createdAt)}</p>
+            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+              {groupByDay(usage.recent).map((group) => (
+                <div key={group.label}>
+                  <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {group.items.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50">
+                        <div className="min-w-0">
+                          <p className="truncate text-slate-800">{taskLabel(r.task)}</p>
+                          <p className="text-[10px] text-slate-400">{timeAgo(r.createdAt)}</p>
+                        </div>
+                        <p className="shrink-0 font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="shrink-0 font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
                 </div>
               ))}
             </div>

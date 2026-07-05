@@ -7,6 +7,7 @@ import { GatewayService } from "../gateway.service";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export type AuthIdentity = {
   email: string;
@@ -97,6 +98,30 @@ export class AuthService {
   /** Invalidates every outstanding session for the user (logout everywhere). */
   async logout(email: string): Promise<void> {
     await this.repo.incrementTokenVersion(normalizeEmail(email));
+  }
+
+  /**
+   * Always resolves the same way regardless of whether the address has an
+   * account or a password — telling the caller "no account with that email"
+   * would let anyone enumerate registered addresses. If a resettable account
+   * exists, a real link is emailed; otherwise this is a silent no-op.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const normalized = normalizeEmail(email);
+    const user = await this.repo.getUser(normalized);
+    if (!user?.passwordHash) return;
+    const token = await this.repo.createPasswordResetToken(normalized, PASSWORD_RESET_TTL_MS);
+    await sendPasswordResetEmail(normalized, token);
+  }
+
+  /** Consumes the reset token, sets the new password, and revokes every existing session. */
+  async resetPassword(token: string, newPassword: string): Promise<boolean> {
+    const record = await this.repo.consumePasswordResetToken(token);
+    if (!record) return false;
+    const { hash, salt } = hashPassword(newPassword);
+    await this.repo.upsertUser(record.email, { passwordHash: hash, passwordSalt: salt });
+    await this.repo.incrementTokenVersion(record.email);
+    return true;
   }
 
   async sendVerification(email: string) {
@@ -305,6 +330,19 @@ function sanitizeReturnPath(value: string | undefined): string {
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return "/dashboard";
+  }
+}
+
+async function sendPasswordResetEmail(email: string, token: string) {
+  const resetUrl = `${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const sent = await sendEmail({
+    to: email,
+    subject: "Reset your Rizly password",
+    text: `Reset your password: ${resetUrl}\n\nThis link expires in 30 minutes. If you didn't request this, ignore this email.`,
+    html: `<p><a href="${resetUrl}">Reset your Rizly password</a></p><p>This link expires in 30 minutes. If you didn't request this, ignore this email.</p>`,
+  });
+  if (!sent && env.RESEND_API_KEY) {
+    throw new Error("Failed to send password reset email");
   }
 }
 

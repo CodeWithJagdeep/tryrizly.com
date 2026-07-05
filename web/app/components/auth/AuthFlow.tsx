@@ -339,7 +339,17 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
 
               {showPassword && (
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-slate-600">Password</label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-slate-600">Password</label>
+                    {mode === "login" && (
+                      <Link
+                        href="/forgot-password"
+                        className="text-xs font-semibold text-slate-500 underline-offset-2 hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    )}
+                  </div>
                   <input
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}

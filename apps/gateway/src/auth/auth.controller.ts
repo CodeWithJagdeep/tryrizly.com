@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
+import { logger } from "@heyriz/shared/logger";
 import { AuthService } from "./auth.service";
 import { EmailThrottlerGuard } from "./email-throttler.guard";
 import { requireInternalSecret } from "../internal-auth";
@@ -58,6 +59,42 @@ export class AuthController {
       return { error: "Invalid email or password" };
     }
     return { identity };
+  }
+
+  @Post("password/forgot")
+  @UseGuards(EmailThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  async forgotPassword(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.email) return { error: "email is required" };
+    try {
+      await this.auth.requestPasswordReset(body.email);
+    } catch (error) {
+      // Swallowed deliberately: the response must be identical whether the
+      // email send succeeded, failed, or the account doesn't exist at all —
+      // otherwise the response itself becomes an account-enumeration oracle.
+      logger.warn("password reset email failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return { ok: true };
+  }
+
+  @Post("password/reset")
+  @Throttle({ default: { limit: 10, ttl: 900_000 } })
+  async resetPassword(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { token?: string; password?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.token || !body.password) return { error: "token and password are required" };
+    if (body.password.length < 8) return { error: "Password must be at least 8 characters" };
+    const ok = await this.auth.resetPassword(body.token, body.password);
+    if (!ok) return { error: "This reset link is invalid or has expired." };
+    return { ok: true };
   }
 
   @Post("email/send-verification")

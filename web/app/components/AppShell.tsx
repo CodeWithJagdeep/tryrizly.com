@@ -14,7 +14,11 @@ export function AppShell({
   session: Session | null;
 }) {
   const pathname = usePathname();
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
   const isAppPage = pathname === "/onboarding" || pathname.startsWith("/dashboard");
 
   if (isAuthPage || isAppPage) {

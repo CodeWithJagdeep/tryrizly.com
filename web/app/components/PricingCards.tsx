@@ -15,50 +15,43 @@ export type Plan = {
   introNote?: string;
 };
 
-// Mirrors apps/billing/src/plans.ts — keep the two in sync.
+// Mirrors apps/billing/src/plans.ts — keep the two in sync. No "Free" card:
+// there's no standing free plan, just a 10-day trial on any paid plan below
+// (see apps/billing/src/plans.ts "free" entry for the post-trial floor state,
+// which stays internal/unmarketed).
 export const plans: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: '$0',
-    cadence: 'forever',
-    description: 'The floor tier after your trial. Enough to stay connected.',
-    cta: 'Get started',
-    href: '/signup',
-    features: ['Limited chat with Riz', 'Basic memory', 'Manual connector setup', '100 AI credits/month'],
-  },
   {
     id: 'starter',
     name: 'Starter',
-    price: '$49',
+    price: '$20',
     cadence: '/month',
-    introPrice: '$15',
-    introNote: 'First 3 months, then $49/mo',
+    introPrice: '$10',
+    introNote: 'First month, then $20/mo',
     description: 'Founder-grade daily assistant with controlled background AI.',
-    cta: 'Start 15-day free trial',
+    cta: 'Start 10-day free trial',
     href: '/signup',
-    features: ['Email triage & drafting', 'Morning brief & reminders', 'Connector memory', '3,000 AI credits/month'],
+    features: ['Email triage & drafting', 'Morning brief & reminders', 'Connector memory', '1,200 AI credits/month'],
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '$99',
+    price: '$49',
     cadence: '/month',
     description: 'Heavier inbox, meetings, and proactive workflow automation.',
-    cta: 'Start 15-day free trial',
+    cta: 'Start 10-day free trial',
     href: '/signup',
-    features: ['Everything in Starter', 'Priority agent runs', 'Weekly digest automation', '7,000 AI credits/month'],
+    features: ['Everything in Starter', 'Priority agent runs', 'Weekly digest automation', '3,400 AI credits/month'],
     highlighted: true,
   },
   {
     id: 'business',
     name: 'Business',
-    price: '$199',
+    price: '$100',
     cadence: '/month',
     description: 'The highest AI budget for deep background work.',
-    cta: 'Start 15-day free trial',
+    cta: 'Start 10-day free trial',
     href: '/signup',
-    features: ['Everything in Pro', '16,000 AI credits/month', 'Business-system integrations', 'Priority support'],
+    features: ['Everything in Pro', '8,000 AI credits/month', 'Business-system integrations', 'Priority support'],
   },
 ];
 

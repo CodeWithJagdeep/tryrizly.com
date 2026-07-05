@@ -107,7 +107,7 @@ const schema = z.object({
   // (intro pricing: first N cycles discounted). Offers have no create API, so
   // the id is provisioned by hand and injected here; unset = full price.
   RAZORPAY_STARTER_INTRO_OFFER_ID: z.string().optional(),
-  BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(15),
+  BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(10),
   BILLING_SUBSCRIPTION_TOTAL_COUNT: z.coerce.number().int().positive().default(120),
   // Ad-hoc business_snapshot routing against a principal's own connected
   // Postgres/MongoDB/Razorpay accounts (separate from the two vars above,
@@ -126,6 +126,12 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:3000/api/auth/google/callback"),
+  CALCOM_CLIENT_ID: z.string().optional(),
+  CALCOM_CLIENT_SECRET: z.string().optional(),
+  CALCOM_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/calcom/callback"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

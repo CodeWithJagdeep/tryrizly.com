@@ -6,11 +6,13 @@
  */
 export type BillingPlanId = "free" | "starter" | "pro" | "business";
 
+// Rescaled to the $20/$49/$100 sticker prices (was $49/$99/$199) — kept at
+// roughly the same worst-case COGS ratio each tier had before (~30/35/40%).
 export const PLAN_AI_BUDGETS: Record<BillingPlanId, number> = {
   free: 0.5,
-  starter: 15,
-  pro: 35,
-  business: 80,
+  starter: 6,
+  pro: 17,
+  business: 40,
 };
 
 export function isBillingPlanId(value: string): value is BillingPlanId {

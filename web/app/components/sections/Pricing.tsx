@@ -12,7 +12,7 @@ export function Pricing() {
             One price, no surprise overage.
           </h2>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-gray-500">
-            Every paid plan starts with a 15-day free trial of the full product — no credit card
+            Every paid plan starts with a 10-day free trial of the full product — no credit card
             required.
           </p>
         </Reveal>

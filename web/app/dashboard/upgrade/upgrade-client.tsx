@@ -14,6 +14,7 @@ type Plan = {
   aiBudgetUsd: number;
   features: string[];
   configured: boolean;
+  intro?: { amount: number; months: number };
 };
 
 type BillingStatus = {
@@ -139,10 +140,29 @@ export function UpgradeClient() {
                   <div className="mb-6">
                     <h2 className="text-lg font-semibold text-slate-900">{plan.name}</h2>
                     <p className="mt-1 text-sm text-slate-500">{plan.description}</p>
-                    <div className="mt-4 flex items-end gap-1">
-                      <span className="text-4xl font-bold text-slate-900">{price}</span>
-                      <span className="mb-1 text-sm text-slate-400">/ {plan.interval ?? "month"}</span>
-                    </div>
+                    {plan.intro ? (
+                      <>
+                        <div className="mt-4 flex items-end gap-2">
+                          <span className="text-4xl font-bold text-slate-900">
+                            {(plan.intro.amount / 100).toLocaleString("en-US", {
+                              style: "currency",
+                              currency: plan.currency,
+                              minimumFractionDigits: 0,
+                            })}
+                          </span>
+                          <span className="mb-1 text-sm text-slate-400">/ {plan.interval ?? "month"}</span>
+                          <span className="mb-1 text-sm text-slate-400 line-through">{price}</span>
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-[#FE7F2D]">
+                          First {plan.intro.months} months, then {price}/{plan.interval ?? "month"}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="mt-4 flex items-end gap-1">
+                        <span className="text-4xl font-bold text-slate-900">{price}</span>
+                        <span className="mb-1 text-sm text-slate-400">/ {plan.interval ?? "month"}</span>
+                      </div>
+                    )}
                     <p className="mt-1 text-xs text-slate-400">
                       AI budget: ${plan.aiBudgetUsd}/mo
                     </p>

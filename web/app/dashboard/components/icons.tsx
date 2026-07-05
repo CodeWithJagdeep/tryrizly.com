@@ -172,6 +172,15 @@ export function CalendarIcon({ className }: IconProps) {
   );
 }
 
+export function VideoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">
+      <rect x="1.8" y="4" width="8.4" height="8" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M10.2 7.2l3.2-2v5.6l-3.2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function ClockIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">

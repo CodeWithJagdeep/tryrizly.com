@@ -16,6 +16,7 @@ import {
   PlugIcon,
   PlusIcon,
   UsersIcon,
+  VideoIcon,
 } from "./icons";
 import {
   type ChatSession,
@@ -153,6 +154,7 @@ export function ChatSidebar({
         { href: "/dashboard/emails", icon: <MailIcon className="h-4 w-4" />, label: "Emails", badge: emailBadge > 0 ? String(emailBadge) : undefined },
         { href: "/dashboard/people", icon: <UsersIcon className="h-4 w-4" />, label: "People" },
         { href: "/dashboard/calendar", icon: <CalendarIcon className="h-4 w-4" />, label: "Calendar" },
+        { href: "/dashboard/meetings", icon: <VideoIcon className="h-4 w-4" />, label: "Meetings" },
         { href: "/dashboard/connectors", icon: <PlugIcon className="h-4 w-4" />, label: "Connectors" },
       ],
     },

@@ -37,6 +37,9 @@ export function billingPlans(): BillingPlan[] {
         "Connector memory",
       ],
       razorpayPlanId: env.RAZORPAY_STARTER_PLAN_ID,
+      // Advertised only when the Razorpay offer actually backing it exists,
+      // so the shown price can never drift from what gets charged.
+      intro: env.RAZORPAY_STARTER_INTRO_OFFER_ID ? { amount: 1500, months: 3 } : undefined,
     },
     {
       id: "pro",

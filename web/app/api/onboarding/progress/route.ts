@@ -14,11 +14,18 @@ export async function POST(request: Request) {
     source?: string;
     googleConnected?: boolean;
     completedAt?: string;
+    dashboardTourSeenAt?: string;
   };
-  const patch: { source?: string; googleConnected?: boolean; completedAt?: string } = {};
+  const patch: {
+    source?: string;
+    googleConnected?: boolean;
+    completedAt?: string;
+    dashboardTourSeenAt?: string;
+  } = {};
   if (typeof body.source === "string") patch.source = body.source;
   if (typeof body.googleConnected === "boolean") patch.googleConnected = body.googleConnected;
   if (typeof body.completedAt === "string") patch.completedAt = body.completedAt;
+  if (typeof body.dashboardTourSeenAt === "string") patch.dashboardTourSeenAt = body.dashboardTourSeenAt;
 
   const result = await callGateway<{ ok?: boolean; error?: string }>(
     "/api/auth/onboarding/progress",

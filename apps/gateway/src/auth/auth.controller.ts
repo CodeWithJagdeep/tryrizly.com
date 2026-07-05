@@ -158,7 +158,13 @@ export class AuthController {
   async onboardingProgress(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body()
-    body: { email?: string; source?: string; googleConnected?: boolean; completedAt?: string },
+    body: {
+      email?: string;
+      source?: string;
+      googleConnected?: boolean;
+      completedAt?: string;
+      dashboardTourSeenAt?: string;
+    },
   ) {
     this.requireInternal(secret);
     if (!body.email) return { error: "email is required" };
@@ -166,6 +172,7 @@ export class AuthController {
       source: body.source,
       googleConnected: body.googleConnected,
       completedAt: body.completedAt,
+      dashboardTourSeenAt: body.dashboardTourSeenAt,
     });
     return { ok: true };
   }

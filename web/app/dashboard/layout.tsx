@@ -6,6 +6,7 @@ import { DashboardHeader } from "./components/DashboardHeader";
 import { MobileNav } from "./components/MobileNav";
 import { TelegramBanner } from "./components/TelegramBanner";
 import { TrialBar } from "./components/TrialBar";
+import { WelcomeTour } from "./components/WelcomeTour";
 
 // Auth-gated app surface — keep the whole tree out of search indexes
 // (robots.txt disallow alone doesn't prevent indexing of externally linked URLs).
@@ -31,6 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </div>
       <MobileNav />
+      <WelcomeTour />
     </div>
   );
 }

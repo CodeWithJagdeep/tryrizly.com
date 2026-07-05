@@ -34,8 +34,16 @@ export function CreditsBadge() {
   useEffect(() => {
     fetch("/api/usage")
       .then((r) => r.json())
-      .then((data: UsageSummary) => {
-        if (typeof data.creditsBudget === "number" || data.creditsBudget === undefined) setUsage(data);
+      .then((data: Partial<UsageSummary>) => {
+        // Defensive against an old backend / partial response mid-deploy —
+        // this crashed the whole page when `recent` was simply absent.
+        setUsage({
+          state: data.state ?? "ok",
+          creditsUsed: data.creditsUsed ?? 0,
+          creditsBudget: data.creditsBudget ?? Number.POSITIVE_INFINITY,
+          planId: data.planId ?? "free",
+          recent: data.recent ?? [],
+        });
       })
       .catch(() => undefined);
   }, []);

@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { taskLabel } from "../lib/usage-labels";
+import { groupByDay, taskLabel, timeAgo } from "../lib/usage-labels";
 
 type UsageBreakdownRow = {
   task: string;
   costUsd: number;
   calls: number;
+};
+
+type RecentEntry = {
+  task: string;
+  credits: number;
+  createdAt: string;
 };
 
 type UsageSummary = {
@@ -15,9 +21,11 @@ type UsageSummary = {
   budgetUsd: number;
   creditsUsed: number;
   creditsBudget: number;
+  planId: string;
   ratio: number;
   cycleStart: string;
   breakdown: UsageBreakdownRow[];
+  recent: RecentEntry[];
 };
 
 type CheckoutResponse = {
@@ -34,6 +42,13 @@ declare global {
     Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
   }
 }
+
+const PLAN_NAMES: Record<string, string> = {
+  free: "Free",
+  starter: "Starter",
+  pro: "Pro",
+  business: "Business",
+};
 
 // Mirrors shared/src/billing/plan-budgets.ts CREDIT_PACKS — kept in sync by hand
 // since web/ doesn't share that package (separate deploy target on Vercel).
@@ -58,6 +73,19 @@ function loadRazorpayScript(): Promise<void> {
   });
 }
 
+function nextCycleDate(cycleStartIso: string): Date {
+  const start = new Date(cycleStartIso);
+  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+}
+
+function formatDate(iso: string | Date): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch {
+    return String(iso).slice(0, 10);
+  }
+}
+
 export function UsageClient() {
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -71,9 +99,20 @@ export function UsageClient() {
     try {
       const response = await fetch("/api/usage");
       if (!response.ok) throw new Error("Failed to load usage");
-      const data = (await response.json()) as UsageSummary & { message?: string };
+      const data = (await response.json()) as Partial<UsageSummary> & { message?: string };
       if (data.message && data.budgetUsd === undefined) throw new Error(data.message);
-      setUsage(data);
+      setUsage({
+        state: data.state ?? "ok",
+        spendUsd: data.spendUsd ?? 0,
+        budgetUsd: data.budgetUsd ?? Number.POSITIVE_INFINITY,
+        creditsUsed: data.creditsUsed ?? 0,
+        creditsBudget: data.creditsBudget ?? Number.POSITIVE_INFINITY,
+        planId: data.planId ?? "free",
+        ratio: data.ratio ?? 0,
+        cycleStart: data.cycleStart ?? new Date().toISOString(),
+        breakdown: data.breakdown ?? [],
+        recent: data.recent ?? [],
+      });
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to load usage");
@@ -142,117 +181,156 @@ export function UsageClient() {
   }
 
   const unlimited = usage ? !Number.isFinite(usage.creditsBudget) : false;
+  const remaining = usage && !unlimited ? Math.max(0, usage.creditsBudget - usage.creditsUsed) : 0;
   const pct = usage ? Math.min(100, Math.round(usage.ratio * 100)) : 0;
   const barColor =
     usage?.state === "exceeded" ? "bg-red-600" : usage?.state === "warn" ? "bg-amber-600" : "bg-emerald-600";
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 py-8 sm:px-8">
-        <header className="flex flex-col gap-3 border-b border-slate-200 pb-6">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">rizly</p>
+      {/* Header */}
+      <header className="border-b border-slate-200 px-6 pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Credits</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              Your AI credits for this billing cycle. Every chat, email triage, and background task spends credits.
+            <h1 className="text-xl font-semibold tracking-tight">Credits</h1>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Your AI credits for this billing cycle — every chat, email triage, and background task spends credits.
             </p>
           </div>
-        </header>
+          {!loading && usage && !unlimited && (
+            <button
+              type="button"
+              onClick={() => void buyCredits()}
+              disabled={buying}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+            >
+              {buying ? "Opening checkout…" : `+${CREDIT_PACK.credits.toLocaleString()} credits — $${CREDIT_PACK.priceUsd}`}
+            </button>
+          )}
+        </div>
+      </header>
 
-        {loadError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-500">
+      <div className="w-full px-6 py-6">
+        {loadError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
             {loadError}
-          </p>
-        ) : null}
+          </div>
+        )}
 
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <div className="flex items-center justify-center gap-3 py-16">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+            <span className="text-sm text-slate-500">Loading usage…</span>
+          </div>
         ) : usage ? (
-          <>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-5">
-              <div className="flex items-baseline justify-between gap-4">
-                <p className="text-sm font-medium text-slate-400">This cycle (since {formatDate(usage.cycleStart)})</p>
-                <p className="text-sm font-medium text-slate-500">
-                  {unlimited ? "No credit cap" : `${usage.creditsBudget.toLocaleString()} credits`}
-                </p>
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">
-                {usage.creditsUsed.toLocaleString()} <span className="text-base font-normal text-slate-400">used</span>
-              </p>
-
-              {!unlimited ? (
-                <>
-                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="mt-2 text-xs text-slate-400">
-                    {usage.state === "exceeded"
-                      ? "Credits used up — background features (decisions, memory, morning brief) are paused, and chat has switched to a lighter model until next cycle."
-                      : usage.state === "warn"
-                        ? "Running low on credits — background features will pause once they're used up."
-                        : `${pct}% of this cycle's credits used.`}
-                  </p>
-                </>
-              ) : null}
-
-              {!unlimited && (
-                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      Need more this cycle? +{CREDIT_PACK.credits.toLocaleString()} credits for ${CREDIT_PACK.priceUsd}
-                    </p>
-                    <p className="text-xs text-slate-400">Applies immediately, lasts through this billing cycle.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void buyCredits()}
-                    disabled={buying}
-                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
-                  >
-                    {buying ? "Opening checkout…" : "Buy credits"}
-                  </button>
-                </div>
-              )}
-              {buyError && <p className="mt-2 text-xs text-red-500">{buyError}</p>}
-              {buySuccess && (
-                <p className="mt-2 text-xs text-emerald-600">
-                  Payment received — your balance below updates once it's confirmed (a few seconds).
-                </p>
-              )}
+          <div className="flex flex-col gap-6">
+            {/* Stat tiles */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile label="Plan" value={PLAN_NAMES[usage.planId] ?? "Free"} />
+              <StatTile
+                label="Remaining"
+                value={unlimited ? "Unlimited" : remaining.toLocaleString()}
+                accent={usage.state === "exceeded" ? "text-red-600" : usage.state === "warn" ? "text-amber-600" : undefined}
+              />
+              <StatTile label="Used this cycle" value={usage.creditsUsed.toLocaleString()} />
+              <StatTile label="Renews" value={formatDate(nextCycleDate(usage.cycleStart))} />
             </div>
 
+            {/* Usage bar */}
+            {!unlimited && (
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="flex items-baseline justify-between gap-4">
+                  <p className="text-sm font-medium text-slate-500">Since {formatDate(usage.cycleStart)}</p>
+                  <p className="text-sm font-medium text-slate-500">{usage.creditsBudget.toLocaleString()} credits included</p>
+                </div>
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {usage.state === "exceeded"
+                    ? "Credits used up — background features (decisions, memory, morning brief) are paused, and chat has switched to a lighter model until next cycle."
+                    : usage.state === "warn"
+                      ? "Running low on credits — background features will pause once they're used up."
+                      : `${pct}% of this cycle's credits used.`}
+                </p>
+                {buyError && <p className="mt-2 text-xs text-red-500">{buyError}</p>}
+                {buySuccess && (
+                  <p className="mt-2 text-xs text-emerald-600">
+                    Payment received — your balance above updates once it&apos;s confirmed (a few seconds).
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* By feature */}
             <Section title="By feature">
               {usage.breakdown.length === 0 ? (
                 <EmptyRow text="No AI usage recorded yet this cycle." />
               ) : (
-                usage.breakdown.map((row) => (
-                  <article key={row.task} className="flex items-center justify-between px-5 py-4 transition hover:bg-white/60">
-                    <div>
-                      <p className="text-sm leading-6 text-slate-900">
-                        {taskLabel(row.task)}
+                usage.breakdown
+                  .slice()
+                  .sort((a, b) => b.costUsd - a.costUsd)
+                  .map((row) => (
+                    <article key={row.task} className="flex items-center justify-between px-5 py-4 transition hover:bg-slate-50">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{taskLabel(row.task)}</p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {row.calls} call{row.calls === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {Math.round(row.costUsd * 200).toLocaleString()} credits
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {row.calls} call{row.calls === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {Math.round(row.costUsd * 200).toLocaleString()} credits
-                    </p>
-                  </article>
-                ))
+                    </article>
+                  ))
               )}
             </Section>
-          </>
+
+            {/* Recent activity, grouped by day */}
+            <Section title="Recent activity">
+              {usage.recent.length === 0 ? (
+                <EmptyRow text="No AI usage recorded yet this cycle." />
+              ) : (
+                <div className="divide-y divide-slate-200">
+                  {groupByDay(usage.recent).map((group) => (
+                    <div key={group.label}>
+                      <p className="bg-slate-50 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {group.label}
+                      </p>
+                      {group.items.map((r, i) => (
+                        <article key={i} className="flex items-center justify-between px-5 py-3 transition hover:bg-slate-50">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-slate-800">{taskLabel(r.task)}</p>
+                            <p className="mt-0.5 text-xs text-slate-400">{timeAgo(r.createdAt)}</p>
+                          </div>
+                          <p className="shrink-0 text-sm font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+          </div>
         ) : null}
-      </section>
+      </div>
     </main>
+  );
+}
+
+function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${accent ?? "text-slate-900"}`}>{value}</p>
+    </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">{title}</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</p>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="divide-y divide-slate-200">{children}</div>
       </div>
@@ -262,12 +340,4 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function EmptyRow({ text }: { text: string }) {
   return <p className="px-5 py-8 text-center text-sm text-slate-400">{text}</p>;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return iso.slice(0, 10);
-  }
 }

@@ -53,6 +53,8 @@ export type AgentRunInput = {
   approval?: { tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
   history?: ConversationTurn[];
+  /** Where the reply renders: the web dashboard supports Markdown, Telegram is plain text. */
+  channel?: "web" | "telegram";
 };
 
 export type AgentRunResult = {
@@ -87,7 +89,7 @@ export class AgentService {
     const respond = (result: AgentRunResult): AgentRunResult => this.withBudgetNote(input, budget, result);
 
     const messages: AgentMessage[] = [
-      { role: "system", content: this.systemPrompt(input.context) },
+      { role: "system", content: this.systemPrompt(input.context, input.channel) },
       ...(input.history ?? []).map(
         (turn): AgentMessage => ({ role: turn.role, content: turn.content }),
       ),
@@ -390,7 +392,7 @@ export class AgentService {
     }
   }
 
-  private systemPrompt(context: HeyRizRuntimeContext): string {
+  private systemPrompt(context: HeyRizRuntimeContext, channel?: "web" | "telegram"): string {
     const toolLines = this.tools
       .list()
       .map(
@@ -409,9 +411,15 @@ export class AgentService {
         ? `Connected business data sources: ${context.connectedDataSources.join(", ")}.`
         : "No business data sources connected.";
 
+    const formatting =
+      channel === "web"
+        ? "Formatting: your reply renders in the web dashboard, which supports GitHub-flavored Markdown. When presenting numbers across periods or items (revenue, metrics, bookings, lists of records), use a Markdown table; use bold/lists where they aid scanning. Keep it clean — no decorative markup."
+        : "Formatting: your reply renders as plain text (Telegram). Do not use Markdown syntax — no tables, pipes, asterisks, or headings; use short lines and simple bullets (•) instead.";
+
     return [
       buildOperatorPrompt(context.honorific, context.language, context.timezoneConfirmed),
       agentContractInstructions,
+      formatting,
       `Available tools:\n${toolLines}`,
       `Right now it is ${describeNow(new Date(), context.timezone)} for the principal. Use this exact date/year when resolving any relative or partial date the principal mentions (e.g. "Thursday", "next week", a date with no year) — never assume a year from training data.`,
       renderLive(context.live, context.timezone),

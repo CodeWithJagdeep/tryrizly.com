@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpIcon, LibraryIcon } from "./icons";
+import { MarkdownMessage } from "./MarkdownMessage";
 import {
   CalendarIcon,
   GmailIcon,
@@ -208,13 +209,13 @@ export function ChatHome({ name }: { name?: string }) {
                 return (
                   <div key={index} className="flex flex-col gap-2 self-stretch">
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${
                         turn.role === "user"
-                          ? "self-end bg-slate-900 text-white"
+                          ? "self-end bg-slate-900 text-white whitespace-pre-wrap"
                           : "self-start border border-slate-200 bg-slate-50 text-slate-800"
                       }`}
                     >
-                      {turn.content}
+                      {turn.role === "user" ? turn.content : <MarkdownMessage content={turn.content} />}
                     </div>
                     {approval && !approval.resolved && isLast && (
                       <div className="self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">

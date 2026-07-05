@@ -18,7 +18,7 @@ export function FinalCta() {
                 Start today
               </p>
               <h2 className="mt-5 text-balance text-4xl font-medium leading-[1.08] tracking-tight text-white md:text-5xl">
-                Give Riz your inbox for 15 days.
+                Give Riz your inbox for 10 days.
                 <br />
                 <span className="text-white/40">Take back your mornings.</span>
               </h2>

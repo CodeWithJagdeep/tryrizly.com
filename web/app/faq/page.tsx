@@ -26,7 +26,7 @@ const categories: FaqCategory[] = [
       },
       {
         q: "How does the free trial work?",
-        a: "Every new account gets 15 days of the full product — every feature, every connector, no credit card. If you don't subscribe when it ends, you move to the Free plan rather than losing access to your account.",
+        a: "Every new account gets 10 days of the full product — every feature, every connector, no credit card. If you don't subscribe when it ends, you drop to limited background access rather than losing your account.",
       },
       {
         q: "Do I have to use Telegram?",
@@ -81,7 +81,7 @@ const categories: FaqCategory[] = [
     items: [
       {
         q: "What do the plans cost?",
-        a: "Starter is $49/month, Pro is $99/month, and Business is $199/month — all billed monthly in USD through Razorpay, all starting with the 15-day free trial. Free is $0 forever as the floor tier.",
+        a: "Starter is $20/month (just $10 for your first month), Pro is $49/month, and Business is $100/month — all billed monthly in USD through Razorpay, all starting with a 10-day free trial. Need more AI credits than your plan includes? Top up any time.",
       },
       {
         q: "What happens if I go over my AI budget?",

@@ -107,7 +107,7 @@ export function PricingClient() {
               Simple, honest pricing
             </h1>
             <p className='mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-500 md:text-xl'>
-              Every paid plan starts with a 15-day free trial of the full product — no credit card
+              Every paid plan starts with a 10-day free trial of the full product — no credit card
               required. If you don&apos;t convert, you land on Free, not on a lock-out.
             </p>
           </Reveal>

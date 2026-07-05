@@ -10,8 +10,11 @@ export function billingPlans(): BillingPlan[] {
       id: "free",
       name: "Free",
       kind: "free",
-      description:
-        "7-day full-feature trial, then choose a plan. This is also the floor tier afterward if you don't convert.",
+      // Not a marketed/selectable plan — this is the internal fallback state
+      // for an account with no active trial/subscription/purchase (post-trial
+      // floor, or pre-trial before signup completes). requirePlan("free") in
+      // billing.service.ts depends on this entry existing; don't remove it.
+      description: "Limited background access after your trial ends, until you choose a plan.",
       currency,
       amount: 0,
       trialDays: 0,
@@ -26,7 +29,7 @@ export function billingPlans(): BillingPlan[] {
       kind: "subscription",
       description: "Founder-grade daily assistant with controlled background AI.",
       currency,
-      amount: 4900,
+      amount: 2000,
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.starter,
@@ -41,7 +44,7 @@ export function billingPlans(): BillingPlan[] {
       razorpayPlanId: env.RAZORPAY_STARTER_PLAN_ID,
       // Advertised only when the Razorpay offer actually backing it exists,
       // so the shown price can never drift from what gets charged.
-      intro: env.RAZORPAY_STARTER_INTRO_OFFER_ID ? { amount: 1500, months: 3 } : undefined,
+      intro: env.RAZORPAY_STARTER_INTRO_OFFER_ID ? { amount: 1000, months: 1 } : undefined,
     },
     {
       id: "pro",
@@ -49,7 +52,7 @@ export function billingPlans(): BillingPlan[] {
       kind: "subscription",
       description: "Heavier inbox, meetings, and proactive workflow automation.",
       currency,
-      amount: 9900,
+      amount: 4900,
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.pro,
@@ -69,7 +72,7 @@ export function billingPlans(): BillingPlan[] {
       kind: "subscription",
       description: "Higher budget plan for deeper background work.",
       currency,
-      amount: 19900,
+      amount: 10000,
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.business,

@@ -6,7 +6,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Transparent AI automation pricing for professionals. Start your 15-day free trial. Simple plans with no hidden fees.",
+    "Transparent AI automation pricing for professionals. Start your 10-day free trial. Simple plans with no hidden fees.",
   alternates: { canonical: `${SITE_URL}/pricing` },
   openGraph: {
     title: "Pricing",
@@ -32,10 +32,9 @@ const productSchema = {
   operatingSystem: "Web, Telegram",
   url: SITE_URL,
   offers: [
-    { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Starter", price: "49", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Pro", price: "99", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Business", price: "199", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Starter", price: "20", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Pro", price: "49", priceCurrency: "USD" },
+    { "@type": "Offer", name: "Business", price: "100", priceCurrency: "USD" },
   ],
 };
 

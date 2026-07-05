@@ -96,7 +96,7 @@ export function UpgradeClient() {
               ? `You have ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left on your free trial. Subscribe now to keep access.`
               : trialExpired
                 ? "Subscribe to continue using rizly and unlock full access."
-                : "All plans include a 15-day free trial. Cancel any time."}
+                : "All plans include a 10-day free trial. Cancel any time."}
           </p>
         </div>
 
@@ -155,7 +155,7 @@ export function UpgradeClient() {
                           <span className="mb-1 text-sm text-slate-400 line-through">{price}</span>
                         </div>
                         <p className="mt-1 text-xs font-semibold text-[#FE7F2D]">
-                          First {plan.intro.months} months, then {price}/{plan.interval ?? "month"}
+                          First {plan.intro.months} month{plan.intro.months === 1 ? "" : "s"}, then {price}/{plan.interval ?? "month"}
                         </p>
                       </>
                     ) : (

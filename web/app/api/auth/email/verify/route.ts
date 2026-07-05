@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const jwt = signAuthToken(result.identity);
   await setAuthCookie(jwt);
 
-  // Auto-start 15-day trial on first login; idempotent if already started.
+  // Auto-start 10-day trial on first login; idempotent if already started.
   const userId = normalizeEmail(result.identity.email);
   callGateway("/api/billing/trial/start", {
     userId,

@@ -305,6 +305,8 @@ export class AiCoreService {
    * fire-and-forget. The body is fetched live here, never carried on the queue.
    */
   async ingestEmailSpine(data: SpineJobData) {
+    const sender = parseHeader(data.from);
+    const senderName = cleanSenderHint(data.senderName) ?? sender.name;
     // Parse CC header into extra participants
     const ccParticipants = parseCcHeader(data.cc ?? "").map((p) => ({
       ...p,
@@ -320,7 +322,14 @@ export class AiCoreService {
       content: data.subject,
       metadata: { from: data.from },
       participants: [
-        { ...parseHeader(data.from), role: "sender" },
+        {
+          ...sender,
+          name: senderName,
+          role: "sender",
+          senderType: data.senderType,
+          isAutomated: data.isAutomated,
+          isMarketing: data.isMarketing,
+        },
         ...ccParticipants,
       ],
     });
@@ -329,11 +338,11 @@ export class AiCoreService {
     const body = msg.connected ? msg.message.body : "";
 
     if (data.extractDecisions && body) {
-        await this.decisions.extractFromEmail(data.userId, {
-          from: data.from,
-          subject: data.subject,
-          body,
-        });
+      await this.decisions.extractFromEmail(data.userId, {
+        from: data.from,
+        subject: data.subject,
+        body,
+      });
     }
 
     if (body) {
@@ -713,6 +722,12 @@ function parseConnectorProvider(provider: string | undefined): ConnectorProvider
     "stripe", "calcom", "slack", "notion", "custom_api", "paypal", "github", "mpesa",
   ]);
   return provider && allowed.has(provider) ? (provider as ConnectorProvider) : undefined;
+}
+
+function cleanSenderHint(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.includes("@")) return undefined;
+  return trimmed.length > 80 ? trimmed.slice(0, 80).trim() : trimmed;
 }
 
 /** Split a raw CC header like "Name <email>, Name2 <email2>" into participants. */

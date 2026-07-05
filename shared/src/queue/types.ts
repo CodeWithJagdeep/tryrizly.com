@@ -53,8 +53,9 @@ export type SpineJobName = "spine-ingest-email";
 /**
  * A durable spine-ingest job. Carries only non-sensitive descriptors — the
  * worker re-fetches the email body live so a body never lands in Redis.
- * `extractDecisions` is decided upstream (category-gated) so the worker needs
- * no email-classification knowledge.
+ * `extractDecisions` is decided upstream (category-gated). Lightweight sender
+ * hints come from the classifier so the spine can avoid turning automated mail
+ * into fake people.
  */
 export type SpineJobData = {
   userId: string;
@@ -63,6 +64,10 @@ export type SpineJobData = {
   from: string;
   subject: string;
   extractDecisions: boolean;
+  senderName?: string;
+  senderType?: "human" | "automated" | "customer" | "investor" | "vendor" | "internal" | "unknown";
+  isAutomated?: boolean;
+  isMarketing?: boolean;
   /** Raw CC header value from Gmail, e.g. "Name <email>, Name2 <email2>" */
   cc?: string;
 };

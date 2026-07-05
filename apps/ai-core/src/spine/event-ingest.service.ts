@@ -1,9 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { logger } from "@heyriz/shared/logger";
-import { EntityResolverService } from "./entity-resolver.service";
+import { EntityResolverService, type ResolveInput } from "./entity-resolver.service";
 import { EventRepository, type EventType } from "./event.repository";
 
-export type Participant = { name?: string; email?: string; role?: string };
+export type Participant = {
+  name?: string;
+  email?: string;
+  role?: string;
+  senderType?: ResolveInput["senderType"];
+  isAutomated?: boolean;
+  isMarketing?: boolean;
+};
 
 export type RecordEventInput = {
   type: EventType;
@@ -56,6 +63,9 @@ export class EventIngestService {
         const resolved = await this.entities.resolve(userId, {
           name: p.name,
           email: p.email,
+          senderType: p.senderType,
+          isAutomated: p.isAutomated,
+          isMarketing: p.isMarketing,
           source: input.source,
         });
         if (resolved) await this.events.linkEntity(eventId, resolved.entityId, p.role);

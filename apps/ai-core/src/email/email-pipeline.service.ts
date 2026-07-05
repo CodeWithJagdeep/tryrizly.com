@@ -102,6 +102,10 @@ export class EmailPipelineService {
       from: input.from,
       subject: input.subject,
       extractDecisions: env.BACKGROUND_AI_ENABLED && DECISION_CATEGORIES.has(facts.category),
+      senderName: facts.person,
+      senderType: facts.senderType,
+      isAutomated: facts.isAutomated,
+      isMarketing: facts.isMarketing,
       cc: msgRes.connected ? msgRes.message.cc : undefined,
     }).catch((e: unknown) =>
       logger.warn("spine: enqueue failed", {

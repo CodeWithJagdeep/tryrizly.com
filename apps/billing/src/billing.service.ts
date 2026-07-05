@@ -27,7 +27,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** A Telegram nudge the sweep wants delivered; the worker owns the queue, so these are returned, not enqueued here. */
 export type SweepNudge = {
   userId: string;
-  kind: "trial-d3" | "trial-d1" | "trial-ended";
+  kind: "trial-d3" | "trial-d1" | "trial-ended" | "renewal-notice";
   message: string;
   emailFallback: boolean;
 };
@@ -434,6 +434,38 @@ export class BillingService {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    // Renewal notices: 5 days before the next auto-charge on an active paid
+    // subscription, so nobody is surprised by a deduction. Deduped per billing
+    // period through billing_events (keyed on the period end date), and only
+    // for subscriptions not already set to stop at period end.
+    try {
+      const renewing = await this.repository.findSubscriptionsRenewingWithin(5);
+      for (const subscription of renewing) {
+        const periodEnd = subscription.current_period_end;
+        if (!periodEnd) continue;
+        const firstTime = await this.repository.insertEvent({
+          provider: "internal",
+          eventId: `renewal-notice:${subscription.user_id}:${periodEnd.toISOString().slice(0, 10)}`,
+          eventType: "renewal_notice",
+          payload: { subscriptionId: subscription.id, periodEnd: periodEnd.toISOString() },
+        });
+        if (!firstTime) continue;
+        const plan = findPlan(subscription.plan_id);
+        const amount = plan ? `${(plan.amount / 100).toFixed(0)} ${plan.currency}` : "your plan amount";
+        const renewDate = periodEnd.toISOString().slice(0, 10);
+        nudges.push({
+          userId: subscription.user_id,
+          kind: "renewal-notice",
+          message: `Your Rizly ${plan?.name ?? subscription.plan_id} plan renews on ${renewDate} — ${amount} will be charged automatically. To stop the renewal, cancel any time before then: ${env.WEB_APP_URL}/dashboard/upgrade`,
+          emailFallback: true,
+        });
+      }
+    } catch (error) {
+      logger.warn("billing sweep: renewal notice pass failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     let expiredProcessed = 0;

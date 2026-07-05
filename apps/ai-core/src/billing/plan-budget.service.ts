@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { Pool } from "pg";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
-import { aiBudgetForPlan } from "@heyriz/shared/billing/plan-budgets";
+import { aiBudgetForPlan, isCreditPackId, CREDIT_PACKS, usdForCredits } from "@heyriz/shared/billing/plan-budgets";
 
 type SubscriptionRow = { plan_id: string; status: string };
 type TrialRow = { plan_id: string; ends_at: Date; consumed: boolean };
@@ -35,8 +35,43 @@ export class PlanBudgetService implements OnModuleDestroy {
   /** No DATABASE_URL (local/dev) degrades to "unlimited" rather than blocking everything. */
   async aiBudgetUsd(userId: string): Promise<number> {
     if (!this.pool) return Number.POSITIVE_INFINITY;
-    const planId = await this.currentPlanId(userId);
-    return aiBudgetForPlan(planId);
+    const [planId, topUpUsd] = await Promise.all([
+      this.currentPlanId(userId),
+      this.topUpUsdThisCycle(userId),
+    ]);
+    return aiBudgetForPlan(planId) + topUpUsd;
+  }
+
+  /**
+   * Sum of purchased credit-pack allowance for the current calendar-month
+   * cycle (packs don't carry over — see CREDIT_PACKS doc comment). Uses the
+   * pack's redemption value (usdForCredits), not the price paid, since the
+   * pack price is marked up above raw cost.
+   */
+  private async topUpUsdThisCycle(userId: string): Promise<number> {
+    if (!this.pool) return 0;
+    try {
+      const result = await this.pool.query<{ plan_id: string }>(
+        `select plan_id from billing_purchases
+         where user_id = $1
+           and status in ('paid', 'captured')
+           and created_at >= date_trunc('month', now() at time zone 'utc')`,
+        [userId],
+      );
+      let usd = 0;
+      for (const row of result.rows) {
+        if (isCreditPackId(row.plan_id)) {
+          usd += usdForCredits(CREDIT_PACKS[row.plan_id].credits);
+        }
+      }
+      return usd;
+    } catch (error) {
+      logger.warn("plan budget: top-up lookup failed, ignoring top-ups", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
   }
 
   private async currentPlanId(userId: string): Promise<string> {
@@ -64,8 +99,13 @@ export class PlanBudgetService implements OnModuleDestroy {
       const t = trial.rows[0];
       if (t && !t.consumed && new Date(t.ends_at).getTime() > Date.now()) return t.plan_id;
 
+      // Credit packs are top-ups, never an access tier — excluded here so one
+      // never gets mistaken for the plan_id whose budget defines this cycle
+      // (topUpUsdThisCycle adds their value separately, on top of whatever
+      // tier this resolves to).
       const purchase = await this.pool.query<PurchaseRow>(
         `select plan_id, status from billing_purchases where user_id = $1
+           and plan_id not like 'credits_%'
          order by case status when 'paid' then 1 when 'captured' then 2 else 9 end, updated_at desc limit 1`,
         [userId],
       );

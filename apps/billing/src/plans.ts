@@ -1,5 +1,5 @@
 import { env } from "@heyriz/shared/env";
-import { PLAN_AI_BUDGETS } from "@heyriz/shared/billing/plan-budgets";
+import { CREDIT_PACKS, PLAN_AI_BUDGETS, PLAN_CREDITS } from "@heyriz/shared/billing/plan-budgets";
 import type { BillingPlan } from "./types";
 
 const currency = "USD";
@@ -16,6 +16,7 @@ export function billingPlans(): BillingPlan[] {
       amount: 0,
       trialDays: 0,
       aiBudgetUsd: PLAN_AI_BUDGETS.free,
+      credits: PLAN_CREDITS.free,
       seats: 1,
       features: ["Limited chat", "Basic memory", "Manual connector setup"],
     },
@@ -29,6 +30,7 @@ export function billingPlans(): BillingPlan[] {
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.starter,
+      credits: PLAN_CREDITS.starter,
       seats: 1,
       features: [
         "Recurring subscription",
@@ -51,6 +53,7 @@ export function billingPlans(): BillingPlan[] {
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.pro,
+      credits: PLAN_CREDITS.pro,
       seats: 1,
       features: [
         "Recurring subscription",
@@ -70,6 +73,7 @@ export function billingPlans(): BillingPlan[] {
       interval: "month",
       trialDays: env.BILLING_TRIAL_DAYS,
       aiBudgetUsd: PLAN_AI_BUDGETS.business,
+      credits: PLAN_CREDITS.business,
       seats: 1,
       features: [
         "Recurring subscription",
@@ -78,7 +82,25 @@ export function billingPlans(): BillingPlan[] {
       ],
       razorpayPlanId: env.RAZORPAY_BUSINESS_PLAN_ID,
     },
+    ...creditPackPlans(),
   ];
+}
+
+/** One-time credit top-up packs — purchasable by any paid or free user to extend the current cycle's AI budget. */
+function creditPackPlans(): BillingPlan[] {
+  return Object.entries(CREDIT_PACKS).map(([packId, pack]) => ({
+    id: packId,
+    name: `${pack.credits.toLocaleString()} credits`,
+    kind: "one_time",
+    description: "Top up your AI credits for the rest of this billing cycle.",
+    currency,
+    amount: pack.priceUsd * 100,
+    trialDays: 0,
+    aiBudgetUsd: 0,
+    credits: pack.credits,
+    seats: 1,
+    features: [`+${pack.credits.toLocaleString()} credits`, "Applies to your current cycle"],
+  }));
 }
 
 export function findPlan(planId: string) {

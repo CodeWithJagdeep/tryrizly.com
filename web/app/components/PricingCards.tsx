@@ -25,7 +25,7 @@ export const plans: Plan[] = [
     description: 'The floor tier after your trial. Enough to stay connected.',
     cta: 'Get started',
     href: '/signup',
-    features: ['Limited chat with Riz', 'Basic memory', 'Manual connector setup', 'Telegram delivery'],
+    features: ['Limited chat with Riz', 'Basic memory', 'Manual connector setup', '100 AI credits/month'],
   },
   {
     id: 'starter',
@@ -37,7 +37,7 @@ export const plans: Plan[] = [
     description: 'Founder-grade daily assistant with controlled background AI.',
     cta: 'Start 15-day free trial',
     href: '/signup',
-    features: ['Email triage & drafting', 'Morning brief & reminders', 'Connector memory', 'Standard AI allowance'],
+    features: ['Email triage & drafting', 'Morning brief & reminders', 'Connector memory', '3,000 AI credits/month'],
   },
   {
     id: 'pro',
@@ -47,7 +47,7 @@ export const plans: Plan[] = [
     description: 'Heavier inbox, meetings, and proactive workflow automation.',
     cta: 'Start 15-day free trial',
     href: '/signup',
-    features: ['Everything in Starter', 'Priority agent runs', 'Weekly digest automation', 'Higher AI allowance'],
+    features: ['Everything in Starter', 'Priority agent runs', 'Weekly digest automation', '7,000 AI credits/month'],
     highlighted: true,
   },
   {
@@ -58,7 +58,7 @@ export const plans: Plan[] = [
     description: 'The highest AI budget for deep background work.',
     cta: 'Start 15-day free trial',
     href: '/signup',
-    features: ['Everything in Pro', 'Highest AI allowance', 'Business-system integrations', 'Priority support'],
+    features: ['Everything in Pro', '16,000 AI credits/month', 'Business-system integrations', 'Priority support'],
   },
 ];
 

@@ -22,3 +22,50 @@ export function aiBudgetForPlan(planId: string | undefined): number {
   if (planId && isBillingPlanId(planId)) return PLAN_AI_BUDGETS[planId];
   return PLAN_AI_BUDGETS.free;
 }
+
+// ── Credits ──────────────────────────────────────────────────────────────────
+// "Credits" are a marketing-facing relabeling of the same USD budget above —
+// not a separate ledger. 1 credit = $0.005 of allowed AI spend. Every included
+// plan allotment converts at this exact rate (no margin hidden here; that
+// margin already lives in the subscription price vs. PLAN_AI_BUDGETS). Purchased
+// top-up packs are priced ABOVE this rate — see CREDIT_PACKS — so margin on
+// top-ups is explicit in the pack price, not in a second conversion rate.
+
+export const CREDITS_PER_DOLLAR = 200;
+
+export function creditsForUsd(usd: number): number {
+  return Math.round(usd * CREDITS_PER_DOLLAR);
+}
+
+export function usdForCredits(credits: number): number {
+  return credits / CREDITS_PER_DOLLAR;
+}
+
+export const PLAN_CREDITS: Record<BillingPlanId, number> = {
+  free: creditsForUsd(PLAN_AI_BUDGETS.free),
+  starter: creditsForUsd(PLAN_AI_BUDGETS.starter),
+  pro: creditsForUsd(PLAN_AI_BUDGETS.pro),
+  business: creditsForUsd(PLAN_AI_BUDGETS.business),
+};
+
+export function creditsForPlan(planId: string | undefined): number {
+  return creditsForUsd(aiBudgetForPlan(planId));
+}
+
+/**
+ * One-time purchasable credit packs (kind: "one_time" billing plans, id
+ * "credits_<packId>"). `credits` is the ADDED allowance for the current
+ * billing cycle (redeemable at CREDITS_PER_DOLLAR, same as included credits);
+ * `priceUsd` is what the customer pays — priced above raw cost so Rizly keeps
+ * a margin even if the whole pack is spent. Top-ups apply to the current
+ * calendar-month cycle only; they do not carry over into the next cycle.
+ */
+export const CREDIT_PACKS = {
+  credits_1000: { credits: 1000, priceUsd: 10 },
+} as const;
+
+export type CreditPackId = keyof typeof CREDIT_PACKS;
+
+export function isCreditPackId(value: string): value is CreditPackId {
+  return value in CREDIT_PACKS;
+}

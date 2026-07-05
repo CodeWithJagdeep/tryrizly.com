@@ -15,6 +15,8 @@ export type BillingPlan = {
   razorpayPlanId?: string;
   /** Intro pricing (e.g. first 3 months discounted). Present only when the backing Razorpay offer is configured. */
   intro?: { amount: number; months: number };
+  /** Credits label for this plan's aiBudgetUsd (subscriptions/free) or this pack's grant (one_time credit packs). */
+  credits?: number;
 };
 
 export type BillingCustomerInput = {

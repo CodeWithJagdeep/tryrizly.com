@@ -12,6 +12,7 @@ type Plan = {
   interval?: "month" | "year";
   trialDays: number;
   aiBudgetUsd: number;
+  credits?: number;
   features: string[];
   configured: boolean;
   intro?: { amount: number; months: number };
@@ -163,8 +164,8 @@ export function UpgradeClient() {
                         <span className="mb-1 text-sm text-slate-400">/ {plan.interval ?? "month"}</span>
                       </div>
                     )}
-                    <p className="mt-1 text-xs text-slate-400">
-                      AI budget: ${plan.aiBudgetUsd}/mo
+                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                      {plan.credits?.toLocaleString() ?? "—"} AI credits / mo
                     </p>
                   </div>
 

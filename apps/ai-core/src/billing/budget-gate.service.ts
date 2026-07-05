@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { logger } from "@heyriz/shared/logger";
 import { PlanBudgetService } from "./plan-budget.service";
 import { UsageLedgerService } from "../llm/usage-ledger.service";
+import { creditsForUsd } from "@heyriz/shared/billing/plan-budgets";
 
 export type BudgetState = "ok" | "warn" | "exceeded";
 
@@ -81,6 +82,8 @@ export class BudgetGateService {
       this.check(userId),
       this.usageLedger.breakdownSince(userId, cycleStart),
     ]);
-    return { ...check, cycleStart: cycleStart.toISOString(), breakdown };
+    const creditsUsed = creditsForUsd(check.spendUsd);
+    const creditsBudget = Number.isFinite(check.budgetUsd) ? creditsForUsd(check.budgetUsd) : Infinity;
+    return { ...check, creditsUsed, creditsBudget, cycleStart: cycleStart.toISOString(), breakdown };
   }
 }

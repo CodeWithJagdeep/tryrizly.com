@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { taskLabel } from "../lib/usage-labels";
 
 type UsageBreakdownRow = {
   task: string;
@@ -33,17 +34,6 @@ declare global {
     Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
   }
 }
-
-const TASK_LABELS: Record<string, string> = {
-  agent: "Chat & tool calls",
-  extract: "Email reading",
-  decide: "Decision tracking",
-  draft: "Drafting replies",
-  memory: "Memory notes",
-  brief: "Morning brief",
-  query: "Business data lookups",
-  classify: "Inbox triage",
-};
 
 // Mirrors shared/src/billing/plan-budgets.ts CREDIT_PACKS — kept in sync by hand
 // since web/ doesn't share that package (separate deploy target on Vercel).
@@ -239,7 +229,7 @@ export function UsageClient() {
                   <article key={row.task} className="flex items-center justify-between px-5 py-4 transition hover:bg-white/60">
                     <div>
                       <p className="text-sm leading-6 text-slate-900">
-                        {TASK_LABELS[row.task] ?? row.task}
+                        {taskLabel(row.task)}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
                         {row.calls} call{row.calls === 1 ? "" : "s"}

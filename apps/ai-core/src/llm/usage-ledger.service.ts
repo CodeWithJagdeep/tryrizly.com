@@ -128,6 +128,40 @@ export class UsageLedgerService implements OnModuleDestroy {
     }
   }
 
+  /** Most recent individual calls (real activity feed, not aggregated) for the header credits popover. */
+  async recentEntries(
+    userId: string,
+    limit = 15,
+  ): Promise<Array<{ task: string; costUsd: number; createdAt: string }>> {
+    try {
+      if (!this.pool) {
+        return inMemoryLog
+          .filter((r) => r.userId === userId)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, limit)
+          .map((r) => ({ task: r.task, costUsd: r.costUsd, createdAt: r.createdAt.toISOString() }));
+      }
+      await this.ensureTable();
+      const result = await this.pool.query<{ task: string; cost_usd: string; created_at: Date }>(
+        `select task, cost_usd, created_at from llm_usage_log
+         where user_id = $1
+         order by created_at desc
+         limit $2`,
+        [userId, limit],
+      );
+      return result.rows.map((r) => ({
+        task: r.task,
+        costUsd: Number(r.cost_usd),
+        createdAt: r.created_at.toISOString(),
+      }));
+    } catch (error) {
+      logger.warn("usage ledger: recentEntries failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
   private async ensureTable() {
     if (!this.pool) return;
     await this.pool.query(`

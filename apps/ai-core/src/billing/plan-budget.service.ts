@@ -42,6 +42,11 @@ export class PlanBudgetService implements OnModuleDestroy {
     return aiBudgetForPlan(planId) + topUpUsd;
   }
 
+  /** Public wrapper for the header credits badge — just the plan id, e.g. "free" | "starter" | "pro" | "business". */
+  async getPlanId(userId: string): Promise<string> {
+    return this.currentPlanId(userId);
+  }
+
   /**
    * Sum of purchased credit-pack allowance for the current calendar-month
    * cycle (packs don't carry over — see CREDIT_PACKS doc comment). Uses the

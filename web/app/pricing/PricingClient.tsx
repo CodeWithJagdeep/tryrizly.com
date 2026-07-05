@@ -9,7 +9,7 @@ import { PricingCards, plans } from '../components/PricingCards';
 type FeatureRow = {
   label: string;
   description: string;
-  values: [string, string, string, string];
+  values: [string, string, string];
 };
 
 type FeatureCategory = {
@@ -24,32 +24,32 @@ const comparisonCategories: FeatureCategory[] = [
       {
         label: 'Chat with Riz',
         description: 'Ask, delegate, and approve from Telegram or the dashboard.',
-        values: ['Limited', 'Full', 'Full', 'Full'],
+        values: ['Full', 'Full', 'Full'],
       },
       {
         label: 'Email triage & drafting',
         description: 'Inbox analysis, summaries, and reply drafts awaiting your approval.',
-        values: ['—', 'Yes', 'Yes', 'Yes'],
+        values: ['Yes', 'Yes', 'Yes'],
       },
       {
         label: 'Morning brief & reminders',
         description: 'A daily brief in your timezone, plus follow-ups that chase themselves.',
-        values: ['—', 'Yes', 'Yes', 'Yes'],
+        values: ['Yes', 'Yes', 'Yes'],
       },
       {
         label: 'Contextual memory',
         description: 'People, companies, and decisions remembered across channels.',
-        values: ['Basic', 'Full', 'Full', 'Full'],
+        values: ['Full', 'Full', 'Full'],
       },
       {
         label: 'Priority agent runs',
         description: 'Your requests jump the queue with stronger models.',
-        values: ['—', '—', 'Yes', 'Yes'],
+        values: ['—', 'Yes', 'Yes'],
       },
       {
         label: 'Weekly digest automation',
         description: 'A business digest composed and delivered every week.',
-        values: ['—', '—', 'Yes', 'Yes'],
+        values: ['—', 'Yes', 'Yes'],
       },
     ],
   },
@@ -59,12 +59,12 @@ const comparisonCategories: FeatureCategory[] = [
       {
         label: 'Standard connectors',
         description: 'Gmail, Google Calendar, and Telegram.',
-        values: ['Yes', 'Yes', 'Yes', 'Yes'],
+        values: ['Yes', 'Yes', 'Yes'],
       },
       {
         label: 'Business systems',
         description: 'Stripe, Razorpay, PostgreSQL, and MongoDB.',
-        values: ['—', '—', 'Yes', 'Yes'],
+        values: ['—', 'Yes', 'Yes'],
       },
     ],
   },
@@ -72,14 +72,14 @@ const comparisonCategories: FeatureCategory[] = [
     categoryName: 'Usage & support',
     rows: [
       {
-        label: 'Monthly AI allowance',
+        label: 'Monthly AI credits',
         description: 'How much background AI work your plan covers each month.',
-        values: ['Minimal', 'Standard', 'High', 'Highest'],
+        values: ['1,200', '3,400', '8,000'],
       },
       {
         label: 'Support',
         description: 'How to reach us when something needs a human.',
-        values: ['Email', 'Email', 'Priority email', 'Priority email'],
+        values: ['Email', 'Priority email', 'Priority email'],
       },
     ],
   },
@@ -170,7 +170,7 @@ export function PricingClient() {
                   {comparisonCategories.map((category) => (
                     <Fragment key={category.categoryName}>
                       <tr className='border-b border-black/10 bg-slate-50'>
-                        <td colSpan={5} className='px-6 py-3'>
+                        <td colSpan={4} className='px-6 py-3'>
                           <h4 className='text-[12px] font-black uppercase tracking-[0.18em] text-slate-500'>
                             {category.categoryName}
                           </h4>

@@ -66,7 +66,7 @@ function CheckIcon() {
 /** The joined pricing-card grid used on /pricing and the homepage — one source, no drift. */
 export function PricingCards() {
   return (
-    <div className='grid grid-cols-1 overflow-hidden border-2 border-black md:grid-cols-2 lg:grid-cols-4'>
+    <div className='grid grid-cols-1 overflow-hidden border-2 border-black md:grid-cols-3'>
       {plans.map((plan, index) => (
         <div
           key={plan.id}

@@ -103,6 +103,10 @@ const schema = z.object({
   RAZORPAY_STARTER_PLAN_ID: z.string().optional(),
   RAZORPAY_PRO_PLAN_ID: z.string().optional(),
   RAZORPAY_BUSINESS_PLAN_ID: z.string().optional(),
+  // Dashboard-created Razorpay Offer applied to new Starter subscriptions
+  // (intro pricing: first N cycles discounted). Offers have no create API, so
+  // the id is provisioned by hand and injected here; unset = full price.
+  RAZORPAY_STARTER_INTRO_OFFER_ID: z.string().optional(),
   BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(15),
   BILLING_SUBSCRIPTION_TOTAL_COUNT: z.coerce.number().int().positive().default(120),
   // Ad-hoc business_snapshot routing against a principal's own connected

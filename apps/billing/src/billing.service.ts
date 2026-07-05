@@ -162,6 +162,7 @@ export class BillingService {
       name: input.name,
       returnUrl: input.returnUrl,
       trialEndsAt,
+      offerId: plan.id === "starter" ? env.RAZORPAY_STARTER_INTRO_OFFER_ID : undefined,
     });
 
     const subscription = await this.repository.createSubscription({

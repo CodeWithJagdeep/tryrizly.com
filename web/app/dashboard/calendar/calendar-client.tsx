@@ -199,6 +199,10 @@ export function CalendarClient() {
   const [mtgAttendees, setMtgAttendees] = useState<string[]>([]);
   const [mtgAttendeeInput, setMtgAttendeeInput] = useState("");
   const [mtgDescription, setMtgDescription] = useState("");
+  // Set after a 409 conflict so the next submit can say "book it anyway".
+  const [mtgConflict, setMtgConflict] = useState(false);
+  // A changed slot is a new proposal — re-run the conflict check for it.
+  useEffect(() => setMtgConflict(false), [mtgDate, mtgStartTime, mtgEndTime]);
 
   // Scheduled mail form
   const [mailTo, setMailTo] = useState("");
@@ -341,10 +345,17 @@ export function CalendarClient() {
           attendees: mtgAttendees,
           description: mtgDescription.trim() || undefined,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          ignoreConflict: mtgConflict,
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; hangoutLink?: string; message?: string };
+      const data = (await res.json()) as { ok?: boolean; hangoutLink?: string; message?: string; code?: string };
+      if (res.status === 409 && data.code === "conflict") {
+        setMtgConflict(true);
+        setSubmitError(`${data.message ?? "This slot clashes with another meeting."} Press "Create Anyway" to book it regardless.`);
+        return;
+      }
       if (!res.ok) throw new Error(data.message ?? "Failed to create meeting");
+      setMtgConflict(false);
       setSubmitSuccess({
         message: data.hangoutLink
           ? "Meeting created. Google Meet link was added and sent to attendees."
@@ -402,6 +413,16 @@ export function CalendarClient() {
     setSubmitSuccess(null);
     setSubmitError(null);
   }
+
+  // Deep link from the Meetings page: /dashboard/calendar?new=meeting opens
+  // the scheduling dialog on the meeting tab. window.location (not
+  // useSearchParams) so the page needs no Suspense boundary.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "meeting") {
+      setDialogTab("meeting");
+      setDialogOpen(true);
+    }
+  }, []);
 
   function openDialogForDate(dateKey: string) {
     setSelectedDay(dateKey);
@@ -1072,7 +1093,7 @@ export function CalendarClient() {
                   A Google Meet link will be created and attendees emailed automatically. Riz will send you a Telegram reminder 15 min before.
                 </p>
 
-                <DialogFooter onCancel={closeDialog} onSubmit={submitMeeting} submitting={submitting} label="Create Meeting" />
+                <DialogFooter onCancel={closeDialog} onSubmit={submitMeeting} submitting={submitting} label={mtgConflict ? "Create Anyway" : "Create Meeting"} />
               </div>
             )}
 

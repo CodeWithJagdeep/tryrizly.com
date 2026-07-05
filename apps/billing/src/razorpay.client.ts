@@ -43,12 +43,15 @@ export class RazorpayClient {
     email?: string;
     name?: string;
     returnUrl?: string;
+    /** Razorpay Offer to apply (intro pricing). */
+    offerId?: string;
   }): Promise<RazorpaySubscriptionResponse> {
     const body: Record<string, unknown> = {
       plan_id: input.planId,
       total_count: env.BILLING_SUBSCRIPTION_TOTAL_COUNT,
       quantity: 1,
       customer_notify: 1,
+      ...(input.offerId ? { offer_id: input.offerId } : {}),
       notes: {
         userId: input.userId,
         planId: input.localPlanId,

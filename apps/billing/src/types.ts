@@ -13,6 +13,8 @@ export type BillingPlan = {
   seats: number;
   features: string[];
   razorpayPlanId?: string;
+  /** Intro pricing (e.g. first 3 months discounted). Present only when the backing Razorpay offer is configured. */
+  intro?: { amount: number; months: number };
 };
 
 export type BillingCustomerInput = {

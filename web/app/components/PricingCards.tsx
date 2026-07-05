@@ -10,6 +10,9 @@ export type Plan = {
   href: string;
   features: string[];
   highlighted?: boolean;
+  /** Launch/intro price shown instead of `price`, e.g. "$15 for your first 3 months". */
+  introPrice?: string;
+  introNote?: string;
 };
 
 // Mirrors apps/billing/src/plans.ts — keep the two in sync.
@@ -29,6 +32,8 @@ export const plans: Plan[] = [
     name: 'Starter',
     price: '$49',
     cadence: '/month',
+    introPrice: '$15',
+    introNote: 'First 3 months, then $49/mo',
     description: 'Founder-grade daily assistant with controlled background AI.',
     cta: 'Start 15-day free trial',
     href: '/signup',
@@ -88,11 +93,19 @@ export function PricingCards() {
             {plan.name}
           </h3>
           <div className='mt-5 flex items-baseline gap-1.5'>
-            <span className='font-neue-haas text-5xl font-medium tracking-tight'>{plan.price}</span>
+            <span className='font-neue-haas text-5xl font-medium tracking-tight'>{plan.introPrice ?? plan.price}</span>
             <span className={`text-sm font-medium ${plan.highlighted ? 'text-white/50' : 'text-slate-400'}`}>
               {plan.cadence}
             </span>
+            {plan.introPrice && (
+              <span className={`text-sm font-medium line-through ${plan.highlighted ? 'text-white/40' : 'text-slate-300'}`}>
+                {plan.price}
+              </span>
+            )}
           </div>
+          {plan.introNote && (
+            <p className='mt-1 text-xs font-semibold text-[#FE7F2D]'>{plan.introNote}</p>
+          )}
           <p className={`mt-4 min-h-[48px] text-sm leading-6 ${plan.highlighted ? 'text-white/60' : 'text-slate-500'}`}>
             {plan.description}
           </p>

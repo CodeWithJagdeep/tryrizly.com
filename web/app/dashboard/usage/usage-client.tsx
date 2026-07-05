@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { groupByDay, taskLabel, timeAgo } from "../lib/usage-labels";
+import { dayLabel, taskLabel } from "../lib/usage-labels";
 
 type UsageBreakdownRow = {
   task: string;
@@ -9,10 +9,9 @@ type UsageBreakdownRow = {
   calls: number;
 };
 
-type RecentEntry = {
-  task: string;
+type DailyTotal = {
+  day: string;
   credits: number;
-  createdAt: string;
 };
 
 type UsageSummary = {
@@ -25,7 +24,12 @@ type UsageSummary = {
   ratio: number;
   cycleStart: string;
   breakdown: UsageBreakdownRow[];
-  recent: RecentEntry[];
+  daily: DailyTotal[];
+};
+
+type BillingStatus = {
+  plan?: { name?: string };
+  access?: { state?: string; expiresAt?: string | null };
 };
 
 type CheckoutResponse = {
@@ -88,6 +92,7 @@ function formatDate(iso: string | Date): string {
 
 export function UsageClient() {
   const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
@@ -111,7 +116,7 @@ export function UsageClient() {
         ratio: data.ratio ?? 0,
         cycleStart: data.cycleStart ?? new Date().toISOString(),
         breakdown: data.breakdown ?? [],
-        recent: data.recent ?? [],
+        daily: data.daily ?? [],
       });
       setLoadError(null);
     } catch (error) {
@@ -123,6 +128,10 @@ export function UsageClient() {
 
   useEffect(() => {
     void loadUsage();
+    fetch("/api/billing/status")
+      .then((r) => r.json())
+      .then((d: BillingStatus) => setBilling(d))
+      .catch(() => undefined);
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
@@ -186,6 +195,9 @@ export function UsageClient() {
   const barColor =
     usage?.state === "exceeded" ? "bg-red-600" : usage?.state === "warn" ? "bg-amber-600" : "bg-emerald-600";
 
+  const trialOrRenewLabel = billing?.access?.state === "trialing" ? "Trial ends" : "Renews";
+  const trialOrRenewValue = billing?.access?.expiresAt ? formatDate(billing.access.expiresAt) : "—";
+
   return (
     <main className="min-h-screen bg-white text-slate-900">
       {/* Header */}
@@ -226,21 +238,23 @@ export function UsageClient() {
           <div className="flex flex-col gap-6">
             {/* Stat tiles */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile label="Plan" value={PLAN_NAMES[usage.planId] ?? "Free"} />
+              <StatTile label="Plan" value={billing?.plan?.name ?? PLAN_NAMES[usage.planId] ?? "Free"} />
               <StatTile
                 label="Remaining"
                 value={unlimited ? "Unlimited" : remaining.toLocaleString()}
                 accent={usage.state === "exceeded" ? "text-red-600" : usage.state === "warn" ? "text-amber-600" : undefined}
               />
               <StatTile label="Used this cycle" value={usage.creditsUsed.toLocaleString()} />
-              <StatTile label="Renews" value={formatDate(nextCycleDate(usage.cycleStart))} />
+              <StatTile label={trialOrRenewLabel} value={trialOrRenewValue} />
             </div>
 
             {/* Usage bar */}
             {!unlimited && (
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex items-baseline justify-between gap-4">
-                  <p className="text-sm font-medium text-slate-500">Since {formatDate(usage.cycleStart)}</p>
+                  <p className="text-sm font-medium text-slate-500">
+                    Credits since {formatDate(usage.cycleStart)} · resets {formatDate(nextCycleDate(usage.cycleStart))}
+                  </p>
                   <p className="text-sm font-medium text-slate-500">{usage.creditsBudget.toLocaleString()} credits included</p>
                 </div>
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -286,29 +300,18 @@ export function UsageClient() {
               )}
             </Section>
 
-            {/* Recent activity, grouped by day */}
+            {/* Recent activity — one row per day, not per call (a single call can
+                cost a fraction of a credit and reads as "-0"). */}
             <Section title="Recent activity">
-              {usage.recent.length === 0 ? (
-                <EmptyRow text="No AI usage recorded yet this cycle." />
+              {usage.daily.length === 0 ? (
+                <EmptyRow text="No AI usage recorded yet." />
               ) : (
-                <div className="divide-y divide-slate-200">
-                  {groupByDay(usage.recent).map((group) => (
-                    <div key={group.label}>
-                      <p className="bg-slate-50 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {group.label}
-                      </p>
-                      {group.items.map((r, i) => (
-                        <article key={i} className="flex items-center justify-between px-5 py-3 transition hover:bg-slate-50">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm text-slate-800">{taskLabel(r.task)}</p>
-                            <p className="mt-0.5 text-xs text-slate-400">{timeAgo(r.createdAt)}</p>
-                          </div>
-                          <p className="shrink-0 text-sm font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
-                        </article>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                usage.daily.map((d) => (
+                  <article key={d.day} className="flex items-center justify-between px-5 py-4 transition hover:bg-slate-50">
+                    <p className="text-sm font-medium text-slate-900">{dayLabel(d.day)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{d.credits.toLocaleString()} credits</p>
+                  </article>
+                ))
               )}
             </Section>
           </div>

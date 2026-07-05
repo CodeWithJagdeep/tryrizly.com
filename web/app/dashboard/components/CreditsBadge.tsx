@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { groupByDay, taskLabel, timeAgo } from "../lib/usage-labels";
+import { dayLabel } from "../lib/usage-labels";
 
 type UsageSummary = {
   state: "ok" | "warn" | "exceeded";
   creditsUsed: number;
   creditsBudget: number;
   planId: string;
-  recent: Array<{ task: string; credits: number; createdAt: string }>;
+  daily: Array<{ day: string; credits: number }>;
 };
 
 const PLAN_NAMES: Record<string, string> = {
@@ -42,7 +42,7 @@ export function CreditsBadge() {
           creditsUsed: data.creditsUsed ?? 0,
           creditsBudget: data.creditsBudget ?? Number.POSITIVE_INFINITY,
           planId: data.planId ?? "free",
-          recent: data.recent ?? [],
+          daily: data.daily ?? [],
         });
       })
       .catch(() => undefined);
@@ -102,26 +102,14 @@ export function CreditsBadge() {
           <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Recent activity
           </p>
-          {usage.recent.length === 0 ? (
+          {usage.daily.length === 0 ? (
             <p className="py-4 text-center text-sm text-slate-400">No usage recorded yet.</p>
           ) : (
-            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-              {groupByDay(usage.recent).map((group) => (
-                <div key={group.label}>
-                  <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    {group.label}
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {group.items.map((r, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
-                        <div className="min-w-0">
-                          <p className="truncate text-slate-800">{taskLabel(r.task)}</p>
-                          <p className="text-xs text-slate-400">{timeAgo(r.createdAt)}</p>
-                        </div>
-                        <p className="shrink-0 font-medium text-slate-500">-{r.credits.toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
+            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+              {usage.daily.map((d) => (
+                <div key={d.day} className="flex items-center justify-between rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
+                  <p className="text-slate-800">{dayLabel(d.day)}</p>
+                  <p className="font-medium text-slate-500">{d.credits.toLocaleString()} credits</p>
                 </div>
               ))}
             </div>

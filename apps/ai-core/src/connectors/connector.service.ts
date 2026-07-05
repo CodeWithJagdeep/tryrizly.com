@@ -133,7 +133,7 @@ export class ConnectorService {
     const account = await this.repository.findById(id);
     if (!account || account.userId !== userId) return { ok: false, error: "not_found" };
     await this.repository.deleteById(id);
-    return { ok: true };
+    return { ok: true, provider: account.provider };
   }
 
   async updateMetadata(userId = "default", id: string, patch: Record<string, unknown>) {

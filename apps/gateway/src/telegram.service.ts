@@ -64,6 +64,15 @@ function userIdFromEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+// Shown to whoever tries to link an already-claimed chat — enough to
+// recognize your own other account without leaking a stranger's address.
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "another account";
+  const visible = local.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(local.length - 2, 1))}@${domain}`;
+}
+
 const AFFIRM = /^(y|yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|send( it)?|confirm|approve|please do)\b/i;
 const NEGATE = /^(n|no|nope|cancel|stop|don'?t|abort|discard|nah)\b/i;
 const WATCH = /^(watch|just watch|keep an eye|monitor)\b/i;
@@ -182,7 +191,15 @@ export class TelegramService {
     const userId = userIdFromEmail(record.email);
     const userBeforeLink = await this.authRepo.getUser(record.email);
     const isFirstOnboarding = !userBeforeLink?.onboarding?.completedAt;
-    await this.authRepo.linkTelegramChat(String(chatId), record.email, userId);
+    const linked = await this.authRepo.linkTelegramChat(String(chatId), record.email, userId);
+
+    if (!linked.ok) {
+      await sendTelegramMessage({
+        chatId,
+        text: `This Telegram is already linked to ${maskEmail(linked.linkedEmail)}. One chat can only serve one account — unlink it from that account's dashboard first, then try again.`,
+      });
+      return;
+    }
 
     if (isFirstOnboarding) {
       sendWelcomeEmail(record.email, userBeforeLink?.name).catch((error) => {

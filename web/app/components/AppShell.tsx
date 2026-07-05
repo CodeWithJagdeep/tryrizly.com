@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
+import { CookieNotice } from "./CookieNotice";
 
 type Session = { email: string; name?: string; userId: string };
 
@@ -30,6 +31,7 @@ export function AppShell({
       <Header session={session} />
       <main className="flex flex-1 flex-col">{children}</main>
       <Footer />
+      <CookieNotice />
     </>
   );
 }

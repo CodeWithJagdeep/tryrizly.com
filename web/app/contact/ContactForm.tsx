@@ -124,6 +124,13 @@ export function ContactForm() {
           {status === "submitting" ? "Sending..." : "Send message"}
           <SendIcon />
         </button>
+        <p className="text-center text-[12px] text-slate-500">
+          By sending this, you agree to our{" "}
+          <a href="/privacy" className="font-semibold underline">
+            Privacy Policy
+          </a>
+          .
+        </p>
       </form>
     </div>
   );

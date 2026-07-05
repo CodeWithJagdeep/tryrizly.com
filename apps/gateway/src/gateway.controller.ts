@@ -420,13 +420,22 @@ export class GatewayController {
   }
 
   @Delete("api/connectors/account/:id")
-  deleteConnectorById(
+  async deleteConnectorById(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Param("id") id: string,
     @Query("userId") userId = "default",
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("connector.deleteById", { userId, id });
+    const result = await this.gatewayService.sendToAiCore<{ ok: boolean; provider?: string }>(
+      "connector.deleteById",
+      { userId, id },
+    );
+    // Removing the Telegram connector must also release the chat claim, or no
+    // other account (including this one, re-onboarding) can ever link that chat.
+    if (result?.ok && result.provider === "telegram") {
+      await this.authRepo.unlinkTelegramChat(userId);
+    }
+    return result;
   }
 
   @Patch("api/connectors/account/:id")
@@ -456,12 +465,17 @@ export class GatewayController {
   }
 
   @Delete("api/connectors/:provider")
-  deleteConnector(
+  async deleteConnector(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Param("provider") provider: string,
     @Query("userId") userId = "default",
   ) {
     this.requireInternal(secret);
+    // Disconnecting Telegram must also release the chat claim, or no other
+    // account (including this one, re-onboarding) can ever link that chat.
+    if (provider === "telegram") {
+      await this.authRepo.unlinkTelegramChat(userId);
+    }
     return this.gatewayService.sendToAiCore("connector.delete", {
       userId,
       provider,

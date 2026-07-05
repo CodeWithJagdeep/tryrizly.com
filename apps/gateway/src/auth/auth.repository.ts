@@ -194,17 +194,40 @@ export class AuthRepository {
     return { email: record.email };
   }
 
-  async linkTelegramChat(chatId: string, email: string, userId: string) {
+  /**
+   * Links a Telegram chat to an account. A chat belongs to exactly one
+   * account and an account to one chat — two accounts on one chat means
+   * scheduled sends (morning brief etc.) fan out once per account into the
+   * same chat, and inbound messages resolve to an arbitrary one. A chat
+   * already owned by a *different* account is therefore refused, not stolen;
+   * the owner must unlink from their dashboard first.
+   */
+  async linkTelegramChat(
+    chatId: string,
+    email: string,
+    userId: string,
+  ): Promise<{ ok: true } | { ok: false; linkedEmail: string }> {
     const db = await getDb();
-    // A chat belongs to exactly one account and an account to one chat.
-    // Clear both sides before writing — a leftover link on either side means
-    // scheduled sends (morning brief etc.) fan out once per linked account
-    // into the same chat, and inbound messages resolve to an arbitrary one.
-    await db.collection("telegram_links").deleteMany({ $or: [{ chatId }, { userId }] });
-    await db
-      .collection("telegram_links")
-      .insertOne({ chatId, email, userId, linkedAt: new Date() });
+    const links = db.collection<{ chatId: string; userId: string; email?: string }>("telegram_links");
+
+    const existing = await links.findOne({ chatId });
+    if (existing && existing.userId !== userId) {
+      return { ok: false, linkedEmail: existing.email ?? existing.userId };
+    }
+
+    // Same account relinking (possibly from a new chat): drop any stale link
+    // on either side, then write the fresh one.
+    await links.deleteMany({ $or: [{ chatId }, { userId }] });
+    await links.insertOne({ chatId, email, userId, linkedAt: new Date() } as never);
     await this.setOnboarding(email, { telegramLinked: true, completedAt: new Date().toISOString() });
+    return { ok: true };
+  }
+
+  /** Unlink this user's Telegram chat. Returns true if a link was removed. */
+  async unlinkTelegramChat(userId: string): Promise<boolean> {
+    const db = await getDb();
+    const result = await db.collection("telegram_links").deleteMany({ userId });
+    return result.deletedCount > 0;
   }
 
   async findUserIdByTelegramChat(chatId: string): Promise<string | null> {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,47 @@ type MeetingsPayload = {
   meetings: Meeting[];
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+type MeetingTab = "today" | "upcoming" | "past" | "all";
+
+const TABS: { key: MeetingTab; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "past", label: "Past" },
+  { key: "all", label: "All" },
+];
 
 const PAGE_SIZE = 10;
+// Wide enough to cover "previous meetings" history and a solid upcoming
+// horizon in one fetch; Refresh re-pulls the same window on demand.
+const WINDOW_DAYS_BACK = 60;
+const WINDOW_DAYS_FORWARD = 120;
+
+const AVATAR_COLORS = [
+  "bg-blue-500/20 text-blue-300",
+  "bg-violet-500/20 text-violet-300",
+  "bg-emerald-500/20 text-emerald-300",
+  "bg-amber-500/20 text-amber-300",
+  "bg-rose-500/20 text-rose-300",
+  "bg-cyan-500/20 text-cyan-300",
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function avatarColor(id: string) {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+}
+
+function initials(title: string) {
+  return title
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "M";
+}
 
 function startOfDay(d: Date): Date {
   const copy = new Date(d);
@@ -34,109 +72,92 @@ function startOfDay(d: Date): Date {
   return copy;
 }
 
-function addDays(d: Date, days: number): Date {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function chipLabel(offset: number, date: Date): string {
-  if (offset === -1) return "Yesterday";
-  if (offset === 0) return "Today";
-  if (offset === 1) return "Tomorrow";
-  return date.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
-}
-
-function formatTime(iso?: string): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
 function meetingEndMs(m: Meeting): number {
   if (m.end) return Date.parse(m.end);
-  // No end: assume 1h after start; all-day events last through their day.
   if (m.start) {
     return m.allDay
-      ? startOfDay(addDays(new Date(m.start), 1)).getTime()
+      ? startOfDay(new Date(new Date(m.start).getTime() + 86_400_000)).getTime()
       : Date.parse(m.start) + 60 * 60 * 1000;
   }
   return 0;
 }
 
+function formatDateTime(m: Meeting): { date: string; time: string } {
+  if (!m.start) return { date: "—", time: "" };
+  const d = new Date(m.start);
+  const diffDays = Math.round((startOfDay(d).getTime() - startOfDay(new Date()).getTime()) / 86_400_000);
+  const date =
+    diffDays === 0
+      ? "Today"
+      : diffDays === 1
+        ? "Tomorrow"
+        : diffDays === -1
+          ? "Yesterday"
+          : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = m.allDay
+    ? "All day"
+    : `${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}${
+        m.end ? ` – ${new Date(m.end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""
+      }`;
+  return { date, time };
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MeetingsClient() {
-  const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()));
-  const [monthCache, setMonthCache] = useState<Record<string, Meeting[]>>({});
-  const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [connected, setConnected] = useState(true);
-  const [now, setNow] = useState<number>(() => Date.now());
-  const [upcomingShown, setUpcomingShown] = useState(PAGE_SIZE);
-  const [doneShown, setDoneShown] = useState(PAGE_SIZE);
-  const fetchedMonths = useRef(new Set<string>());
+  const [googleConnected, setGoogleConnected] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<MeetingTab>("today");
+  const [page, setPage] = useState(1);
+  const [now, setNow] = useState(() => Date.now());
 
-  // Meetings auto-complete as their end time passes — tick twice a minute.
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(interval);
   }, []);
 
-  const mKey = monthKey(selected);
-
-  useEffect(() => {
-    if (fetchedMonths.current.has(mKey)) return;
-    fetchedMonths.current.add(mKey);
-    setLoadingMonth(mKey);
+  async function load(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
     setError(null);
+    try {
+      const start = new Date(Date.now() - WINDOW_DAYS_BACK * 86_400_000);
+      const end = new Date(Date.now() + WINDOW_DAYS_FORWARD * 86_400_000);
+      const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+      const res = await fetch(`/api/meetings?${params.toString()}`);
+      const payload = (await res.json()) as MeetingsPayload & { message?: string };
+      if (!Array.isArray(payload.meetings)) throw new Error(payload.message ?? "Failed to load meetings");
+      setMeetings(payload.meetings);
+      setConnected(payload.connected);
+      setGoogleConnected(payload.googleConnected);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load meetings");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
 
-    const monthStart = new Date(selected.getFullYear(), selected.getMonth(), 1);
-    const monthEnd = new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59);
-    const params = new URLSearchParams({
-      start: monthStart.toISOString(),
-      end: monthEnd.toISOString(),
-    });
-
-    fetch(`/api/meetings?${params.toString()}`)
-      .then((r) => r.json() as Promise<MeetingsPayload & { message?: string }>)
-      .then((payload) => {
-        if (!Array.isArray(payload.meetings)) {
-          throw new Error(payload.message ?? "Failed to load meetings");
-        }
-        setConnected(payload.connected);
-        setMonthCache((cache) => ({ ...cache, [mKey]: payload.meetings }));
-      })
-      .catch((err) => {
-        fetchedMonths.current.delete(mKey);
-        setError(err instanceof Error ? err.message : "Failed to load meetings");
-      })
-      .finally(() => setLoadingMonth((current) => (current === mKey ? null : current)));
-  }, [mKey, selected]);
-
-  // Reset pagination when the day changes.
   useEffect(() => {
-    setUpcomingShown(PAGE_SIZE);
-    setDoneShown(PAGE_SIZE);
-  }, [selected]);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const selectedKey = dayKey(selected);
-  const dayMeetings = useMemo(() => {
-    const monthMeetings = monthCache[mKey] ?? [];
-    return monthMeetings.filter((m) => m.start && dayKey(new Date(m.start)) === selectedKey);
-  }, [monthCache, mKey, selectedKey]);
+  useEffect(() => setPage(1), [activeTab, query]);
 
-  // Two timed meetings overlapping is a conflict worth flagging on both cards.
+  const todayKey = dayKey(new Date());
+
   const conflictIds = useMemo(() => {
     const ids = new Set<string>();
-    const timed = dayMeetings.filter((m) => !m.allDay && m.start);
+    const timed = meetings.filter((m) => !m.allDay && m.start);
     for (let i = 0; i < timed.length; i++) {
       for (let j = i + 1; j < timed.length; j++) {
         const aStart = Date.parse(timed[i].start!);
@@ -150,57 +171,78 @@ export function MeetingsClient() {
       }
     }
     return ids;
-  }, [dayMeetings]);
+  }, [meetings]);
 
-  const upcoming = useMemo(
-    () =>
-      dayMeetings
+  const counts = useMemo(() => {
+    const today = meetings.filter((m) => m.start && dayKey(new Date(m.start)) === todayKey);
+    const upcoming = meetings.filter((m) => meetingEndMs(m) > now);
+    const past = meetings.filter((m) => meetingEndMs(m) <= now);
+    return { today: today.length, upcoming: upcoming.length, past: past.length, all: meetings.length };
+  }, [meetings, now, todayKey]);
+
+  const tabbed = useMemo(() => {
+    let list: Meeting[];
+    if (activeTab === "today") {
+      list = meetings.filter((m) => m.start && dayKey(new Date(m.start)) === todayKey);
+      // Upcoming-first, then completed below — matches how the day plays out.
+      list = [...list].sort((a, b) => {
+        const aDone = meetingEndMs(a) <= now;
+        const bDone = meetingEndMs(b) <= now;
+        if (aDone !== bDone) return aDone ? 1 : -1;
+        return aDone
+          ? meetingEndMs(b) - meetingEndMs(a)
+          : Date.parse(a.start ?? "") - Date.parse(b.start ?? "");
+      });
+    } else if (activeTab === "upcoming") {
+      list = meetings
         .filter((m) => meetingEndMs(m) > now)
-        .sort((a, b) => Date.parse(a.start ?? "") - Date.parse(b.start ?? "")),
-    [dayMeetings, now],
-  );
-  const completed = useMemo(
-    () =>
-      dayMeetings
+        .sort((a, b) => Date.parse(a.start ?? "") - Date.parse(b.start ?? ""));
+    } else if (activeTab === "past") {
+      list = meetings
         .filter((m) => meetingEndMs(m) <= now)
-        .sort((a, b) => Date.parse(b.start ?? "") - Date.parse(a.start ?? "")),
-    [dayMeetings, now],
-  );
+        .sort((a, b) => meetingEndMs(b) - meetingEndMs(a));
+    } else {
+      list = [...meetings].sort((a, b) => Date.parse(a.start ?? "") - Date.parse(b.start ?? ""));
+    }
+    return list;
+  }, [meetings, activeTab, now, todayKey]);
 
-  const today = startOfDay(new Date());
-  const chips = [-1, 0, 1, 2, 3].map((offset) => {
-    const date = addDays(today, offset);
-    return { offset, date, label: chipLabel(offset, date), key: dayKey(date) };
-  });
-  const selectedIsChip = chips.some((c) => c.key === selectedKey);
-  const loading = loadingMonth === mKey && !monthCache[mKey];
+  const filtered = query.trim()
+    ? tabbed.filter(
+        (m) =>
+          m.title.toLowerCase().includes(query.toLowerCase()) ||
+          m.attendees.some((a) => a.toLowerCase().includes(query.toLowerCase())) ||
+          m.location?.toLowerCase().includes(query.toLowerCase()),
+      )
+    : tabbed;
 
-  const headerDate = selected.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-white px-6 py-8">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+    <main className="min-h-screen bg-white text-slate-900">
+      {/* Header */}
+      <header className="border-b border-slate-200 px-6 pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Meetings</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{headerDate}</p>
+            <h1 className="text-xl font-semibold tracking-tight">Meetings</h1>
+            <p className="mt-0.5 text-sm text-slate-500">Google Calendar and Cal.com, in one place</p>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={selectedKey}
-              onChange={(e) => {
-                const picked = new Date(`${e.target.value}T00:00:00`);
-                if (!Number.isNaN(picked.getTime())) setSelected(startOfDay(picked));
-              }}
-              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700"
-              aria-label="Jump to date"
-            />
+            {!loading && (
+              <span className="rounded border border-slate-200 px-3 py-1 text-sm text-slate-500">
+                {meetings.length} meeting{meetings.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={refreshing || loading}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+            >
+              <RefreshIcon spinning={refreshing} />
+              Refresh
+            </button>
             <Link
               href="/dashboard/calendar?new=meeting"
               className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
@@ -210,81 +252,133 @@ export function MeetingsClient() {
           </div>
         </div>
 
-        {/* Day tabs: ‹ › walk one day at a time (previous meetings live to the left) */}
-        <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setSelected((d) => addDays(d, -1))}
-            className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
-            aria-label="Previous day"
-          >
-            ‹
-          </button>
-          {chips.map((chip) => (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setSelected(chip.date)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                chip.key === selectedKey
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-200 text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {chip.label}
-            </button>
-          ))}
-          {!selectedIsChip && (
-            <span className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
-              {selected.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setSelected((d) => addDays(d, 1))}
-            className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
-            aria-label="Next day"
-          >
-            ›
-          </button>
+        {/* Search */}
+        <div className="relative mb-3">
+          <SearchIcon />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by title, attendee, or location…"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+          />
         </div>
 
-        {error && (
-          <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
-        )}
+        {/* Tabs */}
+        <div className="flex gap-0 overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                activeTab === tab.key
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-600"
+              }`}
+            >
+              {tab.label}
+              {!loading && counts[tab.key] > 0 && (
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
+                    activeTab === tab.key ? "bg-[#FE7F2D]/10 text-[#FE7F2D]" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {counts[tab.key]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </header>
 
-        {!error && !connected && !loading && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
-            No meeting sources connected.{" "}
-            <Link href="/dashboard/connectors" className="font-semibold text-[#FE7F2D] underline">
-              Connect Google Calendar or Cal.com
-            </Link>{" "}
-            to see meetings here.
+      <div className="w-full px-6 py-6">
+        {loading && (
+          <div className="flex items-center justify-center gap-3 py-16">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+            <span className="text-sm text-slate-500">Loading meetings…</span>
           </div>
         )}
 
-        {loading ? (
-          <p className="mt-6 text-sm text-slate-500">Loading meetings…</p>
-        ) : (
+        {!loading && error && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-5 py-4 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && !connected && (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+              <MeetingIcon />
+            </div>
+            <p className="font-medium">No meeting sources connected</p>
+            <p className="max-w-xs text-sm text-slate-500">
+              Connect Google Calendar or Cal.com so Riz can build this list from your real schedule.
+            </p>
+            <Link
+              href="/dashboard/connectors"
+              className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+            >
+              Connect a calendar
+            </Link>
+          </div>
+        )}
+
+        {!loading && !error && connected && filtered.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+              <MeetingIcon />
+            </div>
+            <p className="font-medium">{query ? "No matches" : "Nothing here"}</p>
+            <p className="max-w-xs text-sm text-slate-500">
+              {query
+                ? "Try a different title, attendee, or location."
+                : activeTab === "today"
+                  ? "No meetings today."
+                  : activeTab === "upcoming"
+                    ? "No upcoming meetings in the next few months."
+                    : activeTab === "past"
+                      ? "No past meetings on record yet."
+                      : "No meetings found."}
+            </p>
+            {!googleConnected && (
+              <a
+                href="/api/connectors/gmail/start?returnTo=%2Fdashboard%2Fmeetings"
+                className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+              >
+                Connect Google Calendar
+              </a>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && filtered.length > 0 && (
           <>
-            <Section
-              title="Upcoming"
-              empty={connected ? "No upcoming meetings this day." : undefined}
-              meetings={upcoming.slice(0, upcomingShown)}
-              total={upcoming.length}
-              onMore={() => setUpcomingShown((n) => n + PAGE_SIZE)}
-              done={false}
-              conflictIds={conflictIds}
-            />
-            <Section
-              title="Completed"
-              empty={completed.length === 0 && upcoming.length > 0 ? "Nothing finished yet." : undefined}
-              meetings={completed.slice(0, doneShown)}
-              total={completed.length}
-              onMore={() => setDoneShown((n) => n + PAGE_SIZE)}
-              done
-              conflictIds={conflictIds}
-            />
+            <MeetingsTable meetings={pageItems} now={now} conflictIds={conflictIds} />
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-xs text-slate-400">
+                  Page {page} of {totalPages} · {filtered.length} meeting{filtered.length !== 1 ? "s" : ""}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ‹ Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next ›
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -292,107 +386,164 @@ export function MeetingsClient() {
   );
 }
 
-function Section({
-  title,
+// ── Table ─────────────────────────────────────────────────────────────────────
+
+function MeetingsTable({
   meetings,
-  total,
-  empty,
-  onMore,
-  done,
+  now,
   conflictIds,
 }: {
-  title: string;
   meetings: Meeting[];
-  total: number;
-  empty?: string;
-  onMore: () => void;
-  done: boolean;
+  now: number;
   conflictIds: Set<string>;
 }) {
-  if (total === 0 && !empty) return null;
   return (
-    <section className="mt-7">
-      <h2 className="flex items-baseline gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        {title}
-        <span className="text-xs font-normal text-slate-400">{total}</span>
-      </h2>
-      {total === 0 ? (
-        <p className="mt-2 text-sm text-slate-400">{empty}</p>
-      ) : (
-        <ul className="mt-2 flex flex-col gap-2">
+    <div className="overflow-x-auto bg-white">
+      <table className="w-full min-w-[1050px] border-collapse text-left">
+        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          <tr>
+            <th className="px-4 py-3">Meeting</th>
+            <th className="px-4 py-3">Attendees</th>
+            <th className="px-4 py-3">Date &amp; time</th>
+            <th className="px-4 py-3">Location</th>
+            <th className="px-4 py-3">Source</th>
+            <th className="px-4 py-3 text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody>
           {meetings.map((m) => (
-            <MeetingCard key={m.id} meeting={m} done={done} conflict={!done && conflictIds.has(m.id)} />
+            <MeetingRow key={m.id} meeting={m} now={now} conflict={conflictIds.has(m.id)} />
           ))}
-        </ul>
-      )}
-      {meetings.length < total && (
-        <button
-          type="button"
-          onClick={onMore}
-          className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-        >
-          Show more ({total - meetings.length} left)
-        </button>
-      )}
-    </section>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function MeetingCard({ meeting, done, conflict }: { meeting: Meeting; done: boolean; conflict?: boolean }) {
-  const time = meeting.allDay
-    ? "All day"
-    : `${formatTime(meeting.start)}${meeting.end ? ` – ${formatTime(meeting.end)}` : ""}`;
-  const attendees = meeting.attendees.slice(0, 3).join(", ");
-  const extra = meeting.attendees.length - 3;
+function MeetingRow({ meeting, now, conflict }: { meeting: Meeting; now: number; conflict: boolean }) {
+  const color = avatarColor(meeting.id);
+  const done = meetingEndMs(meeting) <= now;
+  const { date, time } = formatDateTime(meeting);
+  const attendeesShown = meeting.attendees.slice(0, 2).join(", ");
+  const extra = meeting.attendees.length - 2;
 
   return (
-    <li
-      className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
-        done ? "border-slate-100 bg-slate-50 opacity-75" : "border-slate-200 bg-white"
-      }`}
-    >
-      <div className="w-24 shrink-0 pt-0.5 text-xs font-medium text-slate-500">{time}</div>
-      <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-medium ${done ? "text-slate-500 line-through" : "text-slate-900"}`}>
-          {meeting.title}
-        </p>
-        {(attendees || meeting.location) && (
-          <p className="mt-0.5 truncate text-xs text-slate-500">
-            {attendees}
-            {extra > 0 ? ` +${extra}` : ""}
-            {attendees && meeting.location ? " · " : ""}
-            {meeting.location}
-          </p>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2 pt-0.5">
-        {conflict && (
-          <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-600">
-            Conflict
+    <tr className={`border-t border-slate-200 bg-white align-top transition hover:bg-slate-50 ${done ? "opacity-70" : ""}`}>
+      <td className="px-4 py-4">
+        <div className="flex items-center gap-3">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${color}`}>
+            {initials(meeting.title)}
           </span>
+          <div className="min-w-0">
+            <p className={`truncate text-sm font-medium ${done ? "text-slate-500 line-through" : "text-slate-900"}`}>
+              {meeting.title}
+            </p>
+            {conflict && !done && (
+              <span className="mt-0.5 inline-block rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">
+                Conflict
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-4">
+        {meeting.attendees.length > 0 ? (
+          <p className="max-w-[220px] truncate text-sm text-slate-700">
+            {attendeesShown}
+            {extra > 0 ? ` +${extra}` : ""}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-400">—</p>
         )}
+      </td>
+      <td className="px-4 py-4 text-sm text-slate-700">
+        <p>{date}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">{time}</p>
+      </td>
+      <td className="max-w-[200px] px-4 py-4">
+        <p className="truncate text-sm text-slate-700">{meeting.location || "—"}</p>
+      </td>
+      <td className="px-4 py-4">
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-            meeting.source === "calcom" ? "bg-indigo-50 text-indigo-600" : "bg-emerald-50 text-emerald-600"
+          className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${
+            meeting.source === "calcom"
+              ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-600"
+              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
           }`}
         >
           {meeting.source === "calcom" ? "Cal.com" : "Google"}
         </span>
+      </td>
+      <td className="px-4 py-4 text-right">
         {done ? (
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-400">✓ Done</span>
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase text-slate-400">
+            <CheckIcon /> Done
+          </span>
+        ) : meeting.meetingUrl ? (
+          <a
+            href={meeting.meetingUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105"
+          >
+            Join
+          </a>
         ) : (
-          meeting.meetingUrl && (
-            <a
-              href={meeting.meetingUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg bg-[#FE7F2D] px-2.5 py-1 text-xs font-semibold text-white transition hover:brightness-105"
-            >
-              Join
-            </a>
-          )
+          <span className="text-sm text-slate-400">—</span>
         )}
-      </div>
-    </li>
+      </td>
+    </tr>
+  );
+}
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg
+      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ spinning }: { spinning?: boolean }) {
+  return (
+    <svg
+      className={`h-3.5 w-3.5 ${spinning ? "animate-spin" : ""}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M13.5 8a5.5 5.5 0 1 1-1.6-3.89M13.5 2v3.2h-3.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" aria-hidden="true">
+      <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MeetingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px] text-slate-400" aria-hidden="true">
+      <rect x="2.5" y="5" width="13" height="12" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M15.5 10l4.8-3v10l-4.8-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

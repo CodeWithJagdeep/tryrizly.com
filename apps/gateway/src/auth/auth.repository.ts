@@ -49,6 +49,9 @@ export class AuthRepository {
       await db
         .collection("telegram_link_tokens")
         .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      await db
+        .collection("password_reset_tokens")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
       // Best-effort: if legacy duplicate links exist, index creation fails —
       // don't let that take down every auth query; linkTelegramChat's
       // delete-before-insert still enforces uniqueness going forward.
@@ -170,6 +173,37 @@ export class AuthRepository {
       return null;
     }
     return { returnTo: record.returnTo };
+  }
+
+  /**
+   * Single-use, short-lived password reset token. Any existing token for the
+   * email is invalidated first — a reset link only works if it's the most
+   * recently requested one, so an old leaked/forwarded email can't be used
+   * after the user has requested (and presumably used) a newer one.
+   */
+  async createPasswordResetToken(email: string, ttlMs: number): Promise<string> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    await db.collection("password_reset_tokens").deleteMany({ email });
+    const token = randomBytes(32).toString("base64url");
+    await db.collection("password_reset_tokens").insertOne({
+      token,
+      email,
+      expiresAt: new Date(Date.now() + ttlMs),
+    });
+    return token;
+  }
+
+  async consumePasswordResetToken(token: string): Promise<{ email: string } | null> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    const record = await db
+      .collection<{ token: string; email: string; expiresAt: Date }>("password_reset_tokens")
+      .findOneAndDelete({ token });
+    if (!record || record.expiresAt.getTime() < Date.now()) {
+      return null;
+    }
+    return { email: record.email };
   }
 
   async createTelegramLinkToken(email: string, ttlMs: number): Promise<string> {

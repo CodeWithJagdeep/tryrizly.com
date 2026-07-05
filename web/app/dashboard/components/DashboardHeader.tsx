@@ -33,7 +33,7 @@ export function DashboardHeader() {
       <Link
         href="/faq"
         title="Help & FAQ"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
       >
         <HelpIcon />
       </Link>

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { ContactCandidate } from "@heyriz/shared/queue/types";
 import { EntityRepository, type AliasInput, type EntityType } from "./entity.repository";
 
 const FUZZY_THRESHOLD = 0.45;
@@ -43,6 +44,7 @@ const ROLE_LOCAL_PARTS = new Set([
   "postmaster",
   "promo",
   "promotions",
+  "receipt",
   "receipts",
   "recruiting",
   "recruitment",
@@ -56,6 +58,8 @@ const ROLE_LOCAL_PARTS = new Set([
   "support",
   "system",
   "team",
+  "transaction",
+  "transactions",
   "updates",
   "verification",
   "verify",
@@ -63,10 +67,10 @@ const ROLE_LOCAL_PARTS = new Set([
 ]);
 /** Catches automated locals the set can't enumerate: "noreply-orders", "billing.alerts", "us-marketing+tag"… */
 const AUTOMATED_LOCAL_RE =
-  /(^|[-_.+])(no-?reply|do-?not-?reply|noreply\w*|notif(?:y|ications?)?|robot|bot|mailer|daemon|bounces?|automated|alerts?|updates?|newsletters?|postmaster)($|[-_.+\d])/i;
+  /(^|[-_.+])(no-?reply|do-?not-?reply|noreply\w*|notif(?:y|ications?)?|robot|bot|mailer|daemon|bounces?|automated|alerts?|updates?|newsletters?|transactions?|receipts?|postmaster)($|[-_.+\d])/i;
 /** Display names that describe the mailbox, not the org ("No Reply", "Google Accounts Team"). */
 const GENERIC_DISPLAY_RE =
-  /^(no[- ]?reply|do[- ]?not[- ]?reply|notifications?|alerts?|accounts?|support|info|admin|robot|bot|mail(?:er)? ?(?:daemon|delivery(?: subsystem)?)?|system|team|updates?|news(?:letter)?s?)$/i;
+  /^(no[- ]?reply|do[- ]?not[- ]?reply|notifications?|alerts?|accounts?|support|info|admin|robot|bot|mail(?:er)? ?(?:daemon|delivery(?: subsystem)?)?|system|team|updates?|news(?:letter)?s?|transactions?|receipts?|billing|security)$/i;
 const PERSONAL_LOCAL_RE = /^[a-z][a-z]+[._-][a-z][a-z]+(?:[._-]\d+)?$/i;
 const FREE_EMAIL_DOMAINS = new Set([
   "aol.com",
@@ -96,6 +100,7 @@ export type ResolveInput = {
   senderType?: SenderType;
   isAutomated?: boolean;
   isMarketing?: boolean;
+  contactCandidate?: ContactCandidate;
   source: string;
 };
 
@@ -158,6 +163,9 @@ export class EntityResolverService {
     const emailParts = emailNorm ? splitEmail(emailNorm) : undefined;
     const automatedHint =
       input.isAutomated === true || input.isMarketing === true || input.senderType === "automated";
+    if (input.source === "gmail" && input.contactCandidate?.isRealContact === false) {
+      return undefined;
+    }
     const inferredName = input.name?.trim() || inferPersonNameFromEmail(emailNorm);
     const nameNorm = inferredName ? normalizeName(inferredName) : undefined;
     if (!emailNorm && !nameNorm) return undefined;
@@ -169,6 +177,7 @@ export class EntityResolverService {
     // "Accounts") is about the mailbox and is ignored. On a free-email domain
     // there is no org — record nothing rather than a fake person.
     if (!input.type && emailParts && (isRoleLocalPart(emailParts.local) || automatedHint)) {
+      if (input.source === "gmail") return undefined;
       const displayName = input.name?.trim();
       const orgName =
         displayName && !GENERIC_DISPLAY_RE.test(displayName) ? displayName : undefined;
@@ -343,7 +352,7 @@ function splitEmail(email: string): { local: string; domain: string } | undefine
   return { local, domain };
 }
 
-function isRoleLocalPart(local: string): boolean {
+export function isRoleLocalPart(local: string): boolean {
   const normalized = local.replace(/[_.+].*$/, "").toLowerCase();
   return (
     ROLE_LOCAL_PARTS.has(local.toLowerCase()) ||
@@ -364,7 +373,7 @@ function inferPersonNameFromEmail(email: string | undefined): string | undefined
   return name.includes(" ") ? name : undefined;
 }
 
-function companyNameFromDomain(domain: string): string | undefined {
+export function companyNameFromDomain(domain: string): string | undefined {
   const base = registrableDomain(domain).split(".").filter(Boolean)[0];
   if (!base || base.length < 2) return undefined;
   return base
@@ -374,11 +383,11 @@ function companyNameFromDomain(domain: string): string | undefined {
     .join(" ");
 }
 
-function isFreeEmailDomain(domain: string): boolean {
+export function isFreeEmailDomain(domain: string): boolean {
   return FREE_EMAIL_DOMAINS.has(registrableDomain(domain));
 }
 
-function registrableDomain(domain: string): string {
+export function registrableDomain(domain: string): string {
   const labels = domain.toLowerCase().split(".").filter(Boolean);
   if (labels.length <= 2) return labels.join(".");
 

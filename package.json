@@ -26,6 +26,7 @@
     "start:worker": "npm run start:prod -w apps/worker",
     "lint": "eslint",
     "typecheck": "tsc --noEmit -p web/tsconfig.json",
+    "test": "vitest run",
     "smoke:boot": "npm run smoke:boot -w apps/ai-core",
     "smoke:agent": "npm run smoke:agent -w apps/ai-core",
     "smoke:memory": "npm run smoke:memory -w apps/ai-core",
@@ -50,6 +51,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }

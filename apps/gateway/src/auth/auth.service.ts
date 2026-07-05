@@ -305,12 +305,12 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
+export function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
   const hash = pbkdf2Sync(password, salt, 120000, 32, "sha256").toString("hex");
   return { hash, salt };
 }
 
-function verifyPassword(password: string, salt: string, expectedHash: string) {
+export function verifyPassword(password: string, salt: string, expectedHash: string) {
   const actual = hashPassword(password, salt).hash;
   const actualBuffer = Buffer.from(actual, "hex");
   const expectedBuffer = Buffer.from(expectedHash, "hex");

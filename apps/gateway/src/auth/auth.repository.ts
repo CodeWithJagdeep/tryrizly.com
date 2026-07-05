@@ -47,6 +47,13 @@ export class AuthRepository {
       await db
         .collection("telegram_link_tokens")
         .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      // Best-effort: if legacy duplicate links exist, index creation fails —
+      // don't let that take down every auth query; linkTelegramChat's
+      // delete-before-insert still enforces uniqueness going forward.
+      await Promise.all([
+        db.collection("telegram_links").createIndex({ chatId: 1 }, { unique: true }),
+        db.collection("telegram_links").createIndex({ userId: 1 }, { unique: true }),
+      ]).catch(() => undefined);
     })();
     return this.indexesReady;
   }
@@ -189,11 +196,14 @@ export class AuthRepository {
 
   async linkTelegramChat(chatId: string, email: string, userId: string) {
     const db = await getDb();
-    await db.collection("telegram_links").updateOne(
-      { chatId },
-      { $set: { chatId, email, userId, linkedAt: new Date() } },
-      { upsert: true },
-    );
+    // A chat belongs to exactly one account and an account to one chat.
+    // Clear both sides before writing — a leftover link on either side means
+    // scheduled sends (morning brief etc.) fan out once per linked account
+    // into the same chat, and inbound messages resolve to an arbitrary one.
+    await db.collection("telegram_links").deleteMany({ $or: [{ chatId }, { userId }] });
+    await db
+      .collection("telegram_links")
+      .insertOne({ chatId, email, userId, linkedAt: new Date() });
     await this.setOnboarding(email, { telegramLinked: true, completedAt: new Date().toISOString() });
   }
 

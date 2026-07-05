@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CreditsBadge } from "./CreditsBadge";
 
 type BillingStatus = {
   ok?: boolean;
@@ -24,29 +23,6 @@ function InfoIcon() {
       <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
       <path d="M8 7v4M8 5.5v.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
-  );
-}
-
-function HelpButton() {
-  return (
-    <Link
-      href="/faq"
-      title="Help & FAQ"
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xs font-bold text-white transition hover:bg-white/20"
-    >
-      ?
-    </Link>
-  );
-}
-
-// Credits + help, shown on every bar variant so there's one header strip —
-// not a second floating element competing with this bar's own CTA button.
-function HeaderExtras() {
-  return (
-    <div className="flex shrink-0 items-center gap-2">
-      <CreditsBadge />
-      <HelpButton />
-    </div>
   );
 }
 
@@ -78,12 +54,9 @@ export function TrialBar() {
           <span className="font-semibold text-white">{planName} plan</span>
           <span>· Active</span>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <HeaderExtras />
-          <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
-            Manage
-          </Link>
-        </div>
+        <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
+          Manage
+        </Link>
       </div>
     );
   }
@@ -98,12 +71,9 @@ export function TrialBar() {
           <span className="font-semibold text-white">{planName} plan</span>
           <span>· Renews {days > 0 ? `in ${days} day${days === 1 ? "" : "s"}` : `on ${shortDate(expiresAt)}`}</span>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <HeaderExtras />
-          <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
-            Manage
-          </Link>
-        </div>
+        <Link href="/dashboard/upgrade" className="border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-black">
+          Manage
+        </Link>
       </div>
     );
   }
@@ -122,15 +92,12 @@ export function TrialBar() {
               <p className="text-xs text-white/60">Upgrade to unlock unlimited messages, connectors, and AI features.</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <HeaderExtras />
-            <Link
-              href="/dashboard/upgrade"
-              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
-            >
-              Upgrade
-            </Link>
-          </div>
+          <Link
+            href="/dashboard/upgrade"
+            className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
+          >
+            Upgrade
+          </Link>
         </div>
       </div>
     );
@@ -156,15 +123,12 @@ export function TrialBar() {
                 <p className="text-xs text-white/60">Choose a plan to restore access to all features.</p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <HeaderExtras />
-              <Link
-                href="/dashboard/upgrade"
-                className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
-              >
-                Choose a plan
-              </Link>
-            </div>
+            <Link
+              href="/dashboard/upgrade"
+              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
+            >
+              Choose a plan
+            </Link>
           </div>
         </div>
       );
@@ -188,15 +152,12 @@ export function TrialBar() {
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <HeaderExtras />
-              <Link
-                href="/dashboard/upgrade"
-                className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
-              >
-                Upgrade now
-              </Link>
-            </div>
+            <Link
+              href="/dashboard/upgrade"
+              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
+            >
+              Upgrade now
+            </Link>
           </div>
         </div>
       );
@@ -223,15 +184,12 @@ export function TrialBar() {
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <HeaderExtras />
-            <Link
-              href="/dashboard/upgrade"
-              className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
-            >
-              Upgrade now
-            </Link>
-          </div>
+          <Link
+            href="/dashboard/upgrade"
+            className="shrink-0 border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
+          >
+            Upgrade now
+          </Link>
         </div>
       </div>
     );

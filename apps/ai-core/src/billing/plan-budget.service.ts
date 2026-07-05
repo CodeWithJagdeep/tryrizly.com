@@ -7,6 +7,12 @@ import { aiBudgetForPlan, isCreditPackId, CREDIT_PACKS, usdForCredits } from "@h
 type SubscriptionRow = { plan_id: string; status: string };
 type TrialRow = { plan_id: string; ends_at: Date; consumed: boolean };
 type PurchaseRow = { plan_id: string; status: string };
+type CycleRow = {
+  status: string;
+  current_period_end: Date | null;
+  trial_ends_at: Date | null;
+  created_at: Date;
+};
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "authenticated", "trialing"]);
 const PAID_PURCHASE_STATUSES = new Set(["paid", "captured"]);
@@ -35,10 +41,11 @@ export class PlanBudgetService implements OnModuleDestroy {
   /** No DATABASE_URL (local/dev) degrades to "unlimited" rather than blocking everything. */
   async aiBudgetUsd(userId: string): Promise<number> {
     if (!this.pool) return Number.POSITIVE_INFINITY;
-    const [planId, topUpUsd] = await Promise.all([
+    const [planId, cycle] = await Promise.all([
       this.currentPlanId(userId),
-      this.topUpUsdThisCycle(userId),
+      this.getCycleWindow(userId),
     ]);
+    const topUpUsd = await this.topUpUsdSince(userId, cycle.start);
     return aiBudgetForPlan(planId) + topUpUsd;
   }
 
@@ -48,20 +55,68 @@ export class PlanBudgetService implements OnModuleDestroy {
   }
 
   /**
-   * Sum of purchased credit-pack allowance for the current calendar-month
-   * cycle (packs don't carry over — see CREDIT_PACKS doc comment). Uses the
+   * The user's REAL current billing/trial window, not a calendar-month
+   * approximation — a trial that started July 4 and ends July 18 has no
+   * relationship to "resets on the 1st". Falls back to the calendar month
+   * only when there's no subscription/trial row at all (a free-tier account
+   * that never started one), since there's no real anchor date to use.
+   */
+  async getCycleWindow(userId: string): Promise<{ start: Date; end: Date | null }> {
+    if (!this.pool) return { start: currentCalendarMonthStart(), end: null };
+    try {
+      const result = await this.pool.query<CycleRow>(
+        `select status, current_period_end, trial_ends_at, created_at
+         from billing_subscriptions where user_id = $1
+         order by case status
+           when 'active' then 1
+           when 'authenticated' then 2
+           when 'trialing' then 3
+           when 'created' then 4
+           when 'pending' then 5
+           else 9
+         end, updated_at desc limit 1`,
+        [userId],
+      );
+      const sub = result.rows[0];
+      if (sub) {
+        if (sub.status === "trialing" && sub.trial_ends_at) {
+          return { start: sub.created_at, end: sub.trial_ends_at };
+        }
+        if (ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) && sub.current_period_end) {
+          // No stored period-start column — the last renewal is approximated
+          // as one interval before the next one. All current plans are
+          // monthly, so subtracting a month is exact for the common case.
+          const end = new Date(sub.current_period_end);
+          const start = new Date(end);
+          start.setUTCMonth(start.getUTCMonth() - 1);
+          return { start, end };
+        }
+      }
+      return { start: currentCalendarMonthStart(), end: null };
+    } catch (error) {
+      logger.warn("plan budget: cycle window lookup failed, defaulting to calendar month", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { start: currentCalendarMonthStart(), end: null };
+    }
+  }
+
+  /**
+   * Sum of purchased credit-pack allowance since the real cycle start (packs
+   * don't carry into the next cycle — see CREDIT_PACKS doc comment). Uses the
    * pack's redemption value (usdForCredits), not the price paid, since the
    * pack price is marked up above raw cost.
    */
-  private async topUpUsdThisCycle(userId: string): Promise<number> {
+  private async topUpUsdSince(userId: string, since: Date): Promise<number> {
     if (!this.pool) return 0;
     try {
       const result = await this.pool.query<{ plan_id: string }>(
         `select plan_id from billing_purchases
          where user_id = $1
            and status in ('paid', 'captured')
-           and created_at >= date_trunc('month', now() at time zone 'utc')`,
-        [userId],
+           and created_at >= $2`,
+        [userId, since],
       );
       let usd = 0;
       for (const row of result.rows) {
@@ -106,7 +161,7 @@ export class PlanBudgetService implements OnModuleDestroy {
 
       // Credit packs are top-ups, never an access tier — excluded here so one
       // never gets mistaken for the plan_id whose budget defines this cycle
-      // (topUpUsdThisCycle adds their value separately, on top of whatever
+      // (topUpUsdSince adds their value separately, on top of whatever
       // tier this resolves to).
       const purchase = await this.pool.query<PurchaseRow>(
         `select plan_id, status from billing_purchases where user_id = $1
@@ -126,4 +181,9 @@ export class PlanBudgetService implements OnModuleDestroy {
       return "free";
     }
   }
+}
+
+function currentCalendarMonthStart(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }

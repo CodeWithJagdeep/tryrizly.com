@@ -87,88 +87,50 @@ export class UsageLedgerService implements OnModuleDestroy {
     }
   }
 
-  /** Per-task cost breakdown since `since`, for the dashboard's Usage view. */
-  async breakdownSince(
+
+  /**
+   * Cost per (day, task) — most recent day first — for the usage page's
+   * per-day feature breakdown and the header popover's daily total. One row
+   * per day-and-task rather than one per call: a single email-triage call
+   * can cost a fraction of a credit, so a per-call feed mostly reads as "-0";
+   * summing first gives real, non-zero numbers, and the caller sums across
+   * tasks for the day's overall total.
+   */
+  async dailyBreakdownSince(
     userId: string,
     since: Date,
-  ): Promise<Array<{ task: string; costUsd: number; calls: number }>> {
+  ): Promise<Array<{ day: string; task: string; costUsd: number; calls: number }>> {
     try {
       if (!this.pool) {
         const rows = inMemoryLog.filter((r) => r.userId === userId && r.createdAt >= since);
-        const byTask = new Map<string, { costUsd: number; calls: number }>();
+        const byKey = new Map<string, { day: string; task: string; costUsd: number; calls: number }>();
         for (const r of rows) {
-          const cur = byTask.get(r.task) ?? { costUsd: 0, calls: 0 };
+          const day = r.createdAt.toISOString().slice(0, 10);
+          const key = `${day}:${r.task}`;
+          const cur = byKey.get(key) ?? { day, task: r.task, costUsd: 0, calls: 0 };
           cur.costUsd += r.costUsd;
           cur.calls += 1;
-          byTask.set(r.task, cur);
+          byKey.set(key, cur);
         }
-        return [...byTask.entries()]
-          .map(([task, v]) => ({ task, ...v }))
-          .sort((a, b) => b.costUsd - a.costUsd);
+        return [...byKey.values()].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
       }
       await this.ensureTable();
-      const result = await this.pool.query<{ task: string; cost_usd: string | null; calls: string }>(
-        `select task, sum(cost_usd) as cost_usd, count(*) as calls
+      const result = await this.pool.query<{ day: Date; task: string; cost_usd: string; calls: string }>(
+        `select date_trunc('day', created_at) as day, task, sum(cost_usd) as cost_usd, count(*) as calls
          from llm_usage_log
          where user_id = $1 and created_at >= $2
-         group by task
-         order by sum(cost_usd) desc`,
+         group by date_trunc('day', created_at), task
+         order by day desc`,
         [userId, since],
       );
       return result.rows.map((r) => ({
+        day: r.day.toISOString().slice(0, 10),
         task: r.task,
-        costUsd: Number(r.cost_usd ?? 0),
+        costUsd: Number(r.cost_usd),
         calls: Number(r.calls),
       }));
     } catch (error) {
-      logger.warn("usage ledger: breakdownSince failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
-  }
-
-  /**
-   * Total cost per calendar day, most recent day first, for the header
-   * credits popover and usage page. One row per day rather than one per
-   * call — a single email-triage call can cost a fraction of a credit, so a
-   * per-call feed mostly reads as "-0" and "-1"; summing the day first gives
-   * a real, non-zero number.
-   */
-  async dailyTotalsSince(
-    userId: string,
-    since: Date,
-    limit = 14,
-  ): Promise<Array<{ day: string; costUsd: number }>> {
-    try {
-      if (!this.pool) {
-        const rows = inMemoryLog.filter((r) => r.userId === userId && r.createdAt >= since);
-        const byDay = new Map<string, number>();
-        for (const r of rows) {
-          const day = r.createdAt.toISOString().slice(0, 10);
-          byDay.set(day, (byDay.get(day) ?? 0) + r.costUsd);
-        }
-        return [...byDay.entries()]
-          .map(([day, costUsd]) => ({ day, costUsd }))
-          .sort((a, b) => (a.day < b.day ? 1 : -1))
-          .slice(0, limit);
-      }
-      await this.ensureTable();
-      const result = await this.pool.query<{ day: Date; cost_usd: string }>(
-        `select date_trunc('day', created_at) as day, sum(cost_usd) as cost_usd
-         from llm_usage_log
-         where user_id = $1 and created_at >= $2
-         group by date_trunc('day', created_at)
-         order by day desc
-         limit $3`,
-        [userId, since, limit],
-      );
-      return result.rows.map((r) => ({
-        day: r.day.toISOString().slice(0, 10),
-        costUsd: Number(r.cost_usd),
-      }));
-    } catch (error) {
-      logger.warn("usage ledger: dailyTotalsSince failed", {
+      logger.warn("usage ledger: dailyBreakdownSince failed", {
         error: error instanceof Error ? error.message : String(error),
       });
       return [];

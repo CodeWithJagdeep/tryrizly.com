@@ -4,9 +4,12 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalComIcon,
   CalendarIcon,
+  GitHubIcon,
   GmailIcon,
   MongoDbIcon,
+  MpesaIcon,
   NotionIcon,
+  PayPalIcon,
   PostgresIcon,
   RazorpayIcon,
   SlackIcon,
@@ -40,7 +43,7 @@ type ConnectorField = {
 type ConnectorCatalogItem = {
   id: string;
   /** Backend connector key used for status lookup + connect/disconnect. */
-  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion";
+  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa";
   title: string;
   description: string;
   category: "Google" | "Scheduling" | "Payments" | "Databases" | "Team" | "APIs";
@@ -102,6 +105,46 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     authType: "manual",
     icon: StripeIcon,
     fields: [{ name: "secretKey", label: "Secret Key", type: "password" }],
+  },
+  {
+    id: "paypal",
+    provider: "paypal",
+    title: "PayPal",
+    description: "Read-only balances and recent transactions from your PayPal business account.",
+    category: "Payments",
+    authType: "manual",
+    icon: PayPalIcon,
+    fields: [
+      { name: "clientId", label: "Client ID", placeholder: "REST app client ID" },
+      { name: "clientSecret", label: "Client Secret", type: "password" },
+    ],
+  },
+  {
+    id: "mpesa",
+    provider: "mpesa",
+    title: "M-Pesa",
+    description: "Safaricom Daraja business credentials — connection checks now, balance and transaction pulls coming next.",
+    category: "Payments",
+    authType: "manual",
+    icon: MpesaIcon,
+    fields: [
+      { name: "consumerKey", label: "Consumer Key", type: "password" },
+      { name: "consumerSecret", label: "Consumer Secret", type: "password" },
+      { name: "shortcode", label: "Business Shortcode", placeholder: "e.g. 174379" },
+      { name: "environment", label: "Environment", placeholder: "production or sandbox" },
+    ],
+  },
+  {
+    id: "github",
+    provider: "github",
+    title: "GitHub",
+    description: "Open PRs, issues, and review requests involving you — briefed on demand.",
+    category: "Team",
+    authType: "manual",
+    icon: GitHubIcon,
+    fields: [
+      { name: "token", label: "Personal Access Token", type: "password", placeholder: "ghp_... or github_pat_..." },
+    ],
   },
   {
     id: "postgres",

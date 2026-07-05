@@ -14,6 +14,9 @@ import { RazorpayService } from "./connectors/razorpay.service";
 import { StripeService } from "./connectors/stripe.service";
 import { SlackService } from "./connectors/slack.service";
 import { NotionService } from "./connectors/notion.service";
+import { PayPalService } from "./connectors/paypal.service";
+import { GitHubService } from "./connectors/github.service";
+import { MpesaService } from "./connectors/mpesa.service";
 import { TextToQueryService } from "./connectors/text-to-query.service";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
 import { ContextService } from "./context/context.service";
@@ -79,6 +82,9 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     StripeService,
     SlackService,
     NotionService,
+    PayPalService,
+    GitHubService,
+    MpesaService,
     TextToQueryService,
     TaskRepository,
     ToolRegistryService,

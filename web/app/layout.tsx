@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Instrument_Serif, Geist_Mono, Rethink_Sans, Inter_Tight, Geist, Noto_Serif, JetBrains_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "./components/AppShell";
+import { requireSession } from "./api/onboarding/_lib/require-user";
 
 export const dynamic = 'force-dynamic';
 
@@ -118,11 +119,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolved once here (not per-page) so every marketing page — home,
+  // pricing, faq, etc. — can render the signed-in header state without each
+  // one re-checking the session cookie itself. Null (not logged in) is the
+  // common case for public pages and is cheap to compute either way.
+  const session = await requireSession().catch(() => null);
+
   return (
     <html
       lang="en"
@@ -130,7 +137,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-white text-text-primary">
-        <AppShell>{children}</AppShell>
+        <AppShell session={session}>{children}</AppShell>
       </body>
     </html>
   );

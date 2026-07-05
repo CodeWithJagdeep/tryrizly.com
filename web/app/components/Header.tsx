@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { UserMenu } from './UserMenu';
+
+type Session = { email: string; name?: string; userId: string };
 
 type DropdownItem = {
   label: string;
@@ -125,7 +128,7 @@ function DropdownNav({ group }: { group: DropdownGroup }) {
   );
 }
 
-export function Header() {
+export function Header({ session }: { session: Session | null }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const headerClassName = 'w-full bg-white/95 font-neue-haas backdrop-blur-md';
@@ -183,15 +186,21 @@ export function Header() {
           <Link className={utilityLinkClassName} href="/contact">
             Contact sales
           </Link>
-          <Link className={loginClassName} href="/login">
-            Log in
-          </Link>
-          <Link
-            className="inline-flex h-11 items-center justify-center bg-[#FE7F2D] px-5 text-[15px] font-medium text-white transition hover:opacity-90 active:scale-[0.98]"
-            href="/signup"
-          >
-            Get started
-          </Link>
+          {session ? (
+            <UserMenu session={session} />
+          ) : (
+            <>
+              <Link className={loginClassName} href="/login">
+                Log in
+              </Link>
+              <Link
+                className="inline-flex h-11 items-center justify-center bg-[#FE7F2D] px-5 text-[15px] font-medium text-white transition hover:opacity-90 active:scale-[0.98]"
+                href="/signup"
+              >
+                Get started
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -251,20 +260,32 @@ export function Header() {
             >
               Pricing
             </Link>
-            <Link
-              onClick={() => setIsMobileMenuOpen(false)}
-              href="/login"
-              className="rounded-xl px-2 py-3 text-[15px] font-semibold text-black"
-            >
-              Log in
-            </Link>
-            <Link
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
-              href="/signup"
-            >
-              Get started
-            </Link>
+            {session ? (
+              <Link
+                onClick={() => setIsMobileMenuOpen(false)}
+                href="/dashboard"
+                className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
+              >
+                Go to dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  href="/login"
+                  className="rounded-xl px-2 py-3 text-[15px] font-semibold text-black"
+                >
+                  Log in
+                </Link>
+                <Link
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
+                  href="/signup"
+                >
+                  Get started
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

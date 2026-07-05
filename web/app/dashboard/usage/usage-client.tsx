@@ -9,9 +9,16 @@ type UsageBreakdownRow = {
   calls: number;
 };
 
+type DailyTaskRow = {
+  task: string;
+  credits: number;
+  calls: number;
+};
+
 type DailyTotal = {
   day: string;
   credits: number;
+  tasks: DailyTaskRow[];
 };
 
 type UsageSummary = {
@@ -23,6 +30,7 @@ type UsageSummary = {
   planId: string;
   ratio: number;
   cycleStart: string;
+  cycleEnd: string | null;
   breakdown: UsageBreakdownRow[];
   daily: DailyTotal[];
 };
@@ -77,11 +85,6 @@ function loadRazorpayScript(): Promise<void> {
   });
 }
 
-function nextCycleDate(cycleStartIso: string): Date {
-  const start = new Date(cycleStartIso);
-  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
-}
-
 function formatDate(iso: string | Date): string {
   try {
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -115,6 +118,7 @@ export function UsageClient() {
         planId: data.planId ?? "free",
         ratio: data.ratio ?? 0,
         cycleStart: data.cycleStart ?? new Date().toISOString(),
+        cycleEnd: data.cycleEnd ?? null,
         breakdown: data.breakdown ?? [],
         daily: data.daily ?? [],
       });
@@ -253,7 +257,8 @@ export function UsageClient() {
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <p className="text-sm font-medium text-slate-500">
-                    Credits since {formatDate(usage.cycleStart)} · resets {formatDate(nextCycleDate(usage.cycleStart))}
+                    Credits since {formatDate(usage.cycleStart)}
+                    {usage.cycleEnd ? ` · resets ${formatDate(usage.cycleEnd)}` : ""}
                   </p>
                   <p className="text-sm font-medium text-slate-500">{usage.creditsBudget.toLocaleString()} credits included</p>
                 </div>
@@ -276,7 +281,7 @@ export function UsageClient() {
               </div>
             )}
 
-            {/* By feature */}
+            {/* By feature summary (whole cycle) */}
             <Section title="By feature">
               {usage.breakdown.length === 0 ? (
                 <EmptyRow text="No AI usage recorded yet this cycle." />
@@ -300,18 +305,34 @@ export function UsageClient() {
               )}
             </Section>
 
-            {/* Recent activity — one row per day, not per call (a single call can
-                cost a fraction of a credit and reads as "-0"). */}
-            <Section title="Recent activity">
+            {/* Recent activity — one group per day, each day showing which
+                features consumed its total (a single call can cost a fraction
+                of a credit, so a per-call feed mostly read as "-0"). */}
+            <Section title="Recent activity, by day">
               {usage.daily.length === 0 ? (
                 <EmptyRow text="No AI usage recorded yet." />
               ) : (
-                usage.daily.map((d) => (
-                  <article key={d.day} className="flex items-center justify-between px-5 py-4 transition hover:bg-slate-50">
-                    <p className="text-sm font-medium text-slate-900">{dayLabel(d.day)}</p>
-                    <p className="text-sm font-semibold text-slate-900">{d.credits.toLocaleString()} credits</p>
-                  </article>
-                ))
+                <div className="divide-y divide-slate-200">
+                  {usage.daily.map((d) => (
+                    <div key={d.day}>
+                      <div className="flex items-center justify-between bg-slate-50 px-5 py-2.5">
+                        <p className="text-sm font-semibold text-slate-900">{dayLabel(d.day)}</p>
+                        <p className="text-sm font-semibold text-slate-900">{d.credits.toLocaleString()} credits</p>
+                      </div>
+                      {d.tasks
+                        .slice()
+                        .sort((a, b) => b.credits - a.credits)
+                        .map((t) => (
+                          <article key={t.task} className="flex items-center justify-between px-5 py-2.5 pl-8 transition hover:bg-slate-50">
+                            <p className="text-sm text-slate-700">{taskLabel(t.task)}</p>
+                            <p className="text-xs text-slate-400">
+                              {t.calls} call{t.calls === 1 ? "" : "s"} · {t.credits.toLocaleString()} credits
+                            </p>
+                          </article>
+                        ))}
+                    </div>
+                  ))}
+                </div>
               )}
             </Section>
           </div>

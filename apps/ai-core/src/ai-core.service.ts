@@ -50,6 +50,8 @@ export type ChatPayload = {
   pendingApproval?: { tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
   history?: ConversationTurn[];
+  /** Where the reply renders: web dashboard (Markdown) or telegram (plain text). Defaults to telegram. */
+  channel?: "web" | "telegram";
 };
 
 type ToolExecutePayload = {
@@ -418,6 +420,7 @@ export class AiCoreService {
       context,
       approval,
       history: body.history,
+      channel: body.channel,
     });
 
     if (env.BACKGROUND_AI_ENABLED && (await this.budgetGate.check(userId)).state !== "exceeded") {

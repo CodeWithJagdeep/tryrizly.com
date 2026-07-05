@@ -124,6 +124,7 @@ export class GatewayController {
       userId,
       message: body.message,
       history: body.history,
+      channel: "web",
       ...(approval ? { approve: true, pendingApproval: approval } : {}),
     });
 

@@ -48,6 +48,24 @@ const AVATAR_COLORS = [
   "bg-rose-500/20 text-rose-300",
   "bg-cyan-500/20 text-cyan-300",
 ];
+const FREE_EMAIL_DOMAINS = new Set([
+  "aol.com",
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "icloud.com",
+  "live.com",
+  "me.com",
+  "msn.com",
+  "outlook.com",
+  "pm.me",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+  "ymail.com",
+  "zoho.com",
+]);
+const SECOND_LEVEL_TLDS = new Set(["ac", "co", "com", "edu", "gov", "net", "org"]);
 
 function avatarColor(id: string) {
   let n = 0;
@@ -252,12 +270,16 @@ function PersonRow({ person }: { person: Person }) {
         <p className="mt-0.5 text-[11px] text-slate-500">{timeAgo(person.createdAt)}</p>
       </td>
       <td className="px-4 py-4 align-middle">
-        <div className="flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-            {company.charAt(0).toUpperCase()}
-          </span>
-          <span className="text-sm text-slate-700">{company}</span>
-        </div>
+        {company ? (
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+              {company.charAt(0).toUpperCase()}
+            </span>
+            <span className="text-sm text-slate-700">{company}</span>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">—</p>
+        )}
       </td>
       <td className="px-4 py-4 align-middle">
         {primaryEmail ? (
@@ -296,13 +318,27 @@ function PersonRow({ person }: { person: Person }) {
 }
 
 function companyFromEmail(email: string) {
-  const domain = email.split("@")[1];
-  if (!domain) return "Unknown";
-  const name = domain.split(".")[0] ?? domain;
+  const domain = email.toLowerCase().split("@")[1];
+  if (!domain) return undefined;
+  const registrable = registrableDomain(domain);
+  if (FREE_EMAIL_DOMAINS.has(registrable)) return undefined;
+  const name = registrable.split(".")[0] ?? registrable;
   return name
     .split(/[-_]/)
+    .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function registrableDomain(domain: string) {
+  const labels = domain.toLowerCase().split(".").filter(Boolean);
+  if (labels.length <= 2) return labels.join(".");
+  const tld = labels.at(-1);
+  const secondLevel = labels.at(-2);
+  if (tld?.length === 2 && secondLevel && SECOND_LEVEL_TLDS.has(secondLevel) && labels.length >= 3) {
+    return labels.slice(-3).join(".");
+  }
+  return labels.slice(-2).join(".");
 }
 
 function formatContactDate(iso: string) {

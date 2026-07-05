@@ -194,6 +194,26 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
     return result.rows;
   }
 
+  /**
+   * Active provider subscriptions whose next charge lands within `days` and
+   * that aren't already set to stop at period end — the renewal-notice cohort.
+   */
+  async findSubscriptionsRenewingWithin(days: number): Promise<BillingSubscriptionRecord[]> {
+    const result = await this.query<BillingSubscriptionRecord>(
+      `
+        select * from billing_subscriptions
+        where provider = 'razorpay'
+          and provider_subscription_id is not null
+          and status in ('active', 'authenticated')
+          and cancel_at_period_end = false
+          and current_period_end > now()
+          and current_period_end <= now() + ($1 || ' days')::interval
+      `,
+      [days],
+    );
+    return result.rows;
+  }
+
   async createSubscription(input: {
     userId: string;
     planId: string;

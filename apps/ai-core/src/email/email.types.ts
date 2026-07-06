@@ -43,9 +43,20 @@ export type EmailReplyIntent =
   | "delegate"
   | "unknown";
 
+export type ExtractedContactCandidate = {
+  isRealContact: boolean;
+  contactType?: "person" | "company";
+  name?: string;
+  email?: string;
+  company?: string;
+  reason?: string;
+  confidence?: "high" | "medium" | "low";
+};
+
 export type ExtractedEmailFacts = {
   category: EmailCategory;
   person?: string;
+  contactCandidate?: ExtractedContactCandidate;
   entities?: string[];
   serviceName?: string;
   amount?: string;

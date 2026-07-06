@@ -144,9 +144,15 @@ export class AuthService {
     };
   }
 
-  async createOAuthState(provider: string, returnTo: string): Promise<string> {
+  async createOAuthState(provider: string, returnTo: string, redirectUri?: string): Promise<string> {
     const state = randomBytes(24).toString("base64url");
-    await this.repo.setOAuthState(provider, state, { returnTo: sanitizeReturnPath(returnTo) }, OAUTH_STATE_TTL_MS);
+    const data: { returnTo: string; redirectUri?: string } = {
+      returnTo: sanitizeReturnPath(returnTo),
+    };
+    const normalizedRedirectUri =
+      provider === "linkedin" ? normalizeLinkedInRedirectUri(redirectUri) : undefined;
+    if (normalizedRedirectUri) data.redirectUri = normalizedRedirectUri;
+    await this.repo.setOAuthState(provider, state, data, OAUTH_STATE_TTL_MS);
     return state;
   }
 
@@ -216,7 +222,7 @@ export class AuthService {
 
     const clientId = env.LINKEDIN_CLIENT_ID;
     const clientSecret = env.LINKEDIN_CLIENT_SECRET;
-    const redirectUri = env.LINKEDIN_REDIRECT_URI;
+    const redirectUri = stateRecord.redirectUri || env.LINKEDIN_REDIRECT_URI;
     if (!clientId || !clientSecret || !redirectUri) {
       throw new Error("LinkedIn OAuth env vars are missing");
     }
@@ -303,6 +309,42 @@ export class AuthService {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizeLinkedInRedirectUri(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+
+  const normalized = url.toString();
+  if (env.LINKEDIN_REDIRECT_URI && normalized === env.LINKEDIN_REDIRECT_URI) {
+    return normalized;
+  }
+  if (
+    url.pathname === "/api/auth/oauth/linkedin/callback" &&
+    !url.search &&
+    !url.hash &&
+    url.protocol === "https:" &&
+    (url.hostname === "getrizly.com" || url.hostname === "www.getrizly.com")
+  ) {
+    return normalized;
+  }
+  if (
+    url.pathname === "/api/auth/oauth/linkedin/callback" &&
+    !url.search &&
+    !url.hash &&
+    url.protocol === "http:" &&
+    url.hostname === "localhost" &&
+    url.port === "3000"
+  ) {
+    return normalized;
+  }
+  return undefined;
 }
 
 export function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {

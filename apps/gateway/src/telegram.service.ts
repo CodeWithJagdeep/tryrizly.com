@@ -178,9 +178,17 @@ export class TelegramService {
   }
 
   private async handleStart(chatId: number, token: string): Promise<void> {
-    const record = await this.authRepo.consumeTelegramLinkToken(token);
+    const record = await this.authRepo.consumeTelegramLinkToken(token, String(chatId));
 
     if (!record) {
+      const existing = await this.authRepo.findTelegramLinkByChat(String(chatId));
+      if (existing) {
+        await sendTelegramMessage({
+          chatId,
+          text: `You're already linked to ${maskEmail(existing.email ?? existing.userId)}.`,
+        });
+        return;
+      }
       await sendTelegramMessage({
         chatId,
         text: "That link has expired — generate a new one from the dashboard.",

@@ -10,6 +10,7 @@ import type {
   EmailSenderType,
   EmailSuggestedAction,
   EmailUrgency,
+  ExtractedContactCandidate,
   ExtractedEmailFacts,
 } from "./email.types";
 
@@ -54,6 +55,7 @@ export class EmailClassifierService {
         isAutomated: true,
         isMarketing: false,
         replyIntent: "ignore",
+        contactCandidate: rejectContactCandidate("OTP or verification email"),
         confidence: "high",
       };
     }
@@ -89,6 +91,8 @@ export class EmailClassifierService {
               "",
               "Extract these facts (omit fields you can't confidently extract):",
               "  person       - real human sender/contact name only; omit for no-reply/system/company mail",
+              "  contactCandidate - contact extraction decision for the People CRM. Return isRealContact=true ONLY when the sender/body identifies a real person the founder may correspond with. Return false for no-reply, notifications, newsletters, receipts, security alerts, digest/marketing mail, job-board bots, social network notifications, and brand/service mail.",
+              "    contactCandidate shape: {isRealContact:boolean, contactType:'person'|'company', name?:string, email?:string, company?:string, confidence:'high'|'medium'|'low', reason?:string}. Prefer contactType='person'. Use company only as the person's company, not a standalone brand notification.",
               "  serviceName  - service / product name (for payments)",
               "  amount       - money amount (for payments)",
               "  dueDate      - due date or deadline",
@@ -111,7 +115,7 @@ export class EmailClassifierService {
               `Resolve any date or time in the email against this reference — weekday names ("Thursday"), relative terms ("tomorrow", "next week"), and dates without a year all mean the soonest matching date on or after today unless the email clearly states otherwise. A bare time like "2:00 PM" with no timezone stated means the founder's own local time, not UTC and not the sender's possible timezone.`,
               `Output dueDate/meetingTime/meetingEndTime as a LOCAL datetime with NO timezone suffix and NO offset — just "YYYY-MM-DDTHH:mm:ss", e.g. "2026-06-25T14:00:00". Do not attempt to convert to UTC or append any offset yourself — that conversion happens elsewhere. Omit a field entirely if the email does not actually specify it; never guess or default to a placeholder time.`,
               "",
-              'Reply ONLY with compact JSON: {"category":"...","person":"...","entities":["..."],"serviceName":"...","amount":"...","dueDate":"...","meetingTime":"...","meetingEndTime":"...","meetingTitle":"...","action":"...","requiresReply":true,"urgency":"urgent|soon|normal|low","senderType":"human|automated|customer|investor|vendor|internal|unknown","suggestedAction":"ignore|notify|remind|schedule|draft_reply|watch_thread|review_manually","reason":"<=16 words","riskLevel":"high|medium|low","isAutomated":true,"isMarketing":false,"replyIntent":"ask|approve|decline|schedule|pay|review|ignore|delegate|unknown","summary":"<=20 words","confidence":"high|medium|low"}',
+              'Reply ONLY with compact JSON: {"category":"...","person":"...","contactCandidate":{"isRealContact":true,"contactType":"person","name":"...","email":"...","company":"...","confidence":"high|medium|low","reason":"..."},"entities":["..."],"serviceName":"...","amount":"...","dueDate":"...","meetingTime":"...","meetingEndTime":"...","meetingTitle":"...","action":"...","requiresReply":true,"urgency":"urgent|soon|normal|low","senderType":"human|automated|customer|investor|vendor|internal|unknown","suggestedAction":"ignore|notify|remind|schedule|draft_reply|watch_thread|review_manually","reason":"<=16 words","riskLevel":"high|medium|low","isAutomated":true,"isMarketing":false,"replyIntent":"ask|approve|decline|schedule|pay|review|ignore|delegate|unknown","summary":"<=20 words","confidence":"high|medium|low"}',
             ].join("\n"),
           },
           {
@@ -124,10 +128,18 @@ export class EmailClassifierService {
 
       const parsed = extractJson<Partial<ExtractedEmailFacts> & { category?: string }>(raw ?? "");
       const category = normalizeCategory(parsed?.category);
+      const senderType = normalizeSenderType(parsed?.senderType);
+      const isAutomated = normalizeBoolean(parsed?.isAutomated);
+      const isMarketing = normalizeBoolean(parsed?.isMarketing);
 
       return {
         category,
         person: parsed?.person?.trim() || undefined,
+        contactCandidate: normalizeContactCandidate(parsed?.contactCandidate, input.from, input.body, {
+          senderType,
+          isAutomated,
+          isMarketing,
+        }),
         entities: normalizeEntities(parsed?.entities),
         serviceName: parsed?.serviceName?.trim() || undefined,
         amount: parsed?.amount?.trim() || undefined,
@@ -138,12 +150,12 @@ export class EmailClassifierService {
         action: parsed?.action?.trim() || undefined,
         requiresReply: normalizeBoolean(parsed?.requiresReply),
         urgency: normalizeUrgency(parsed?.urgency),
-        senderType: normalizeSenderType(parsed?.senderType),
+        senderType,
         suggestedAction: normalizeSuggestedAction(parsed?.suggestedAction),
         reason: parsed?.reason?.trim() || undefined,
         riskLevel: normalizeRiskLevel(parsed?.riskLevel),
-        isAutomated: normalizeBoolean(parsed?.isAutomated),
-        isMarketing: normalizeBoolean(parsed?.isMarketing),
+        isAutomated,
+        isMarketing,
         replyIntent: normalizeReplyIntent(parsed?.replyIntent),
         summary: parsed?.summary?.trim() || `Email from ${input.from}`,
         confidence: normalizeConfidence(parsed?.confidence),
@@ -206,6 +218,7 @@ export class EmailClassifierService {
         person: shortFrom(input.from),
         summary: `Account/service alert from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
+        contactCandidate: rejectContactCandidate("Automated account/service alert"),
         requiresReply: false,
         urgency: "urgent",
         senderType: "automated",
@@ -227,6 +240,7 @@ export class EmailClassifierService {
         person: shortFrom(input.from),
         summary: `Payment or invoice from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
+        contactCandidate: rejectContactCandidate("Automated billing or receipt email"),
         requiresReply: false,
         urgency: "soon",
         senderType: "automated",
@@ -248,6 +262,11 @@ export class EmailClassifierService {
         person: shortFrom(input.from),
         summary: `Meeting request from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
+        contactCandidate: inferContactCandidateFromHeader(input.from, {
+          senderType: "human",
+          isAutomated: false,
+          isMarketing: false,
+        }),
         requiresReply: true,
         urgency: "soon",
         senderType: "human",
@@ -269,6 +288,11 @@ export class EmailClassifierService {
         person: shortFrom(input.from),
         summary: `Investor update from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
+        contactCandidate: inferContactCandidateFromHeader(input.from, {
+          senderType: "investor",
+          isAutomated: false,
+          isMarketing: false,
+        }),
         requiresReply: true,
         urgency: "soon",
         senderType: "investor",
@@ -288,6 +312,7 @@ export class EmailClassifierService {
       return {
         category: "newsletter",
         summary: "Newsletter or marketing email",
+        contactCandidate: rejectContactCandidate("Newsletter or marketing email"),
         requiresReply: false,
         urgency: "low",
         senderType: "automated",
@@ -301,18 +326,24 @@ export class EmailClassifierService {
       };
     }
 
+    const automated = isLikelyAutomated(input.from);
     return {
       category: "general_medium",
       person: shortFrom(input.from),
       summary: `Email from ${shortFrom(input.from)}: ${input.subject.slice(0, 60)}`,
       entities: [shortFrom(input.from)],
+      contactCandidate: inferContactCandidateFromHeader(input.from, {
+        senderType: "unknown",
+        isAutomated: automated,
+        isMarketing: false,
+      }),
       requiresReply: false,
       urgency: "normal",
       senderType: "unknown",
       suggestedAction: "notify",
       reason: "No strong category-specific signal matched.",
       riskLevel: "medium",
-      isAutomated: isLikelyAutomated(input.from),
+      isAutomated: automated,
       isMarketing: false,
       replyIntent: "unknown",
       confidence: "low",
@@ -411,8 +442,234 @@ function normalizeEntities(raw: unknown): string[] | undefined {
   return entities.length ? [...new Set(entities)] : undefined;
 }
 
+const ROLE_LOCAL_PARTS = new Set([
+  "accounts",
+  "admin",
+  "alerts",
+  "billing",
+  "bot",
+  "contact",
+  "digest",
+  "hello",
+  "info",
+  "mail",
+  "mailer",
+  "marketing",
+  "newsletter",
+  "no-reply",
+  "noreply",
+  "notification",
+  "notifications",
+  "offers",
+  "receipt",
+  "receipts",
+  "robot",
+  "sales",
+  "security",
+  "support",
+  "system",
+  "team",
+  "transaction",
+  "transactions",
+  "updates",
+]);
+const AUTOMATED_LOCAL_RE =
+  /(^|[-_.+])(no-?reply|do-?not-?reply|noreply\w*|notif(?:y|ications?)?|robot|bot|mailer|daemon|bounces?|automated|alerts?|updates?|newsletters?|transactions?|receipts?|postmaster)($|[-_.+\d])/i;
+const GENERIC_CONTACT_NAME_RE =
+  /^(no[- ]?reply|do[- ]?not[- ]?reply|notifications?|alerts?|accounts?|support|info|admin|robot|bot|system|team|updates?|news(?:letter)?s?|transactions?|receipts?|billing|security)$/i;
+const EMAIL_RE = /^[^\s<>"]+@[^\s<>"]+\.[^\s<>"]+$/;
+const FREE_EMAIL_DOMAINS = new Set([
+  "aol.com",
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "icloud.com",
+  "live.com",
+  "me.com",
+  "msn.com",
+  "outlook.com",
+  "pm.me",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+  "ymail.com",
+  "zoho.com",
+]);
+const SECOND_LEVEL_TLDS = new Set(["ac", "co", "com", "edu", "gov", "net", "org"]);
+
+function normalizeContactCandidate(
+  raw: unknown,
+  from: string,
+  body: string,
+  hints: {
+    senderType?: EmailSenderType;
+    isAutomated?: boolean;
+    isMarketing?: boolean;
+  },
+): ExtractedContactCandidate {
+  if (!raw || typeof raw !== "object") {
+    return inferContactCandidateFromHeader(from, hints);
+  }
+
+  const candidate = raw as Record<string, unknown>;
+  if (candidate.isRealContact !== true) {
+    return rejectContactCandidate(stringField(candidate.reason) ?? "Model rejected sender as a real contact");
+  }
+
+  const header = parseFromHeader(from);
+  const rawEmail = normalizeEmail(stringField(candidate.email));
+  const email =
+    rawEmail && appearsInSource(rawEmail, from, body)
+      ? rawEmail
+      : header.email;
+  const name =
+    cleanContactName(stringField(candidate.name)) ??
+    cleanContactName(header.name);
+  const company = cleanContactName(stringField(candidate.company)) ?? companyFromEmail(email);
+  const confidence = normalizeConfidence(stringField(candidate.confidence));
+
+  return validateContactCandidate(
+    {
+      isRealContact: true,
+      contactType: "person",
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+      ...(company ? { company } : {}),
+      reason: stringField(candidate.reason) ?? "Model identified a real contact",
+      confidence,
+    },
+    from,
+    hints,
+  );
+}
+
+function inferContactCandidateFromHeader(
+  from: string,
+  hints: {
+    senderType?: EmailSenderType;
+    isAutomated?: boolean;
+    isMarketing?: boolean;
+  },
+): ExtractedContactCandidate {
+  const header = parseFromHeader(from);
+  const name = cleanContactName(header.name);
+  const email = header.email;
+  return validateContactCandidate(
+    {
+      isRealContact: true,
+      contactType: "person",
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+      ...(companyFromEmail(email) ? { company: companyFromEmail(email) } : {}),
+      reason: "Header looks like a real sender",
+      confidence: "medium",
+    },
+    from,
+    hints,
+  );
+}
+
+function validateContactCandidate(
+  candidate: ExtractedContactCandidate,
+  from: string,
+  hints: {
+    senderType?: EmailSenderType;
+    isAutomated?: boolean;
+    isMarketing?: boolean;
+  },
+): ExtractedContactCandidate {
+  const email = normalizeEmail(candidate.email);
+  const header = parseFromHeader(from);
+  const local = email?.split("@")[0] ?? header.email?.split("@")[0] ?? "";
+  const name = candidate.name ?? header.name;
+
+  if (hints.isAutomated || hints.isMarketing || hints.senderType === "automated") {
+    return rejectContactCandidate("Automated or marketing sender");
+  }
+  if (!email && !name) return rejectContactCandidate("No contact name or email");
+  if (local && isRoleLocalPart(local)) return rejectContactCandidate("Role or automated mailbox");
+  if (name && GENERIC_CONTACT_NAME_RE.test(name)) return rejectContactCandidate("Generic sender display name");
+  if (isLikelyAutomated(from)) return rejectContactCandidate("Automated sender header");
+
+  return {
+    ...candidate,
+    isRealContact: true,
+    contactType: "person",
+    ...(email ? { email } : {}),
+    ...(candidate.company ? { company: candidate.company } : {}),
+    confidence: candidate.confidence ?? "medium",
+  };
+}
+
+function rejectContactCandidate(reason: string): ExtractedContactCandidate {
+  return {
+    isRealContact: false,
+    reason,
+    confidence: "high",
+  };
+}
+
+function parseFromHeader(raw: string): { name?: string; email?: string } {
+  const email = normalizeEmail(
+    raw.match(/<([^>]+)>/)?.[1] ?? raw.match(/[^\s<>"]+@[^\s<>"]+/)?.[0],
+  );
+  let name = raw.match(/^\s*"?([^"<]+?)"?\s*</)?.[1]?.trim();
+  if (name && name.includes("@")) name = undefined;
+  return { name: name || undefined, email };
+}
+
+function cleanContactName(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.includes("@") || trimmed.length > 80) return undefined;
+  return trimmed;
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeEmail(value: string | undefined): string | undefined {
+  const email = value?.trim().toLowerCase();
+  return email && EMAIL_RE.test(email) ? email : undefined;
+}
+
+function appearsInSource(email: string, from: string, body: string): boolean {
+  const target = email.toLowerCase();
+  return from.toLowerCase().includes(target) || body.toLowerCase().includes(target);
+}
+
+function isRoleLocalPart(local: string): boolean {
+  const normalized = local.replace(/[_.+].*$/, "").toLowerCase();
+  return ROLE_LOCAL_PARTS.has(local.toLowerCase()) || ROLE_LOCAL_PARTS.has(normalized) || AUTOMATED_LOCAL_RE.test(local);
+}
+
+function companyFromEmail(email: string | undefined): string | undefined {
+  const domain = email?.split("@")[1];
+  if (!domain) return undefined;
+  const registrable = registrableDomain(domain);
+  if (FREE_EMAIL_DOMAINS.has(registrable)) return undefined;
+  const name = registrable.split(".")[0] ?? "";
+  if (!name) return undefined;
+  return name
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function registrableDomain(domain: string): string {
+  const labels = domain.toLowerCase().split(".").filter(Boolean);
+  if (labels.length <= 2) return labels.join(".");
+  const tld = labels.at(-1);
+  const secondLevel = labels.at(-2);
+  if (tld?.length === 2 && secondLevel && SECOND_LEVEL_TLDS.has(secondLevel) && labels.length >= 3) {
+    return labels.slice(-3).join(".");
+  }
+  return labels.slice(-2).join(".");
+}
+
 function isLikelyAutomated(from: string): boolean {
-  return /\b(no-?reply|noreply|notification|notifications|support|billing|alerts?)\b/i.test(from);
+  return /\b(no-?reply|noreply|notification|notifications|support|billing|alerts?|transactions?|newsletter|updates?)\b/i.test(from);
 }
 
 function shortFrom(from: string): string {

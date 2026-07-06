@@ -3,7 +3,12 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { BudgetGateService } from "../billing/budget-gate.service";
 import type { HeyRizRuntimeContext, LiveContext, LiveScheduleEntry } from "../context/context.types";
-import { describeNow, formatEventRange, zonedTimeToUtc } from "../lib/timezone";
+import {
+  describeNow,
+  formatEventRange,
+  localDateTimeToUtc,
+  zonedTimeToUtc,
+} from "../lib/timezone";
 import { LlmRouterService, extractJson } from "../llm/llm-router.service";
 import type { AgentMessage } from "../llm/llm.types";
 import {
@@ -36,6 +41,8 @@ type AgentStep = {
   tool_input?: Record<string, unknown> | null;
   say?: string | null;
 };
+
+type ToolChoice = { name: string; payload: Record<string, unknown> };
 
 export type PendingApproval = {
   tool: string;
@@ -84,6 +91,13 @@ export class AgentService {
     const provider = this.llm.getActiveProviderName("agent");
     const steps: AgentRunResult["steps"] = [];
     const toolResults: ToolExecutionResult[] = [];
+
+    const directChoice = input.approval
+      ? undefined
+      : directReadOnlyTool(input.message, input.context.timezone);
+    if (directChoice) {
+      return this.executeDeterministicChoice(directChoice, input, provider, steps, toolResults);
+    }
 
     if (!this.llm.hasProvider("agent")) {
       return this.ruleFallback(input, provider, steps, toolResults);
@@ -453,13 +467,23 @@ export class AgentService {
     const choice = ruleSelectTool(input.message, input.context.timezone);
     if (!choice) {
       return {
-        reply: `Standing by, ${input.context.honorific}. Ask me about today's schedule, your inbox, a reminder, or a follow-up.`,
+        reply: `Hey, ${input.context.honorific}. I'm here — ask me about your schedule, inbox, reminders, or follow-ups.`,
         provider,
         steps,
         toolResults,
       };
     }
 
+    return this.executeDeterministicChoice(choice, input, provider, steps, toolResults);
+  }
+
+  private async executeDeterministicChoice(
+    choice: ToolChoice,
+    input: AgentRunInput,
+    provider: string,
+    steps: AgentRunResult["steps"],
+    toolResults: ToolExecutionResult[],
+  ): Promise<AgentRunResult> {
     const tool = this.tools.get(choice.name);
     if (tool?.approvalRequired) {
       return {
@@ -482,6 +506,14 @@ export class AgentService {
     const result = await this.execute(choice.name, choice.payload, input);
     steps.push(summarize(result));
     toolResults.push(result);
+
+    if (result.status === "needs_connection" && this.tools.get("connect_google")) {
+      const connect = await this.execute("connect_google", {}, input);
+      steps.push(summarize(connect));
+      toolResults.push(connect);
+      return { reply: connect.message, provider, steps, toolResults };
+    }
+
     return { reply: result.message, provider, steps, toolResults };
   }
 }
@@ -538,23 +570,31 @@ function liveFrom(from: string): string {
   return (email ? email[1] : from).split("@")[0];
 }
 
-function ruleSelectTool(
-  message: string,
-  timezone: string,
-): { name: string; payload: Record<string, unknown> } | undefined {
+function directReadOnlyTool(message: string, timezone: string): ToolChoice | undefined {
+  const payload = calendarDatePayload(message, timezone);
+  if (!payload || !isReadOnlyCalendarDateQuestion(message)) return undefined;
+  return { name: "calendar_briefing", payload };
+}
+
+function isReadOnlyCalendarDateQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  if (/\b(?:create|add|book|remind|send|mail|email|draft|cancel|reschedule|move|invite)\b/.test(text)) {
+    return false;
+  }
+  if (/\b(?:schedule|set\s+up|put)\s+(?:a|an|the|my|this|that|meeting|call|sync|event|reminder)\b/.test(text)) {
+    return false;
+  }
+  return /\b(?:what|whats|what's|about|anything|agenda|calendar|schedule|meetings|free|busy|clear|have|left)\b/.test(text);
+}
+
+function ruleSelectTool(message: string, timezone: string): ToolChoice | undefined {
   const text = message.toLowerCase();
   if (/(cal\.com|calcom|booking|bookings|booked)/.test(text)) {
     return { name: "calcom_briefing", payload: {} };
   }
-  if (/\b(tomorrow|tmrw|tommorow|tommorrow)\b/.test(text)) {
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    return {
-      name: "calendar_briefing",
-      payload: {
-        startDate: zonedTimeToUtc(tomorrow, timezone, 0, 0).toISOString(),
-        endDate: zonedTimeToUtc(tomorrow, timezone, 23, 59).toISOString(),
-      },
-    };
+  const calendarPayload = calendarDatePayload(message, timezone);
+  if (calendarPayload) {
+    return { name: "calendar_briefing", payload: calendarPayload };
   }
   if (/(schedule|calendar|today|meeting|agenda|brief)/.test(text)) {
     return { name: "calendar_briefing", payload: {} };
@@ -578,6 +618,163 @@ function ruleSelectTool(
     return { name: "business_snapshot", payload: {} };
   }
   return undefined;
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+const WEEKDAYS: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  wed: 3,
+  weds: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
+
+const MONTH_PATTERN =
+  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+const WEEKDAY_PATTERN =
+  "sun(?:day)?|mon(?:day)?|tue(?:s|sday)?|wed(?:s|nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?";
+
+function calendarDatePayload(
+  message: string,
+  timezone: string,
+): Record<string, unknown> | undefined {
+  const text = message.toLowerCase();
+
+  if (/\b(?:day after tomorrow|overmorrow)\b/.test(text)) {
+    return payloadForLocalDayOffset(2, timezone);
+  }
+  if (/\btoday\b/.test(text)) {
+    return { range: "today" };
+  }
+  if (/\b(?:tomorrow|tmrw|tommorow|tommorrow)\b/.test(text)) {
+    return payloadForLocalDayOffset(1, timezone);
+  }
+
+  const iso = text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    return payloadForLocalDay(Number(iso[1]), Number(iso[2]), Number(iso[3]), timezone);
+  }
+
+  const monthFirst = text.match(
+    new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(20\\d{2}))?\\b`),
+  );
+  if (monthFirst) {
+    const month = MONTHS[monthFirst[1]];
+    const day = Number(monthFirst[2]);
+    const year = yearForMonthDay(month, day, monthFirst[3], timezone);
+    return payloadForLocalDay(year, month, day, timezone);
+  }
+
+  const dayFirst = text.match(
+    new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})(?:,?\\s+(20\\d{2}))?\\b`),
+  );
+  if (dayFirst) {
+    const day = Number(dayFirst[1]);
+    const month = MONTHS[dayFirst[2]];
+    const year = yearForMonthDay(month, day, dayFirst[3], timezone);
+    return payloadForLocalDay(year, month, day, timezone);
+  }
+
+  const weekday = text.match(new RegExp(`\\b(next\\s+)?(${WEEKDAY_PATTERN})\\b`));
+  if (weekday) {
+    const target = WEEKDAYS[weekday[2]];
+    const today = localDateParts(new Date(), timezone);
+    let daysAhead = (target - today.weekday + 7) % 7;
+    if (weekday[1] && daysAhead === 0) daysAhead = 7;
+    return payloadForLocalDayOffset(daysAhead, timezone);
+  }
+
+  return undefined;
+}
+
+function payloadForLocalDayOffset(days: number, timezone: string): Record<string, unknown> {
+  const today = localDateParts(new Date(), timezone);
+  return payloadForLocalDay(today.year, today.month, today.day + days, timezone);
+}
+
+function payloadForLocalDay(
+  year: number,
+  month: number,
+  day: number,
+  timezone: string,
+): Record<string, unknown> {
+  const start = localDateTimeToUtc(year, month, day, 0, 0, timezone);
+  const end = new Date(localDateTimeToUtc(year, month, day, 23, 59, timezone).getTime() + 59_999);
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+}
+
+function yearForMonthDay(
+  month: number,
+  day: number,
+  explicitYear: string | undefined,
+  timezone: string,
+): number {
+  if (explicitYear) return Number(explicitYear);
+  const today = localDateParts(new Date(), timezone);
+  if (month < today.month || (month === today.month && day < today.day)) {
+    return today.year + 1;
+  }
+  return today.year;
+}
+
+function localDateParts(
+  date: Date,
+  timezone: string,
+): { year: number; month: number; day: number; weekday: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const numberPart = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const weekday = parts.find((p) => p.type === "weekday")?.value.toLowerCase() ?? "sunday";
+  return {
+    year: numberPart("year"),
+    month: numberPart("month"),
+    day: numberPart("day"),
+    weekday: WEEKDAYS[weekday] ?? 0,
+  };
 }
 
 function summarize(result: ToolExecutionResult) {

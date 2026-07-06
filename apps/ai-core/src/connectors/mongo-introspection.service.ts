@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { MongoClient } from "mongodb";
 import { env } from "@heyriz/shared/env";
@@ -91,6 +92,31 @@ export class MongoIntrospectionService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Lets a user paste whatever credentials they already have (often an admin
+   * account) instead of hand-rolling a scoped user first. Uses those
+   * credentials exactly once to provision a same-database `read`-role user,
+   * returns a connection string for the new user, and never persists the
+   * write-capable one it was given.
+   */
+  async provisionReadOnlyUser(connectionUrl: string): Promise<string> {
+    const client = new MongoClient(connectionUrl);
+    try {
+      await client.connect();
+      const db = client.db();
+      const username = `rizly_ro_${randomBytes(4).toString("hex")}`;
+      const password = randomBytes(24).toString("base64url");
+      await db.command({
+        createUser: username,
+        pwd: password,
+        roles: [{ role: "read", db: db.databaseName }],
+      });
+      return withScopedCredentials(connectionUrl, username, password, db.databaseName);
+    } finally {
+      await client.close();
+    }
+  }
+
   async runFind(connectionUrl: string, spec: MongoQuerySpec): Promise<{ documents: unknown[] }> {
     assertSafeFilter(spec.filter);
     const db = await this.dbFor(connectionUrl);
@@ -140,6 +166,27 @@ const READ_ONLY_ACTIONS = new Set([
 
 /** Built-in roles known to grant read-only access. Custom roles are never trusted by name alone. */
 const READ_ONLY_ROLES = new Set(["read", "readAnyDatabase"]);
+
+/**
+ * Swaps the userinfo and authSource of a mongodb(+srv):// URI for a new
+ * same-database user, preserving the original host list and every other
+ * query option (tls, replicaSet, etc.) untouched.
+ */
+function withScopedCredentials(
+  connectionUrl: string,
+  username: string,
+  password: string,
+  authSourceDb: string,
+): string {
+  const withCreds = connectionUrl.replace(
+    /^(mongodb(?:\+srv)?:\/\/)(?:[^@/?]*(?::[^@/?]*)?@)?/,
+    `$1${encodeURIComponent(username)}:${encodeURIComponent(password)}@`,
+  );
+  const [base, query = ""] = withCreds.split("?");
+  const params = new URLSearchParams(query);
+  params.set("authSource", authSourceDb);
+  return `${base}?${params.toString()}`;
+}
 
 function inferFields(sample: Record<string, unknown>[]): MongoIntrospectedField[] {
   const fields = new Map<string, Set<string>>();

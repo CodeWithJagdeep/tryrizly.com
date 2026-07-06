@@ -68,18 +68,7 @@ export class ConnectorService {
       if (typeof connectionUrl !== "string" || !connectionUrl) {
         throw new Error("invalid_connector_payload:mongodb");
       }
-      try {
-        await this.mongoIntrospection.assertReadOnly(connectionUrl);
-      } catch (error) {
-        if (error instanceof Error && error.message.startsWith("mongo_connection_not_read_only")) {
-          throw new Error(
-            "This MongoDB user can write to your database. Create a read-only user (role: read or readAnyDatabase) and connect with that instead.",
-          );
-        }
-        throw new Error(
-          `Couldn't verify that MongoDB connection: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+      input.secret.connectionUrl = await this.readOnlyMongoConnectionUrl(connectionUrl);
     }
 
     const encryptedPayload = this.vault.encrypt(input.secret);
@@ -126,6 +115,42 @@ export class ConnectorService {
     }
 
     return this.toSummary(account);
+  }
+
+  /**
+   * Accepts whatever credentials the user has on hand (often an admin
+   * account) instead of requiring them to hand-roll a read-only user first.
+   * If the pasted credentials can already only read, they're used as-is; if
+   * they can write, a scoped read-only user is provisioned automatically and
+   * that connection is what actually gets stored — the write-capable one
+   * passed in here is used once, in memory, and never persisted.
+   */
+  private async readOnlyMongoConnectionUrl(connectionUrl: string): Promise<string> {
+    try {
+      await this.mongoIntrospection.assertReadOnly(connectionUrl);
+      return connectionUrl;
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith("mongo_connection_not_read_only")) {
+        throw new Error(
+          `Couldn't verify that MongoDB connection: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    let readOnlyUrl: string;
+    try {
+      readOnlyUrl = await this.mongoIntrospection.provisionReadOnlyUser(connectionUrl);
+    } catch (error) {
+      throw new Error(
+        "This MongoDB user can write to your database, and Rizly couldn't automatically create a " +
+          `read-only user for you (${error instanceof Error ? error.message : String(error)}). Create one manually ` +
+          'with: db.createUser({ user: "rizly_readonly", pwd: "<password>", roles: [{ role: "read", db: "<your database name>" }] })',
+      );
+    }
+
+    // The new user was just created — confirm it actually only reads before trusting it.
+    await this.mongoIntrospection.assertReadOnly(readOnlyUrl);
+    return readOnlyUrl;
   }
 
   async delete(userId = "default", provider: ConnectorProvider) {

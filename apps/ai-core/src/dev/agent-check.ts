@@ -111,6 +111,42 @@ async function main() {
   console.log("SCENARIO_C_steps:", c.steps.map((s) => `${s.tool}:${s.status}`).join(", "));
   console.log("SCENARIO_C_pendingApproval:", JSON.stringify(c.pendingApproval));
 
+  // Scenario D: obvious read-only calendar date questions bypass the LLM, so
+  // a misspelled "tomorrow" cannot be answered from today's live context.
+  let dLlmCalls = 0;
+  let dPayload: Record<string, unknown> | undefined;
+  const dateTools = {
+    list: () => fakeTools.list(),
+    get: (name: string) => ({ name, approvalRequired: false }),
+    execute: async ({ name, payload }: { name: string; payload: Record<string, unknown> }): Promise<ToolExecutionResult> => {
+      if (name === "calendar_briefing") {
+        dPayload = payload;
+        return { tool: name, status: "ok", message: "Your calendar is clear tomorrow, sir." };
+      }
+      return { tool: name, status: "not_implemented", message: "n/a" };
+    },
+  } as unknown as ToolRegistryService;
+  const agentD = new AgentService(
+    dateTools,
+    {
+      getActiveProviderName: () => "grok",
+      hasProvider: () => true,
+      complete: async () => {
+        dLlmCalls += 1;
+        return '{"action":"final","say":"Your calendar is clear today, sir."}';
+      },
+    } as unknown as LlmRouterService,
+    fakeBudgetGate,
+  );
+  const d = await agentD.run({
+    userId: "default",
+    message: "Whats about tommorrow?",
+    context,
+  });
+  console.log("SCENARIO_D_steps:", d.steps.map((s) => `${s.tool}:${s.status}`).join(", "));
+  console.log("SCENARIO_D_payload:", JSON.stringify(dPayload));
+  console.log("SCENARIO_D_llmCalls:", dLlmCalls);
+
   const ok =
     a.steps.length === 2 &&
     a.pendingApproval?.tool === "send_email" &&
@@ -118,7 +154,12 @@ async function main() {
     c.steps.length === 1 &&
     c.steps[0]?.tool === "check_calendar_conflict" &&
     c.steps[0]?.status === "conflict" &&
-    c.pendingApproval?.tool === "reschedule_calendar_event";
+    c.pendingApproval?.tool === "reschedule_calendar_event" &&
+    d.steps[0]?.tool === "calendar_briefing" &&
+    Boolean(dPayload?.startDate) &&
+    Boolean(dPayload?.endDate) &&
+    dLlmCalls === 0 &&
+    /tomorrow/i.test(d.reply);
   console.log(ok ? "AGENT_CHECK_OK" : "AGENT_CHECK_FAIL");
   process.exit(ok ? 0 : 1);
 }

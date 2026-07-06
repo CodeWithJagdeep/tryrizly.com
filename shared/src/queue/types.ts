@@ -3,7 +3,7 @@ export type NotificationJobName = "telegram-notification" | "meeting-reminder";
 export type NotificationJobData = {
   userId: string;
   message: string;
-  source: "gateway" | "ai-core" | "calendar" | "gmail" | "manual";
+  source: "gateway" | "ai-core" | "calendar" | "calcom" | "gmail" | "manual";
   taskId?: string;
   meetingId?: string;
   metadata?: Record<string, string | number | boolean | null>;
@@ -50,6 +50,16 @@ export type WatchReplyRequest = Omit<WatchReplyJobData, "attempt" | "maxAttempts
 
 export type SpineJobName = "spine-ingest-email";
 
+export type ContactCandidate = {
+  isRealContact: boolean;
+  contactType?: "person" | "company";
+  name?: string;
+  email?: string;
+  company?: string;
+  reason?: string;
+  confidence?: "high" | "medium" | "low";
+};
+
 /**
  * A durable spine-ingest job. Carries only non-sensitive descriptors — the
  * worker re-fetches the email body live so a body never lands in Redis.
@@ -68,6 +78,7 @@ export type SpineJobData = {
   senderType?: "human" | "automated" | "customer" | "investor" | "vendor" | "internal" | "unknown";
   isAutomated?: boolean;
   isMarketing?: boolean;
+  contactCandidate?: ContactCandidate;
   /** Raw CC header value from Gmail, e.g. "Name <email>, Name2 <email2>" */
   cc?: string;
 };

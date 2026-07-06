@@ -34,6 +34,7 @@ export function aiBudgetForPlan(planId: string | undefined): number {
 // top-ups is explicit in the pack price, not in a second conversion rate.
 
 export const CREDITS_PER_DOLLAR = 200;
+export const MIN_CREDITS_PER_AI_TASK = 1;
 
 export function creditsForUsd(usd: number): number {
   return Math.round(usd * CREDITS_PER_DOLLAR);
@@ -41,6 +42,21 @@ export function creditsForUsd(usd: number): number {
 
 export function usdForCredits(credits: number): number {
   return credits / CREDITS_PER_DOLLAR;
+}
+
+/**
+ * User-facing AI usage is metered in whole credits per recorded LLM task.
+ * This keeps the dashboard readable and gives tiny calls a real minimum charge
+ * for latency/infrastructure overhead, while still preserving token-based
+ * proportionality for larger calls.
+ */
+export function billableCreditsForAiTask(rawCostUsd: number): number {
+  if (!Number.isFinite(rawCostUsd) || rawCostUsd <= 0) return MIN_CREDITS_PER_AI_TASK;
+  return Math.max(MIN_CREDITS_PER_AI_TASK, Math.ceil(rawCostUsd * CREDITS_PER_DOLLAR));
+}
+
+export function billableUsdForAiTask(rawCostUsd: number): number {
+  return usdForCredits(billableCreditsForAiTask(rawCostUsd));
 }
 
 export const PLAN_CREDITS: Record<BillingPlanId, number> = {

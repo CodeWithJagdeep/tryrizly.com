@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { env } from "@heyriz/shared/env";
+import { billableUsdForAiTask } from "@heyriz/shared/billing/plan-budgets";
 import { AnthropicProvider } from "./anthropic.provider";
 import { GrokProvider } from "./grok.provider";
 import { OpenAiProvider } from "./openai.provider";
@@ -30,23 +31,24 @@ export class LlmRouterService {
   ) {
     this.byName = { grok: this.grok, openai: this.openai, anthropic: this.anthropic };
 
-    // Cost-optimized defaults: cheap/high-volume tiers on a small model, and
-    // accuracy/reasoning-critical tiers on the proven strong model (grok).
-    // Every tier is overridable via LLM_ROUTE_<TASK>="provider:model".
+    // Cost-optimized defaults: everything that doesn't need frontier reasoning
+    // runs on grok-3-mini (cheap xAI tier, same key/vendor already trusted with
+    // this data — no new provider added for these). Every tier is overridable
+    // via LLM_ROUTE_<TASK>="provider:model".
     this.routes = {
       classify: parseRoute(env.LLM_ROUTE_CLASSIFY, {
-        provider: "openai",
-        model: env.LLM_CLASSIFIER_MODEL || env.OPENAI_MODEL,
+        provider: "grok",
+        model: env.LLM_CLASSIFIER_MODEL || "grok-3-mini",
       }),
-      memory: parseRoute(env.LLM_ROUTE_MEMORY, { provider: "openai", model: env.OPENAI_MODEL }),
-      brief: parseRoute(env.LLM_ROUTE_BRIEF, { provider: "openai", model: env.OPENAI_MODEL }),
+      memory: parseRoute(env.LLM_ROUTE_MEMORY, { provider: "grok", model: "grok-3-mini" }),
+      brief: parseRoute(env.LLM_ROUTE_BRIEF, { provider: "grok", model: "grok-3-mini" }),
       draft: parseRoute(env.LLM_ROUTE_DRAFT, { provider: "anthropic", model: "claude-haiku-4-5" }),
-      extract: parseRoute(env.LLM_ROUTE_EXTRACT, { provider: "grok" }),
+      extract: parseRoute(env.LLM_ROUTE_EXTRACT, { provider: "grok", model: "grok-3-mini" }),
       agent: parseRoute(env.LLM_ROUTE_AGENT, { provider: "grok" }),
-      query: parseRoute(env.LLM_ROUTE_QUERY, { provider: "grok" }),
+      query: parseRoute(env.LLM_ROUTE_QUERY, { provider: "grok", model: "grok-3-mini" }),
       // Conservative extraction; precision comes from the strict prompt. Bump to
       // anthropic:claude-sonnet-4-6 via LLM_ROUTE_DECIDE if false positives appear.
-      decide: parseRoute(env.LLM_ROUTE_DECIDE, { provider: "openai", model: env.OPENAI_MODEL }),
+      decide: parseRoute(env.LLM_ROUTE_DECIDE, { provider: "grok", model: "grok-3-mini" }),
     };
   }
 
@@ -123,6 +125,7 @@ export class LlmRouterService {
     const resolvedModel = model ?? defaultModelNameFor(provider.name);
     const inputTokens = usage?.inputTokens ?? 0;
     const outputTokens = usage?.outputTokens ?? 0;
+    const rawCostUsd = estimateCostUsd(resolvedModel, inputTokens, outputTokens);
     void this.usageLedger.record({
       userId: input.userId,
       task: input.task ?? "agent",
@@ -130,7 +133,7 @@ export class LlmRouterService {
       model: resolvedModel,
       inputTokens,
       outputTokens,
-      costUsd: estimateCostUsd(resolvedModel, inputTokens, outputTokens),
+      costUsd: billableUsdForAiTask(rawCostUsd),
     });
   }
 
@@ -176,6 +179,11 @@ export class LlmRouterService {
         });
         if (input.userId) {
           const model = resolved.model ?? defaultModelNameFor(resolved.provider.name);
+          const rawCostUsd = estimateCostUsd(
+            model,
+            result.usage?.inputTokens ?? 0,
+            result.usage?.outputTokens ?? 0,
+          );
           void this.usageLedger.record({
             userId: input.userId,
             task: "classify",
@@ -183,11 +191,7 @@ export class LlmRouterService {
             model,
             inputTokens: result.usage?.inputTokens ?? 0,
             outputTokens: result.usage?.outputTokens ?? 0,
-            costUsd: estimateCostUsd(
-              model,
-              result.usage?.inputTokens ?? 0,
-              result.usage?.outputTokens ?? 0,
-            ),
+            costUsd: billableUsdForAiTask(rawCostUsd),
           });
         }
         const parsed = extractJson<{ priority?: string; reason?: string }>(result.content);

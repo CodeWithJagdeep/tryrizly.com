@@ -1,8 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { logger } from "@heyriz/shared/logger";
+import { env } from "@heyriz/shared/env";
+import { sendTelegramMessage } from "@heyriz/shared/telegram";
 import { PlanBudgetService } from "./plan-budget.service";
 import { UsageLedgerService } from "../llm/usage-ledger.service";
-import { creditsForUsd } from "@heyriz/shared/billing/plan-budgets";
+import { creditsForUsd, usdForCredits } from "@heyriz/shared/billing/plan-budgets";
 
 export type BudgetState = "ok" | "warn" | "exceeded";
 
@@ -11,6 +13,7 @@ export type BudgetCheck = {
   spendUsd: number;
   budgetUsd: number;
   ratio: number;
+  rolloverCredits: number;
 };
 
 const WARN_RATIO = 0.8;
@@ -49,31 +52,79 @@ export class BudgetGateService {
   async check(userId: string): Promise<BudgetCheck> {
     try {
       const cycle = await this.planBudget.getCycleWindow(userId);
-      const [budgetUsd, spendUsd] = await Promise.all([
+      const [planId, budgetBeforeRolloverUsd, spendUsd] = await Promise.all([
+        this.planBudget.getPlanId(userId),
         this.planBudget.aiBudgetUsd(userId),
         this.usageLedger.spendSince(userId, cycle.start),
       ]);
+      const previousStart =
+        (await this.planBudget.previousRolloverCycleStart(userId, cycle.start)) ??
+        previousCycleStart(cycle.start);
+      const previousSpendUsd = cycle.end
+        ? Math.max(0, (await this.usageLedger.spendSince(userId, previousStart)) - spendUsd)
+        : 0;
+      const rolloverCredits = await this.planBudget.rolloverCreditsForCycle({
+        userId,
+        planId,
+        cycleStart: cycle.start,
+        cycleEnd: cycle.end,
+        previousSpendCredits: creditsForUsd(previousSpendUsd),
+      });
+      const budgetUsd = budgetBeforeRolloverUsd + usdForCredits(rolloverCredits);
       if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
-        return { state: "ok", spendUsd, budgetUsd, ratio: 0 };
+        return { state: "ok", spendUsd, budgetUsd, ratio: 0, rolloverCredits };
       }
       const ratio = spendUsd / budgetUsd;
       const state: BudgetState = ratio >= 1 ? "exceeded" : ratio >= WARN_RATIO ? "warn" : "ok";
-      return { state, spendUsd, budgetUsd, ratio };
+      const check = { state, spendUsd, budgetUsd, ratio, rolloverCredits };
+      if (state === "warn") {
+        void this.sendLowCreditsNudgeOnce(userId, check).catch((error: unknown) =>
+          logger.warn("budget gate: low credits nudge failed", {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+      return check;
     } catch (error) {
       logger.warn("budget gate: check failed, defaulting to ok", {
         userId,
         error: error instanceof Error ? error.message : String(error),
       });
-      return { state: "ok", spendUsd: 0, budgetUsd: Number.POSITIVE_INFINITY, ratio: 0 };
+      return {
+        state: "ok",
+        spendUsd: 0,
+        budgetUsd: Number.POSITIVE_INFINITY,
+        ratio: 0,
+        rolloverCredits: 0,
+      };
     }
   }
 
   /** True once per user per calendar month — call only when state === "warn". */
-  consumeWarnOnce(userId: string): boolean {
+  private consumeWarnOnce(userId: string): boolean {
     const key = `${userId}:${cycleKey()}`;
     if (this.warnedThisCycle.has(key)) return false;
     this.warnedThisCycle.add(key);
     return true;
+  }
+
+  private async sendLowCreditsNudgeOnce(userId: string, check: BudgetCheck): Promise<void> {
+    if (!this.consumeWarnOnce(userId)) return;
+    const budgetCredits = creditsForUsd(check.budgetUsd);
+    const usedCredits = creditsForUsd(check.spendUsd);
+    const remainingCredits = Math.max(0, budgetCredits - usedCredits);
+    const sent = await sendTelegramMessage({
+      chatId: env.TELEGRAM_CHAT_ID,
+      text:
+        `You've used 80% of your monthly AI budget. ` +
+        `${remainingCredits.toLocaleString("en-US")} credits left. ` +
+        `Upgrade to Pro for 3,400 credits, or add a top-up.`,
+    });
+    if (!sent) {
+      // Let an in-chat fallback still appear if Telegram is unavailable.
+      this.warnedThisCycle.delete(`${userId}:${cycleKey()}`);
+    }
   }
 
   /** Budget check plus a per-day, per-feature cost breakdown, for the dashboard's Usage view. */
@@ -118,10 +169,33 @@ export class BudgetGateService {
       creditsUsed,
       creditsBudget,
       planId,
+      rolloverCredits: check.rolloverCredits,
       cycleStart: cycle.start.toISOString(),
       cycleEnd: cycle.end ? cycle.end.toISOString() : null,
       breakdown,
       daily,
     };
   }
+
+  /** All users' spend since N days ago, highest spender first — admin-only usage view. */
+  async adminSummary(sinceDays: number) {
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const rows = await this.usageLedger.allUsersSince(since);
+    return {
+      sinceDays,
+      since: since.toISOString(),
+      users: rows.map((r) => ({
+        userId: r.userId,
+        calls: r.calls,
+        spendUsd: r.costUsd,
+        credits: creditsForUsd(r.costUsd),
+      })),
+    };
+  }
+}
+
+function previousCycleStart(cycleStart: Date): Date {
+  const previous = new Date(cycleStart);
+  previous.setUTCMonth(previous.getUTCMonth() - 1);
+  return previous;
 }

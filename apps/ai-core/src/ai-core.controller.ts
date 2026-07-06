@@ -113,6 +113,11 @@ export class AiCoreController {
     return this.aiCoreService.getUsage(payload);
   }
 
+  @MessagePattern("usage.listAll")
+  listAllUsage(@Payload() payload: { sinceDays?: number }) {
+    return this.aiCoreService.listAllUsage(payload);
+  }
+
   @MessagePattern("reminder.schedule")
   scheduleReminder(@Payload() payload: ReminderRequest) {
     return this.aiCoreService.scheduleReminder(payload);
@@ -139,7 +144,7 @@ export class AiCoreController {
   }
 
   @MessagePattern("proactive.sync")
-  proactiveSync(@Payload() payload: { userId?: string }) {
+  proactiveSync(@Payload() payload: { userId?: string; source?: "calendar" | "calcom" }) {
     return this.aiCoreService.proactiveSync(payload);
   }
 

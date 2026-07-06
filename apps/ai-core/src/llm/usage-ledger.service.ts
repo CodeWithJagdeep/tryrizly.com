@@ -137,6 +137,46 @@ export class UsageLedgerService implements OnModuleDestroy {
     }
   }
 
+  /** Total spend per user since `since`, highest spender first — for the admin usage view. */
+  async allUsersSince(
+    since: Date,
+  ): Promise<Array<{ userId: string; costUsd: number; calls: number }>> {
+    try {
+      if (!this.pool) {
+        const byUser = new Map<string, { costUsd: number; calls: number }>();
+        for (const r of inMemoryLog) {
+          if (r.createdAt < since) continue;
+          const cur = byUser.get(r.userId) ?? { costUsd: 0, calls: 0 };
+          cur.costUsd += r.costUsd;
+          cur.calls += 1;
+          byUser.set(r.userId, cur);
+        }
+        return [...byUser.entries()]
+          .map(([userId, v]) => ({ userId, ...v }))
+          .sort((a, b) => b.costUsd - a.costUsd);
+      }
+      await this.ensureTable();
+      const result = await this.pool.query<{ user_id: string; cost_usd: string; calls: string }>(
+        `select user_id, sum(cost_usd) as cost_usd, count(*) as calls
+         from llm_usage_log
+         where created_at >= $1
+         group by user_id
+         order by sum(cost_usd) desc`,
+        [since],
+      );
+      return result.rows.map((r) => ({
+        userId: r.user_id,
+        costUsd: Number(r.cost_usd),
+        calls: Number(r.calls),
+      }));
+    } catch (error) {
+      logger.warn("usage ledger: allUsersSince failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
   private async ensureTable() {
     if (!this.pool) return;
     await this.pool.query(`

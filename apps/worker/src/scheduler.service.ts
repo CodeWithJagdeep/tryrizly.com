@@ -74,6 +74,13 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       { pattern: "0 10 * * *", tz: env.DEFAULT_TIMEZONE },
       { name: "trial-expiry-nudge", data: {} },
     );
+    // Admin-only: daily cross-user AI spend digest, sent to ADMIN_EMAILS's
+    // linked Telegram chat (see gateway's api/admin/usage-digest).
+    await this.queue.upsertJobScheduler(
+      "admin-usage-digest",
+      { pattern: "0 8 * * *", tz: env.DEFAULT_TIMEZONE },
+      { name: "admin-usage-digest", data: {} },
+    );
 
     const worker = new Worker(
       queueNames.scheduler,
@@ -136,6 +143,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
           await this.runBillingSweep();
           return;
         }
+
+        if (job.name === "admin-usage-digest") {
+          await this.sendAdminUsageDigest();
+          return;
+        }
       },
       { connection, concurrency: 2 },
     );
@@ -156,6 +168,31 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       emailPollMinutes: env.EMAIL_POLL_MINUTES,
       tz: env.DEFAULT_TIMEZONE,
     });
+  }
+
+  /** Asks the gateway to compose and send the daily admin usage digest to Telegram. */
+  private async sendAdminUsageDigest() {
+    const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+    const secret = env.AUTH_INTERNAL_SECRET;
+    if (!gatewayUrl) return;
+
+    try {
+      const headers: Record<string, string> = {};
+      if (secret) headers["x-heyriz-internal-secret"] = secret;
+      const res = await fetch(`${gatewayUrl}/api/admin/usage-digest`, { method: "POST", headers });
+      if (!res.ok) {
+        logger.warn("admin usage digest request failed", { status: res.status });
+        return;
+      }
+      const result = (await res.json()) as { ok?: boolean; reason?: string };
+      if (!result.ok) {
+        logger.warn("admin usage digest not sent", { reason: result.reason });
+      }
+    } catch (err) {
+      logger.warn("admin usage digest request threw", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**

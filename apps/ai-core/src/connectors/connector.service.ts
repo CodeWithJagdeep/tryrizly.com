@@ -1,13 +1,15 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { env } from "@heyriz/shared/env";
 import { ConnectorRepository } from "./connector.repository";
 import { ConnectorVaultService } from "./connector-vault.service";
 import { MongoIntrospectionService } from "./mongo-introspection.service";
 import type {
+  CalComOAuthSecret,
   CompleteOAuthInput,
   CompleteOAuthResult,
   ConnectedAccount,
+  ConnectorOAuthProvider,
   ConnectorProvider,
   ConnectorSummary,
   DataSourceProvider,
@@ -16,6 +18,7 @@ import type {
   SaveConnectorInput,
   StartOAuthInput,
 } from "./connector.types";
+import type { CalComAuth } from "./calcom.service";
 
 const CONNECTOR_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -33,6 +36,21 @@ const oauthScopesByProvider: Record<GoogleOAuthProvider, string[]> = {
     "https://www.googleapis.com/auth/contacts.readonly",
   ],
   calendar: [...IDENTITY_SCOPES, "https://www.googleapis.com/auth/calendar"],
+};
+
+const calComOAuthScopes = [
+  "BOOKING_READ",
+  "BOOKING_WRITE",
+  "EVENT_TYPE_READ",
+  "PROFILE_READ",
+];
+
+type CalComOAuthClient = {
+  clientId: string;
+  /** Absent for a PKCE-only ("public") client — Cal.com's platform OAuth
+   * clients created with "Use PKCE" don't issue one at all. */
+  clientSecret?: string;
+  source: "env" | "custom";
 };
 
 @Injectable()
@@ -183,14 +201,32 @@ export class ConnectorService {
     return account.metadata.notificationsEnabled !== false;
   }
 
-  /** Decrypts the Cal.com API key for a user. Returns null if not connected. */
-  async getCalComSecret(userId: string): Promise<{ apiKey: string } | null> {
+  /** Decrypts Cal.com auth for a user. Returns null if not connected or refresh fails. */
+  async getCalComSecret(userId: string): Promise<CalComAuth | null> {
     const account = await this.repository.find(userId, "calcom");
     if (!account) return null;
     const payload = this.vault.decrypt(account.encryptedPayload);
-    const apiKey = payload.apiKey;
-    if (typeof apiKey !== "string" || !apiKey) return null;
-    return { apiKey };
+
+    if (account.authType === "oauth") {
+      const accessToken = stringSecret(payload.accessToken) ?? stringSecret(payload.access_token);
+      const refreshToken = stringSecret(payload.refreshToken) ?? stringSecret(payload.refresh_token);
+      const expiresAt =
+        numberSecret(payload.expiresAt) ??
+        numberSecret(payload.expiry_date) ??
+        tokenExpiresAt(numberSecret(payload.expires_in));
+      const oauthClient = calComOAuthClientFromPayload(payload) ?? calComOAuthClientFromEnv();
+
+      if (!accessToken) return null;
+      if (!refreshToken || !expiresAt || expiresAt > Date.now() + 60_000) {
+        return { kind: "oauth", accessToken };
+      }
+
+      return oauthClient ? this.refreshCalComOAuth(account, refreshToken, oauthClient) : null;
+    }
+
+    const apiKey = stringSecret(payload.apiKey);
+    if (!apiKey) return null;
+    return { kind: "apikey", apiKey };
   }
 
   /** Decrypts the PayPal REST app credentials. Returns null if not connected. */
@@ -300,16 +336,47 @@ export class ConnectorService {
   }
 
   async startOAuth(input: StartOAuthInput) {
-    const scopes = oauthScopesByProvider[input.provider];
-    if (!scopes) {
-      throw new Error("Unsupported OAuth provider");
-    }
+    const scopes = scopesForOAuthProvider(input.provider);
+    let calComOAuthClient: CalComOAuthClient | undefined;
+    let statePayload: Record<string, string> | undefined;
+    let codeChallenge: string | undefined;
 
-    if (!env.GOOGLE_CLIENT_ID) {
-      return {
-        status: "missing_config" as const,
-        message: "GOOGLE_CLIENT_ID is missing",
-      };
+    if (input.provider === "calcom") {
+      const customClientId = stringSecret(input.calComClientId?.trim());
+      const customClientSecret = stringSecret(input.calComClientSecret?.trim());
+      if ((customClientId && !customClientSecret) || (!customClientId && customClientSecret)) {
+        return {
+          status: "missing_config" as const,
+          message: "Enter both Cal.com OAuth client ID and client secret",
+        };
+      }
+      calComOAuthClient = customClientId && customClientSecret
+        ? { clientId: customClientId, clientSecret: customClientSecret, source: "custom" }
+        : calComOAuthClientFromEnv();
+
+      if (!calComOAuthClient) {
+        return {
+          status: "missing_config" as const,
+          message: "Enter Cal.com OAuth client credentials or configure CALCOM_CLIENT_ID",
+        };
+      }
+
+      if (calComOAuthClient.source === "custom" && calComOAuthClient.clientSecret) {
+        statePayload = {
+          clientId: calComOAuthClient.clientId,
+          clientSecret: calComOAuthClient.clientSecret,
+        };
+      }
+
+      // Generate a PKCE pair unconditionally: harmless for a confidential
+      // client (Cal.com just ignores the extra params), required for a
+      // PKCE-only ("public") client, which has no client secret at all.
+      const codeVerifier = generateCodeVerifier();
+      codeChallenge = codeChallengeFor(codeVerifier);
+      statePayload = { ...statePayload, codeVerifier };
+    } else {
+      const missingConfig = missingOAuthConfig(input.provider);
+      if (missingConfig) return missingConfig;
     }
 
     const userId = input.userId ?? "default";
@@ -320,6 +387,7 @@ export class ConnectorService {
       userId,
       provider: input.provider,
       returnTo: input.returnTo,
+      encryptedPayload: statePayload ? this.vault.encrypt(statePayload) : undefined,
       expiresAt,
     });
     const state = signOAuthState({
@@ -328,14 +396,7 @@ export class ConnectorService {
       exp: expiresAt.getTime(),
     });
 
-    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    url.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-    url.searchParams.set("redirect_uri", env.GOOGLE_REDIRECT_URI);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("access_type", "offline");
-    url.searchParams.set("prompt", "consent");
-    url.searchParams.set("scope", scopes.join(" "));
-    url.searchParams.set("state", state);
+    const url = authorizationUrlForProvider(input.provider, scopes, state, calComOAuthClient, codeChallenge);
 
     return {
       status: "connected" as const,
@@ -346,17 +407,12 @@ export class ConnectorService {
   }
 
   async completeOAuth(input: CompleteOAuthInput): Promise<CompleteOAuthResult> {
-    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-      throw new Error("Google OAuth env vars are missing");
-    }
-
-    // The real provider comes from the signed state, not the caller — Google
-    // redirects to one fixed callback URL for both flows, so the path can't
-    // carry it, and trusting it from an unsigned param would let a caller
-    // store a gmail token under the calendar row (or vice versa).
+    // The real provider comes from the signed state, not the caller. Trusting
+    // a provider from an unsigned query/path would let a caller store tokens
+    // under the wrong connector row.
     const state = input.state ? verifyOAuthState(input.state) : undefined;
     const provider = state?.provider;
-    const scopes = provider ? oauthScopesByProvider[provider] : undefined;
+    const scopes = provider ? scopesForOAuthProvider(provider) : undefined;
     if (!provider || !scopes) {
       throw new Error("Unsupported OAuth provider");
     }
@@ -369,6 +425,30 @@ export class ConnectorService {
       throw new Error("connector_oauth_state_user_mismatch");
     }
     const userId = storedState.userId;
+
+    if (provider === "calcom") {
+      const oauthClient =
+        calComOAuthClientFromEncryptedState(this.vault, storedState.encryptedPayload) ??
+        calComOAuthClientFromEnv();
+      if (!oauthClient) {
+        throw new Error("Cal.com OAuth client credentials are missing");
+      }
+      const codeVerifier = codeVerifierFromEncryptedState(this.vault, storedState.encryptedPayload);
+      return this.completeCalComOAuth({
+        code: input.code,
+        provider,
+        scopes,
+        userId,
+        returnTo: storedState.returnTo,
+        oauthClient,
+        codeVerifier,
+      });
+    }
+
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      throw new Error("Google OAuth env vars are missing");
+    }
+
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: {
@@ -409,6 +489,110 @@ export class ConnectorService {
     return { ...this.toSummary(account), returnTo: storedState.returnTo };
   }
 
+  private async completeCalComOAuth(input: {
+    code: string;
+    provider: "calcom";
+    scopes: string[];
+    userId: string;
+    returnTo?: string;
+    oauthClient: CalComOAuthClient;
+    codeVerifier?: string;
+  }): Promise<CompleteOAuthResult> {
+    const tokenJson = await exchangeCalComToken({
+      clientId: input.oauthClient.clientId,
+      clientSecret: input.oauthClient.clientSecret,
+      redirectUri: env.CALCOM_REDIRECT_URI,
+      grantType: "authorization_code",
+      code: input.code,
+      codeVerifier: input.codeVerifier,
+    });
+
+    const accessToken = stringSecret(tokenJson.access_token);
+    const refreshToken = stringSecret(tokenJson.refresh_token);
+    const expiresIn = numberSecret(tokenJson.expires_in) ?? 1800;
+    if (!accessToken || !refreshToken) {
+      throw new Error("Cal.com token exchange did not return access and refresh tokens");
+    }
+
+    const expiresAt = Date.now() + expiresIn * 1000;
+    const grantedScopes = splitScopes(stringSecret(tokenJson.scope)) ?? input.scopes;
+    const profile = await fetchCalComProfile(accessToken).catch(() => null);
+    const secret: CalComOAuthSecret = {
+      accessToken,
+      refreshToken,
+      expiresAt,
+      ...(input.oauthClient.source === "custom"
+        ? {
+            clientId: input.oauthClient.clientId,
+            clientSecret: input.oauthClient.clientSecret,
+          }
+        : {}),
+    };
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: input.provider,
+      authType: "oauth",
+      label: profile?.email ? `Cal.com (${profile.email})` : providerLabel(input.provider),
+      status: "connected",
+      encryptedPayload: this.vault.encrypt(secret),
+      scopes: grantedScopes,
+      metadata: {
+        setup: input.oauthClient.source === "custom" ? "custom_oauth" : "oauth",
+        hasRefreshToken: true,
+        oauthClientSource: input.oauthClient.source,
+        tokenExpiresAt: expiresAt,
+        ...(profile?.email ? { accountEmail: profile.email } : {}),
+        ...(profile?.username ? { accountUsername: profile.username } : {}),
+      },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
+  private async refreshCalComOAuth(
+    account: ConnectedAccount,
+    refreshToken: string,
+    oauthClient: CalComOAuthClient,
+  ): Promise<CalComAuth | null> {
+    const tokenJson = await exchangeCalComToken({
+      clientId: oauthClient.clientId,
+      clientSecret: oauthClient.clientSecret,
+      grantType: "refresh_token",
+      refreshToken,
+    }).catch(() => null);
+    if (!tokenJson) return null;
+
+    const accessToken = stringSecret(tokenJson.access_token);
+    const nextRefreshToken = stringSecret(tokenJson.refresh_token) ?? refreshToken;
+    const expiresIn = numberSecret(tokenJson.expires_in) ?? 1800;
+    if (!accessToken) return null;
+
+    const expiresAt = Date.now() + expiresIn * 1000;
+    const secret: CalComOAuthSecret = {
+      accessToken,
+      refreshToken: nextRefreshToken,
+      expiresAt,
+      ...(oauthClient.source === "custom"
+        ? {
+            clientId: oauthClient.clientId,
+            clientSecret: oauthClient.clientSecret,
+          }
+        : {}),
+    };
+    await this.repository.updateById(account.id, {
+      encryptedPayload: this.vault.encrypt(secret),
+      metadata: {
+        ...account.metadata,
+        hasRefreshToken: Boolean(nextRefreshToken),
+        oauthClientSource: oauthClient.source,
+        tokenExpiresAt: expiresAt,
+      },
+    });
+
+    return { kind: "oauth", accessToken };
+  }
+
   private toSummary(account: ConnectedAccount): ConnectorSummary {
     return {
       id: account.id,
@@ -427,7 +611,7 @@ export class ConnectorService {
 
 type SignedOAuthState = {
   stateId: string;
-  provider: GoogleOAuthProvider;
+  provider: ConnectorOAuthProvider;
   exp: number;
 };
 
@@ -452,7 +636,7 @@ function verifyOAuthState(value: string): SignedOAuthState | undefined {
     const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SignedOAuthState;
     if (
       !parsed.stateId ||
-      (parsed.provider !== "gmail" && parsed.provider !== "calendar") ||
+      !isConnectorOAuthProvider(parsed.provider) ||
       parsed.exp < Date.now()
     ) {
       return undefined;
@@ -469,6 +653,203 @@ function oauthStateSecret(): string {
     throw new Error("AUTH_INTERNAL_SECRET or CONNECTOR_VAULT_KEY is required for connector OAuth state");
   }
   return secret ?? "heyriz-local-dev-connector-oauth-state-key";
+}
+
+function isConnectorOAuthProvider(value: unknown): value is ConnectorOAuthProvider {
+  return value === "gmail" || value === "calendar" || value === "calcom";
+}
+
+function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
+  return provider === "calcom" ? calComOAuthScopes : oauthScopesByProvider[provider];
+}
+
+function missingOAuthConfig(provider: ConnectorOAuthProvider) {
+  if (provider === "calcom" && !calComOAuthClientFromEnv()) {
+    return {
+      status: "missing_config" as const,
+      message: "CALCOM_CLIENT_ID and CALCOM_CLIENT_SECRET are missing",
+    };
+  }
+
+  if (provider !== "calcom" && !env.GOOGLE_CLIENT_ID) {
+    return {
+      status: "missing_config" as const,
+      message: "GOOGLE_CLIENT_ID is missing",
+    };
+  }
+
+  return null;
+}
+
+function authorizationUrlForProvider(
+  provider: ConnectorOAuthProvider,
+  scopes: string[],
+  state: string,
+  calComOAuthClient?: CalComOAuthClient,
+  codeChallenge?: string,
+): string {
+  if (provider === "calcom") {
+    const url = new URL("https://app.cal.com/auth/oauth2/authorize");
+    url.searchParams.set("client_id", calComOAuthClient?.clientId ?? env.CALCOM_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.CALCOM_REDIRECT_URI);
+    url.searchParams.set("state", state);
+    url.searchParams.set("scope", scopes.join(" "));
+    if (codeChallenge) {
+      url.searchParams.set("code_challenge", codeChallenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    }
+    return url.toString();
+  }
+
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", env.GOOGLE_CLIENT_ID ?? "");
+  url.searchParams.set("redirect_uri", env.GOOGLE_REDIRECT_URI);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("scope", scopes.join(" "));
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
+function calComOAuthClientFromEnv(): CalComOAuthClient | undefined {
+  // A client secret is optional here: Cal.com's platform OAuth clients created
+  // with "Use PKCE" (the recommended, non-mobile-only mode too) never issue
+  // one — the PKCE code_verifier/code_challenge exchange replaces it.
+  return env.CALCOM_CLIENT_ID
+    ? {
+        clientId: env.CALCOM_CLIENT_ID,
+        clientSecret: env.CALCOM_CLIENT_SECRET || undefined,
+        source: "env",
+      }
+    : undefined;
+}
+
+function calComOAuthClientFromPayload(
+  payload: Record<string, unknown>,
+): CalComOAuthClient | undefined {
+  const clientId = stringSecret(payload.clientId) ?? stringSecret(payload.client_id);
+  const clientSecret = stringSecret(payload.clientSecret) ?? stringSecret(payload.client_secret);
+  return clientId ? { clientId, clientSecret, source: "custom" } : undefined;
+}
+
+/** RFC 7636 code_verifier: 43-128 chars from [A-Za-z0-9-._~]. base64url of 32
+ * random bytes yields 43 chars, right at the minimum, with no padding to strip. */
+function generateCodeVerifier(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function codeChallengeFor(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+function calComOAuthClientFromEncryptedState(
+  vault: ConnectorVaultService,
+  encryptedPayload: string | undefined,
+): CalComOAuthClient | undefined {
+  if (!encryptedPayload) return undefined;
+  try {
+    return calComOAuthClientFromPayload(vault.decrypt(encryptedPayload));
+  } catch {
+    return undefined;
+  }
+}
+
+function codeVerifierFromEncryptedState(
+  vault: ConnectorVaultService,
+  encryptedPayload: string | undefined,
+): string | undefined {
+  if (!encryptedPayload) return undefined;
+  try {
+    return stringSecret(vault.decrypt(encryptedPayload).codeVerifier);
+  } catch {
+    return undefined;
+  }
+}
+
+type CalComTokenJson = Record<string, string | number | boolean | null>;
+
+async function exchangeCalComToken(
+  input:
+    | {
+        clientId: string;
+        clientSecret?: string;
+        grantType: "authorization_code";
+        code: string;
+        redirectUri: string;
+        codeVerifier?: string;
+      }
+    | {
+        clientId: string;
+        clientSecret?: string;
+        grantType: "refresh_token";
+        refreshToken: string;
+      },
+): Promise<CalComTokenJson> {
+  const body =
+    input.grantType === "authorization_code"
+      ? {
+          client_id: input.clientId,
+          ...(input.clientSecret ? { client_secret: input.clientSecret } : {}),
+          grant_type: input.grantType,
+          code: input.code,
+          redirect_uri: input.redirectUri,
+          ...(input.codeVerifier ? { code_verifier: input.codeVerifier } : {}),
+        }
+      : {
+          client_id: input.clientId,
+          ...(input.clientSecret ? { client_secret: input.clientSecret } : {}),
+          grant_type: input.grantType,
+          refresh_token: input.refreshToken,
+        };
+
+  const response = await fetch("https://api.cal.com/v2/auth/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cal.com token exchange failed: ${errorText}`);
+  }
+
+  return (await response.json()) as CalComTokenJson;
+}
+
+async function fetchCalComProfile(
+  accessToken: string,
+): Promise<{ email?: string; username?: string } | null> {
+  const response = await fetch("https://api.cal.com/v2/me", {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json()) as {
+    data?: { email?: string; username?: string };
+  };
+  return payload.data ?? null;
+}
+
+function stringSecret(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function numberSecret(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function tokenExpiresAt(expiresIn: number | undefined): number | undefined {
+  return expiresIn ? Date.now() + expiresIn * 1000 : undefined;
+}
+
+function splitScopes(scope: string | undefined): string[] | undefined {
+  const scopes = scope?.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+  return scopes && scopes.length > 0 ? scopes : undefined;
 }
 
 function providerLabel(provider: ConnectorProvider) {

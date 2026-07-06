@@ -75,12 +75,14 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "calcom",
     provider: "calcom",
     title: "Cal.com",
-    description: "View upcoming bookings, check who booked you, and create new meetings via chat.",
+    description: "View bookings, create meetings, and schedule meeting notifications through Cal.com.",
     category: "Scheduling",
-    authType: "manual",
+    authType: "oauth",
     icon: CalComIcon,
+    // OAuth only covers Cal.com's EU org (cal.eu) today - anyone on the
+    // global cal.com account needs this fallback instead.
     fields: [
-      { name: "apiKey", label: "API Key", type: "password", placeholder: "cal_live_..." },
+      { name: "apiKey", label: "API Key (if OAuth doesn't work for your account)", type: "password", placeholder: "cal_live_..." },
     ],
   },
   {
@@ -613,6 +615,7 @@ function SettingsPanel({
 
   const isGmail = account.provider === "gmail";
   const isCalendar = account.provider === "calendar";
+  const isMeetingProvider = isCalendar || account.provider === "calcom";
 
   async function handleSave() {
     setSaving(true);
@@ -621,7 +624,7 @@ function SettingsPanel({
       patch.notificationScope = notifScope;
       patch.autoProcess = autoProcess;
     }
-    if (isCalendar) {
+    if (isMeetingProvider) {
       patch.meetingReminderMinutes = Number(reminderMinutes);
       patch.notifyOnInvites = notifyOnInvites;
     }
@@ -777,10 +780,14 @@ function SettingsPanel({
                 </SettingRow>
               )}
 
-              {isCalendar && (
+              {isMeetingProvider && (
                 <SettingRow
-                  label="Notify on invites"
-                  description="Alert when a new calendar invite arrives"
+                  label={account.provider === "calcom" ? "Notify on bookings" : "Notify on invites"}
+                  description={
+                    account.provider === "calcom"
+                      ? "Alert when a Cal.com booking is upcoming"
+                      : "Alert when a new calendar invite arrives"
+                  }
                 >
                   <ToggleSwitch
                     checked={notifyOnInvites}
@@ -793,7 +800,7 @@ function SettingsPanel({
           </div>
 
           {/* Behaviour — connector-specific */}
-          {(isGmail || isCalendar) && (
+          {(isGmail || isMeetingProvider) && (
             <div className="py-3">
               <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
                 Behaviour
@@ -807,7 +814,7 @@ function SettingsPanel({
                     <ToggleSwitch checked={autoProcess} onChange={setAutoProcess} />
                   </SettingRow>
                 )}
-                {isCalendar && (
+                {isMeetingProvider && (
                   <SettingRow
                     label="Meeting reminder"
                     description="How early to send a pre-meeting alert"
@@ -1032,6 +1039,9 @@ function SetupDialog({
   const Icon = connector.icon;
   const multi = isMultiAccount(connector.provider);
   const isOAuth = connector.authType === "oauth";
+  // Cal.com's OAuth only covers cal.eu accounts today - it carries a manual
+  // API-key fallback for everyone else, shown alongside the Connect button.
+  const showManualFallback = Boolean(connector.fields?.length);
   const isEdit = Boolean(editAccount);
   const oauthHref = `/api/connectors/${connector.provider}/start?returnTo=%2Fdashboard%2Fconnectors%3Fconnected%3D${connector.provider}`;
   const [closing, setClosing] = useState(false);
@@ -1103,13 +1113,19 @@ function SetupDialog({
               Connect {connector.title}
             </a>
           )}
+
+          {isOAuth && connector.provider === "calcom" && (
+            <a href={`${oauthHref}&region=eu`} className="text-xs font-medium text-black/40 underline-offset-2 hover:text-black hover:underline">
+              Have a Cal.com EU (cal.eu) account? Connect via cal.eu instead
+            </a>
+          )}
         </div>
 
         <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-7 pt-6">
-          {!isOAuth && (
+          {(!isOAuth || showManualFallback) && (
           <div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              Credentials
+              {isOAuth ? `Or connect with an API key instead` : "Credentials"}
             </p>
 
             {error && (
@@ -1176,7 +1192,7 @@ function SetupDialog({
             </div>
           </div>
 
-          {!isOAuth && (
+          {(!isOAuth || showManualFallback) && (
           <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
             <button className="h-10 border border-slate-200 bg-white px-4 text-sm font-semibold text-black/50 transition hover:bg-slate-50 hover:text-black" onClick={handleClose} type="button">
               Cancel
@@ -1189,7 +1205,7 @@ function SetupDialog({
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
                   </svg>
-                  {isEdit ? "Save changes" : "Connect"}
+                  {isEdit ? "Save changes" : isOAuth ? "Connect with API Key" : "Connect"}
                 </>
               )}
             </button>

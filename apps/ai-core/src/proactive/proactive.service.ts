@@ -278,10 +278,15 @@ export class ProactiveService {
       return { connected: false, scheduled: [] as ScheduledReminder[] };
     }
 
-    const bookings = await this.calcom.listBookings(auth, {
-      status: "upcoming",
-      take: 50,
-    });
+    const bookings = await this.calcom
+      .listBookings(auth, { status: "upcoming", take: 50 })
+      .catch((error: unknown) => {
+        logger.warn("cal.com meeting reminder sync: listBookings failed", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [] as CalComBooking[];
+      });
     const scheduled: ScheduledReminder[] = [];
 
     for (const booking of bookings) {

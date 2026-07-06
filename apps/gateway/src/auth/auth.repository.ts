@@ -26,6 +26,11 @@ export type StoredUser = {
   onboarding: OnboardingState;
 };
 
+export type OAuthStateRecord = {
+  returnTo: string;
+  redirectUri?: string;
+};
+
 const defaultOnboarding: OnboardingState = {
   googleConnected: false,
   telegramLinked: false,
@@ -150,7 +155,7 @@ export class AuthRepository {
     await db.collection("users").updateOne({ email }, update);
   }
 
-  async setOAuthState(provider: string, state: string, data: { returnTo: string }, ttlMs: number) {
+  async setOAuthState(provider: string, state: string, data: OAuthStateRecord, ttlMs: number) {
     await this.ensureIndexes();
     const db = await getDb();
     await db.collection("oauth_states").insertOne({
@@ -161,18 +166,24 @@ export class AuthRepository {
     });
   }
 
-  async consumeOAuthState(provider: string, state: string): Promise<{ returnTo: string } | null> {
+  async consumeOAuthState(provider: string, state: string): Promise<OAuthStateRecord | null> {
     await this.ensureIndexes();
     const db = await getDb();
     const record = await db
-      .collection<{ provider: string; state: string; returnTo: string; expiresAt: Date }>(
+      .collection<{
+        provider: string;
+        state: string;
+        returnTo: string;
+        redirectUri?: string;
+        expiresAt: Date;
+      }>(
         "oauth_states",
       )
       .findOneAndDelete({ provider, state });
     if (!record || record.expiresAt.getTime() < Date.now()) {
       return null;
     }
-    return { returnTo: record.returnTo };
+    return { returnTo: record.returnTo, redirectUri: record.redirectUri };
   }
 
   /**
@@ -206,11 +217,27 @@ export class AuthRepository {
     return { email: record.email };
   }
 
+  /**
+   * Idempotent: reuses an existing still-valid token instead of always
+   * minting a new one. The onboarding page re-fires this on every visit to
+   * the Telegram step (including navigating back and forward again), and
+   * unconditionally deleting-and-replacing here would invalidate a token the
+   * principal already opened in Telegram, right as they're clicking /start —
+   * exactly the "link has expired" report this was causing.
+   */
   async createTelegramLinkToken(email: string, ttlMs: number): Promise<string> {
     await this.ensureIndexes();
     const db = await getDb();
+    const collection = db.collection<{ token: string; email: string; expiresAt: Date }>(
+      "telegram_link_tokens",
+    );
+
+    const existing = await collection.findOne({ email, expiresAt: { $gt: new Date() } });
+    if (existing) return existing.token;
+
     const token = randomBytes(16).toString("base64url");
-    await db.collection("telegram_link_tokens").insertOne({
+    await collection.deleteMany({ email });
+    await collection.insertOne({
       token,
       email,
       expiresAt: new Date(Date.now() + ttlMs),
@@ -218,12 +245,35 @@ export class AuthRepository {
     return token;
   }
 
-  async consumeTelegramLinkToken(token: string): Promise<{ email: string } | null> {
+  async consumeTelegramLinkToken(
+    token: string,
+    chatId?: string,
+  ): Promise<{ email: string } | null> {
     await this.ensureIndexes();
     const db = await getDb();
-    const record = await db
-      .collection<{ token: string; email: string; expiresAt: Date }>("telegram_link_tokens")
-      .findOneAndDelete({ token });
+    const now = new Date();
+    const collection = db.collection<{
+      token: string;
+      email: string;
+      expiresAt: Date;
+      claimedByChatId?: string;
+      claimedAt?: Date;
+    }>("telegram_link_tokens");
+
+    if (chatId) {
+      const record = await collection.findOneAndUpdate(
+        {
+          token,
+          expiresAt: { $gt: now },
+          $or: [{ claimedByChatId: { $exists: false } }, { claimedByChatId: chatId }],
+        },
+        { $set: { claimedByChatId: chatId, claimedAt: now } },
+        { returnDocument: "after" },
+      );
+      return record ? { email: record.email } : null;
+    }
+
+    const record = await collection.findOneAndDelete({ token });
     if (!record || record.expiresAt.getTime() < Date.now()) {
       return null;
     }
@@ -272,6 +322,14 @@ export class AuthRepository {
       chatId,
     });
     return record?.userId ?? null;
+  }
+
+  async findTelegramLinkByChat(chatId: string): Promise<{ userId: string; email?: string } | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ chatId: string; userId: string; email?: string }>("telegram_links")
+      .findOne({ chatId });
+    return record ? { userId: record.userId, email: record.email } : null;
   }
 
   /** Reverse of findUserIdByTelegramChat — used by the web dashboard to find a user's chat for pending approvals. */

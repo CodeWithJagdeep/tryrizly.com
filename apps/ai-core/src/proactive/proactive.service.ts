@@ -1,5 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { BudgetGateService } from "../billing/budget-gate.service";
+import { CalComService, type CalComBooking } from "../connectors/calcom.service";
+import { ConnectorService } from "../connectors/connector.service";
 import { GoogleService } from "../google/google.service";
 import type { CalendarEvent } from "../google/google.types";
 import { LlmRouterService } from "../llm/llm-router.service";
@@ -31,6 +33,10 @@ export class ProactiveService {
     private readonly tools: ToolRegistryService,
     @Inject(GoogleService)
     private readonly google: GoogleService,
+    @Inject(ConnectorService)
+    private readonly connectors: ConnectorService,
+    @Inject(CalComService)
+    private readonly calcom: CalComService,
     @Inject(VectorMemoryService)
     private readonly vectorMemory: VectorMemoryService,
     @Inject(LlmRouterService)
@@ -69,6 +75,29 @@ export class ProactiveService {
     const eventLines = await Promise.all(
       events.map((event) => this.enrichEventLine(userId, event, timezone)),
     );
+
+    const calComAuth = await this.connectors.getCalComSecret(userId).catch(() => null);
+    const todayStart = startOfDay(now, timezone).getTime();
+    const todayEnd = endOfDay(now, timezone).getTime();
+    const calComBookings = calComAuth
+      ? await this.calcom
+          .listBookings(calComAuth, { status: "upcoming", take: 50 })
+          .then((bookings) =>
+            bookings.filter((b) => {
+              const startMs = Date.parse(b.startTime);
+              return !Number.isNaN(startMs) && startMs >= todayStart && startMs <= todayEnd;
+            }),
+          )
+          .catch((error: unknown) => {
+            logger.warn("morning brief calcom fetch failed", {
+              userId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return [] as CalComBooking[];
+          })
+      : [];
+    const calComLines = calComBookings.map((booking) => this.enrichCalComLine(booking, timezone));
+
     const openTasks = await this.tasks.listOpen(userId).catch((error: unknown) => {
       logger.warn("morning brief task fetch failed", {
         userId,
@@ -94,10 +123,11 @@ export class ProactiveService {
       : [];
     const metricsLine = await this.metricsLine(userId, honorific, timezone);
 
-    const header = `Good morning, ${honorific}. ${meetingCountPhrase(calendar, events.length)}`;
+    const header = `Good morning, ${honorific}. ${meetingCountPhrase(calendar, events.length + calComBookings.length, Boolean(calComAuth))}`;
 
     const bullets = [
       ...(calendar?.connected ? eventLines : []),
+      ...calComLines,
       ...openTasks.slice(0, 5).map((task) => `Task: ${task.summary}`),
       ...pendingEmails.slice(0, 3).map((hit) => truncate(hit.summary, 80)),
       ...(metricsLine ? [metricsLine] : []),
@@ -125,7 +155,12 @@ export class ProactiveService {
     return { sent: true, text };
   }
 
-  async syncMeetingReminders(userId = env.DEFAULT_USER_ID) {
+  async syncMeetingReminders(
+    userId = env.DEFAULT_USER_ID,
+    source: "calendar" | "calcom" = "calendar",
+  ) {
+    if (source === "calcom") return this.syncCalComMeetingReminders(userId);
+
     const honorific = await this.preferences.getHonorific(userId);
     const timezone = await this.preferences.getTimezone(userId);
     const now = new Date();
@@ -236,6 +271,92 @@ export class ProactiveService {
     return { connected: true, scheduled };
   }
 
+  private async syncCalComMeetingReminders(userId: string) {
+    const honorific = await this.preferences.getHonorific(userId);
+    const auth = await this.connectors.getCalComSecret(userId);
+    if (!auth) {
+      return { connected: false, scheduled: [] as ScheduledReminder[] };
+    }
+
+    const bookings = await this.calcom.listBookings(auth, {
+      status: "upcoming",
+      take: 50,
+    });
+    const scheduled: ScheduledReminder[] = [];
+
+    for (const booking of bookings) {
+      if (booking.status?.toLowerCase() === "cancelled" || !booking.startTime) continue;
+      const startMs = Date.parse(booking.startTime);
+      if (Number.isNaN(startMs)) continue;
+
+      void this.eventIngest
+        .recordEvent(userId, {
+          type: "meeting",
+          source: "calcom",
+          sourceId: booking.uid || String(booking.id),
+          timestamp: new Date(startMs),
+          content: booking.title,
+          metadata: { start: booking.startTime, end: booking.endTime },
+          participants: booking.attendees.map((a) => ({
+            email: a.email,
+            role: "attendee",
+          })),
+        })
+        .catch((e: unknown) =>
+          logger.warn("spine: cal.com meeting event ingest failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+
+      const join = booking.meetingUrl ? ` Join: ${booking.meetingUrl}` : "";
+      const hint = await this.calComMemoryHint(userId, booking, MEMORY_TIMEOUT_MS);
+      const context = hint ? ` (${truncate(hint.summary, 140)})` : "";
+      const meetingId = booking.uid || String(booking.id);
+      const plans = [
+        {
+          kind: "t30",
+          at: startMs - 30 * MIN,
+          text: `Heads up, ${honorific} - "${booking.title}" in 30 minutes${context}.${join}`,
+        },
+        {
+          kind: "t5",
+          at: startMs - 5 * MIN,
+          text: `"${booking.title}" starts in 5 minutes, ${honorific}${context}.${join}`,
+        },
+        {
+          kind: "late",
+          at: startMs + 2 * MIN,
+          text: `${honorific}, "${booking.title}" has started and I don't see you in it yet - want me to open the link?${join}`,
+        },
+      ];
+
+      for (const plan of plans) {
+        if (plan.at <= Date.now()) continue;
+        await enqueueReminder({
+          userId,
+          message: plan.text,
+          runAt: new Date(plan.at).toISOString(),
+          source: "calcom",
+          dedupeKey: `calcom-meet:${meetingId}:${plan.kind}`,
+          metadata: { kind: `meeting_${plan.kind}`, meetingId },
+        });
+        scheduled.push({
+          meetingId,
+          title: booking.title,
+          kind: plan.kind,
+          at: new Date(plan.at).toISOString(),
+        });
+      }
+    }
+
+    logger.info("cal.com meeting reminders synced", {
+      userId,
+      bookings: bookings.length,
+      scheduled: scheduled.length,
+    });
+    return { connected: true, scheduled };
+  }
+
   private async enrichEventLine(
     userId: string,
     event: CalendarEvent,
@@ -251,12 +372,43 @@ export class ProactiveService {
     return `${fmtTime(event.start, timezone)} ${event.title}`;
   }
 
+  private enrichCalComLine(booking: CalComBooking, timezone: string): string {
+    const endMs = Date.parse(booking.endTime ?? booking.startTime ?? "");
+    if (!Number.isNaN(endMs) && endMs < Date.now()) {
+      return `${booking.title} (completed) [Cal.com]`;
+    }
+    return `${fmtTime(booking.startTime, timezone)} ${booking.title} [Cal.com]`;
+  }
+
   private async eventMemoryHint(
     userId: string,
     event: CalendarEvent,
     timeoutMs?: number,
   ) {
     const query = [event.title, ...(event.attendees ?? [])].filter(Boolean).join(" ");
+    if (!env.BACKGROUND_AI_ENABLED) return undefined;
+    if (!query.trim()) return undefined;
+
+    const search = this.vectorMemory
+      .search({ userId, query, limit: 1 })
+      .then((hits) => hits[0]);
+
+    try {
+      return timeoutMs ? await withTimeout(search, timeoutMs) : await search;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async calComMemoryHint(
+    userId: string,
+    booking: CalComBooking,
+    timeoutMs?: number,
+  ) {
+    const query = [
+      booking.title,
+      ...booking.attendees.map((a) => a.name || a.email),
+    ].filter(Boolean).join(" ");
     if (!env.BACKGROUND_AI_ENABLED) return undefined;
     if (!query.trim()) return undefined;
 
@@ -359,9 +511,11 @@ function minimalContext(
 function meetingCountPhrase(
   calendar: Awaited<ReturnType<GoogleService["listEvents"]>> | undefined,
   count: number,
+  calComConnected: boolean,
 ): string {
-  if (!calendar) return "Calendar unavailable right now.";
-  if (!calendar.connected) return "Calendar not connected.";
+  if (!calendar?.connected && !calComConnected) {
+    return calendar ? "Calendar not connected." : "Calendar unavailable right now.";
+  }
   if (count === 0) return "No meetings today.";
   return `${count} meeting${count === 1 ? "" : "s"} today.`;
 }

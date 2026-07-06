@@ -141,6 +141,9 @@ services:
     # Caps WiredTiger cache to 300MB — default is 50% of RAM (2GB on 4GB VM)
     command: mongod --wiredTigerCacheSizeGB 0.3
     restart: unless-stopped
+    # Loopback-only — reachable via an SSH tunnel to the VM, never exposed publicly.
+    ports:
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
     deploy:

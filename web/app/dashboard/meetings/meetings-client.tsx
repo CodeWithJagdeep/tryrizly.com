@@ -76,6 +76,34 @@ function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function groupByDate(meetings: Meeting[]): { dayKey: string; label: string; meetings: Meeting[] }[] {
+  const groups = new Map<string, Meeting[]>();
+  for (const m of meetings) {
+    if (!m.start) continue;
+    const key = dayKey(new Date(m.start));
+    const bucket = groups.get(key) ?? [];
+    bucket.push(m);
+    groups.set(key, bucket);
+  }
+  const today = startOfDay(new Date()).getTime();
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, list]) => {
+      const diffDays = Math.round((new Date(key).getTime() - today) / 86_400_000);
+      const label =
+        diffDays === 0
+          ? "Today"
+          : diffDays === 1
+            ? "Tomorrow"
+            : new Date(key).toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              });
+      return { dayKey: key, label, meetings: list };
+    });
+}
+
 function meetingEndMs(m: Meeting): number {
   if (m.end) return Date.parse(m.end);
   if (m.start) {
@@ -351,7 +379,11 @@ export function MeetingsClient() {
           </div>
         )}
 
-        {!loading && !error && filtered.length > 0 && (
+        {!loading && !error && filtered.length > 0 && activeTab === "upcoming" && (
+          <MeetingsAgenda meetings={filtered} now={now} conflictIds={conflictIds} />
+        )}
+
+        {!loading && !error && filtered.length > 0 && activeTab !== "upcoming" && (
           <>
             <MeetingsTable meetings={pageItems} now={now} conflictIds={conflictIds} />
             {totalPages > 1 && (
@@ -383,6 +415,41 @@ export function MeetingsClient() {
         )}
       </div>
     </main>
+  );
+}
+
+// ── Agenda (date-grouped upcoming view) ────────────────────────────────────────
+
+function MeetingsAgenda({
+  meetings,
+  now,
+  conflictIds,
+}: {
+  meetings: Meeting[];
+  now: number;
+  conflictIds: Set<string>;
+}) {
+  const groups = useMemo(() => groupByDate(meetings), [meetings]);
+
+  return (
+    <div className="flex flex-col gap-8">
+      {groups.map((group, i) => (
+        <section key={group.dayKey}>
+          <div className="mb-2 flex items-baseline gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">{group.label}</h2>
+            <span className="text-xs text-slate-400">
+              {group.meetings.length} meeting{group.meetings.length !== 1 ? "s" : ""}
+            </span>
+            {i === 0 && (
+              <span className="rounded bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#FE7F2D]">
+                Next up
+              </span>
+            )}
+          </div>
+          <MeetingsTable meetings={group.meetings} now={now} conflictIds={conflictIds} />
+        </section>
+      ))}
+    </div>
   );
 }
 

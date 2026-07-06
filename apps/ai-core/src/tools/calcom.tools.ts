@@ -34,7 +34,7 @@ export function createCalComBriefingTool(
         return {
           tool: "calcom_briefing",
           status: "needs_connection",
-          message: `Cal.com isn't connected yet, ${context.honorific} — add your API key in Connectors.`,
+          message: `Cal.com isn't connected yet, ${context.honorific} — connect it from the dashboard connectors page.`,
         };
       }
 
@@ -116,21 +116,31 @@ export function createCalComBookTool(
         return { tool: "calcom_book", status: "not_implemented", message: `Missing booking details, ${context.honorific}.` };
       }
 
-      const result = await calcom.createBooking(secret, {
-        eventTypeId,
-        start,
-        name: attendeeName,
-        email: attendeeEmail,
-        timeZone: timeZone ?? context.timezone,
-        notes,
-      });
+      try {
+        const result = await calcom.createBooking(secret, {
+          eventTypeId,
+          start,
+          name: attendeeName,
+          email: attendeeEmail,
+          timeZone: timeZone ?? context.timezone,
+          notes,
+        });
 
-      return {
-        tool: "calcom_book",
-        status: "ok",
-        message: `Booking created, ${context.honorific}${result.meetingUrl ? ` — join at ${result.meetingUrl}` : ""}.`,
-        data: result,
-      };
+        return {
+          tool: "calcom_book",
+          status: "ok",
+          message: `Booking created, ${context.honorific}${result.meetingUrl ? ` — join at ${result.meetingUrl}` : ""}.`,
+          data: result,
+        };
+      } catch (error) {
+        return {
+          tool: "calcom_book",
+          status: "not_implemented",
+          message: `Couldn't book that on Cal.com right now, ${context.honorific} — ${
+            error instanceof Error ? error.message : "something went wrong"
+          }. Try again in a moment.`,
+        };
+      }
     },
   };
 }

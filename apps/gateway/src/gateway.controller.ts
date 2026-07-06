@@ -22,7 +22,7 @@ import {
   type TelegramUpdate,
 } from "./telegram.service";
 import { env } from "@heyriz/shared/env";
-import { setTelegramWebhook } from "@heyriz/shared/telegram";
+import { sendTelegramMessage, setTelegramWebhook } from "@heyriz/shared/telegram";
 import { requireInternalSecret, safeEqual, sanitizeReturnPath } from "./internal-auth";
 
 type ProxyPayload = Record<string, unknown>;
@@ -385,11 +385,13 @@ export class GatewayController {
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Query("userId") userId = "default",
     @Query("limit") limit = "50",
+    @Query("includeLowValue") includeLowValue = "false",
   ) {
     this.requireInternal(secret);
     return this.gatewayService.sendToAiCore("gmail.listEmailMemories", {
       userId,
       limit: parseInt(limit, 10) || 50,
+      includeLowValue: includeLowValue === "true",
     });
   }
 
@@ -400,6 +402,33 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     return this.gatewayService.sendToAiCore("usage.get", { userId });
+  }
+
+  /**
+   * Daily admin digest: cross-user AI spend, sent to the first ADMIN_EMAILS
+   * entry's linked Telegram chat. The worker's scheduler cron hits this once
+   * a day — see scheduler.service.ts's "admin-usage-digest" job.
+   */
+  @Post("api/admin/usage-digest")
+  async sendAdminUsageDigest(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+  ) {
+    this.requireInternal(secret);
+
+    const adminEmail = (env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim()).filter(Boolean)[0];
+    if (!adminEmail) return { ok: false, reason: "ADMIN_EMAILS not configured" };
+
+    const chatId = await this.authRepo.findTelegramChatIdByUserId(adminEmail);
+    if (!chatId) return { ok: false, reason: "admin has no linked Telegram chat" };
+
+    const summary = await this.gatewayService.sendToAiCore<{
+      sinceDays: number;
+      users: Array<{ userId: string; calls: number; spendUsd: number; credits: number }>;
+    }>("usage.listAll", { sinceDays: 1 });
+
+    const text = renderAdminUsageDigest(summary);
+    const sent = await sendTelegramMessage({ chatId, text });
+    return { ok: sent };
   }
 
   @Get("api/connectors")
@@ -484,34 +513,69 @@ export class GatewayController {
   }
 
   @Get("api/connectors/:provider/start")
-  async startGoogleOAuth(
+  async startConnectorOAuth(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Param("provider") provider: string,
     @Query("userId") userId = "default",
     @Query("returnTo") returnTo: string | undefined,
+    @Query("region") region: string | undefined,
   ) {
     this.requireInternal(secret);
-    const googleProvider = this.requireGoogleOAuthProvider(provider);
+    const oauthProvider = this.requireConnectorOAuthProvider(provider);
     return this.gatewayService.sendToAiCore<{
       status: string;
       authUrl?: string;
       message?: string;
     }>("connector.oauth.start", {
       userId,
-      provider: googleProvider,
+      provider: oauthProvider,
       returnTo,
+      calComRegion: region === "eu" ? "eu" : undefined,
     });
   }
 
-  // Google redirects here for both flows — there's one OAuth client redirect_uri
-  // registered with Google, so the provider can't come from the path. It's
-  // recovered ai-core-side from the signed OAuth state instead.
+  @Post("api/connectors/:provider/start")
+  async startConnectorOAuthWithCredentials(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Param("provider") provider: string,
+    @Query("userId") userId = "default",
+    @Query("returnTo") returnTo: string | undefined,
+    @Body() body: { clientId?: string; clientSecret?: string },
+  ) {
+    this.requireInternal(secret);
+    const oauthProvider = this.requireConnectorOAuthProvider(provider);
+    if (oauthProvider !== "calcom") {
+      throw new BadRequestException(`Custom OAuth credentials are not supported for ${provider}`);
+    }
+    return this.gatewayService.sendToAiCore<{
+      status: string;
+      authUrl?: string;
+      message?: string;
+    }>("connector.oauth.start", {
+      userId,
+      provider: oauthProvider,
+      returnTo,
+      calComClientId: body.clientId,
+      calComClientSecret: body.clientSecret,
+    });
+  }
+
+  // Google redirects here for both Google connector flows. The provider is
+  // recovered ai-core-side from the signed OAuth state.
   @Get("api/connectors/google/callback")
-  async completeGoogleOAuth(
+  async completeGoogleConnectorOAuth(
     @Query("code") code: string,
     @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
     @Res() res: RedirectResponse,
   ) {
+    if (error) {
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
+      );
+      return;
+    }
     if (!code) {
       res.status(400).send("Missing Google OAuth code");
       return;
@@ -529,12 +593,69 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
-  private requireGoogleOAuthProvider(provider: string): "gmail" | "calendar" {
-    if (provider === "gmail" || provider === "calendar") return provider;
+  @Get("api/connectors/calcom/callback")
+  async completeCalComConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
+      );
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Cal.com OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "calcom"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  private requireConnectorOAuthProvider(
+    provider: string,
+  ): "gmail" | "calendar" | "calcom" {
+    if (provider === "gmail" || provider === "calendar" || provider === "calcom") {
+      return provider;
+    }
     throw new BadRequestException(`Unsupported OAuth provider: ${provider}`);
   }
 
   private requireInternal(secret: string | undefined) {
     requireInternalSecret(secret);
   }
+}
+
+function renderAdminUsageDigest(summary: {
+  sinceDays: number;
+  users: Array<{ userId: string; calls: number; spendUsd: number; credits: number }>;
+}): string {
+  const users = summary.users;
+  if (users.length === 0) {
+    return `AI usage digest (last ${summary.sinceDays}d): no activity.`;
+  }
+  const totalCredits = users.reduce((sum, u) => sum + u.credits, 0);
+  const totalCalls = users.reduce((sum, u) => sum + u.calls, 0);
+  const lines = users
+    .slice(0, 20)
+    .map((u) => `${u.userId} — ${u.credits.toLocaleString()} credits (${u.calls} calls)`);
+  const more = users.length > 20 ? `\n…and ${users.length - 20} more users` : "";
+  return [
+    `AI usage digest (last ${summary.sinceDays}d)`,
+    `${users.length} active users, ${totalCredits.toLocaleString()} credits, ${totalCalls} calls total`,
+    "",
+    ...lines,
+  ].join("\n") + more;
 }

@@ -10,5 +10,5 @@ export async function GET() {
   const result = await callGateway(
     `/api/auth/onboarding-status?email=${encodeURIComponent(session.email)}`,
   );
-  return Response.json(result);
+  return Response.json({ ...(result as object), email: session.email });
 }

@@ -106,11 +106,25 @@ function registrableDomain(domain: string) {
   return labels.slice(-2).join(".");
 }
 
+function sanitizePerson(person: PersonRow): PersonRow {
+  return {
+    ...person,
+    phones: person.phones.filter(isPlausiblePhone),
+  };
+}
+
+function isPlausiblePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
+}
+
 export async function GET() {
   const session = await requireSession();
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
 
-  const params = new URLSearchParams({ userId: session.userId, limit: "60" });
+  const params = new URLSearchParams({ userId: session.userId, limit: "200" });
   const [people, connectorsRaw] = await Promise.all([
     callGateway<PersonRow[]>(`/api/people?${params.toString()}`).catch(() => []),
     callGateway<ConnectorRow[]>(`/api/connectors?userId=${encodeURIComponent(session.userId)}`).catch(() => null),
@@ -119,12 +133,15 @@ export async function GET() {
   const gmailConnected = (connectorsRaw ?? []).some((c) => c.provider === "google" || c.provider === "gmail");
 
   return Response.json({
-    people: (people ?? []).filter(
-      (person) =>
-        !isDemoPerson(person) &&
-        !isSyntheticMailboxPerson(person) &&
-        !isLegacyMailboxCompany(person),
-    ),
+    people: (people ?? [])
+      .filter(
+        (person) =>
+          person.type === "person" &&
+          !isDemoPerson(person) &&
+          !isSyntheticMailboxPerson(person) &&
+          !isLegacyMailboxCompany(person),
+      )
+      .map(sanitizePerson),
     gmailConnected,
   });
 }

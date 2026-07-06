@@ -3,7 +3,7 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { BudgetGateService } from "../billing/budget-gate.service";
 import type { HeyRizRuntimeContext, LiveContext, LiveScheduleEntry } from "../context/context.types";
-import { describeNow, formatEventRange } from "../lib/timezone";
+import { describeNow, formatEventRange, zonedTimeToUtc } from "../lib/timezone";
 import { LlmRouterService, extractJson } from "../llm/llm-router.service";
 import type { AgentMessage } from "../llm/llm.types";
 import {
@@ -18,10 +18,14 @@ import type { ToolExecutionResult } from "../tools/tool.types";
  * line): start cheap, escalate to the strong tier once a turn proves itself
  * genuinely multi-tool, or once the cheap model's output looks unreliable.
  * Forced to CHEAP regardless of tier logic once the user's AI budget is
- * exceeded for the cycle.
+ * exceeded for the cycle. Escalation goes to Claude (not Grok) because this
+ * is the tier that actually takes real actions on the principal's behalf
+ * (send_email, calcom_book, ...) — Claude's tool-calling reliability matters
+ * more here than shaving cost off the rare escalated turn.
  */
-const CHEAP_TIER = "openai" as const;
-const STRONG_TIER = "grok" as const;
+const CHEAP_TIER = "grok" as const;
+const CHEAP_MODEL = "grok-3-mini";
+const STRONG_TIER = "anthropic" as const;
 /** Once this many tools have already run in the turn, treat it as multi-tool. */
 const MULTI_TOOL_THRESHOLD = 2;
 
@@ -134,6 +138,7 @@ export class AgentService {
           temperature: 0.2,
           task: "agent",
           provider: tier,
+          model: tier === CHEAP_TIER ? CHEAP_MODEL : undefined,
           userId: input.userId,
         });
       } catch (error) {
@@ -346,6 +351,7 @@ export class AgentService {
         temperature: 0,
         task: "agent",
         provider: CHEAP_TIER,
+        model: CHEAP_MODEL,
         userId,
       });
       return /^\s*yes\b/i.test(verdict ?? "");
@@ -354,18 +360,15 @@ export class AgentService {
     }
   }
 
-  /** Appends a one-time-per-cycle "approaching your AI budget" note when warranted. */
+  /** Low-credit warnings are sent as Telegram nudges by BudgetGateService. */
   private withBudgetNote(
     input: AgentRunInput,
     budget: { state: "ok" | "warn" | "exceeded" },
     result: AgentRunResult,
   ): AgentRunResult {
-    if (budget.state !== "warn") return result;
-    if (!this.budgetGate.consumeWarnOnce(input.userId)) return result;
-    return {
-      ...result,
-      reply: `${result.reply}\n\nYou're at 80% of your AI budget this cycle, ${input.context.honorific}. Background features (decisions, memory, morning brief) will pause once it's used up.`,
-    };
+    void input;
+    void budget;
+    return result;
   }
 
   private async execute(
@@ -447,7 +450,7 @@ export class AgentService {
       return { reply: result.message, provider, steps, toolResults };
     }
 
-    const choice = ruleSelectTool(input.message);
+    const choice = ruleSelectTool(input.message, input.context.timezone);
     if (!choice) {
       return {
         reply: `Standing by, ${input.context.honorific}. Ask me about today's schedule, your inbox, a reminder, or a follow-up.`,
@@ -537,8 +540,22 @@ function liveFrom(from: string): string {
 
 function ruleSelectTool(
   message: string,
+  timezone: string,
 ): { name: string; payload: Record<string, unknown> } | undefined {
   const text = message.toLowerCase();
+  if (/(cal\.com|calcom|booking|bookings|booked)/.test(text)) {
+    return { name: "calcom_briefing", payload: {} };
+  }
+  if (/\b(tomorrow|tmrw|tommorow|tommorrow)\b/.test(text)) {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return {
+      name: "calendar_briefing",
+      payload: {
+        startDate: zonedTimeToUtc(tomorrow, timezone, 0, 0).toISOString(),
+        endDate: zonedTimeToUtc(tomorrow, timezone, 23, 59).toISOString(),
+      },
+    };
+  }
   if (/(schedule|calendar|today|meeting|agenda|brief)/.test(text)) {
     return { name: "calendar_briefing", payload: {} };
   }

@@ -97,7 +97,12 @@ export function PeopleClient() {
     })();
   }, []);
 
-  const displayPeople = people;
+  const displayPeople = people
+    .filter((person) => person.type === "person")
+    .map((person) => ({
+      ...person,
+      phones: person.phones.filter(isPlausiblePhone),
+    }));
 
   const tabbedPeople =
     activeTab === "all" ? displayPeople : displayPeople.filter((person) => person.type === activeTab);
@@ -328,6 +333,13 @@ function companyFromEmail(email: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function isPlausiblePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
 }
 
 function registrableDomain(domain: string) {

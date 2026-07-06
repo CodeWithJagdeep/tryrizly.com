@@ -266,8 +266,8 @@ export function EmailsClient() {
                       : activeTab === "business"
                     ? "Meeting requests, invoices, investor mail and follow-ups will appear here."
                     : activeTab === "updates"
-                      ? "Account alerts, newsletters and notifications will appear here."
-                      : "Every email Riz analyses via webhook will appear here."}
+                      ? "Account alerts and useful updates will appear here."
+                      : "Useful emails Riz analyses via webhook will appear here."}
                 </p>
                 {!gmailConnected && (
                   <a

@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
       process.env.LINKEDIN_REDIRECT_URI ??
       "https://getrizly.com/api/auth/oauth/linkedin/callback",
     LINKEDIN_SCOPES:
-      process.env.LINKEDIN_SCOPES ?? "openid profile email w_member_social",
+      process.env.LINKEDIN_SCOPES ?? "openid profile email",
     NEXT_PUBLIC_GATEWAY_URL:
       process.env.NEXT_PUBLIC_GATEWAY_URL ?? "https://api.getrizly.com",
     NEXT_PUBLIC_VAPID_PUBLIC_KEY:

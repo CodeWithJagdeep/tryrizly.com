@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type OnboardingStatus = {
   onboarding?: { dashboardTourSeenAt?: string };
+  email?: string;
 };
 
 type Step = {
@@ -43,12 +44,16 @@ export function WelcomeTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [dismissing, setDismissing] = useState(false);
+  const [storageKey, setStorageKey] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/onboarding/status")
       .then((r) => r.json())
       .then((data: OnboardingStatus) => {
-        if (!data.onboarding?.dashboardTourSeenAt) setOpen(true);
+        const key = welcomeTourStorageKey(data.email);
+        setStorageKey(key);
+        if (data.onboarding?.dashboardTourSeenAt || localStorage.getItem(key)) return;
+        setOpen(true);
       })
       .catch(() => undefined);
   }, []);
@@ -57,14 +62,16 @@ export function WelcomeTour() {
     if (dismissing) return;
     setDismissing(true);
     setOpen(false);
+    if (storageKey) localStorage.setItem(storageKey, new Date().toISOString());
     try {
-      await fetch("/api/onboarding/progress", {
+      const res = await fetch("/api/onboarding/progress", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ dashboardTourSeenAt: new Date().toISOString() }),
       });
+      if (!res.ok) throw new Error("tour_save_failed");
     } catch {
-      // Non-fatal — worst case the tour shows again next visit.
+      // Non-fatal — local storage already prevents repeat prompts on this browser.
     }
   }
 
@@ -132,6 +139,10 @@ export function WelcomeTour() {
       </div>
     </div>
   );
+}
+
+function welcomeTourStorageKey(email: string | undefined): string {
+  return `rizly:welcome-tour-seen:${email?.trim().toLowerCase() || "current"}`;
 }
 
 function SparkleIcon() {

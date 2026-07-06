@@ -1,16 +1,19 @@
 import { callGateway } from "../../_lib/gateway";
 import { sanitizeReturnPath } from "../../_lib/auth-store";
 
+const LINKEDIN_CALLBACK_PATH = "/api/auth/oauth/linkedin/callback";
+const PRODUCTION_HOSTS = new Set(["getrizly.com", "www.getrizly.com"]);
+
 export async function GET(request: Request) {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
   const scopes = process.env.LINKEDIN_SCOPES || "openid profile email";
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     return Response.json({ message: "LinkedIn OAuth env vars are missing" }, { status: 500 });
   }
 
   const url = new URL(request.url);
+  const redirectUri = resolveLinkedInRedirectUri(url);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
   let state: string | undefined;
@@ -18,6 +21,7 @@ export async function GET(request: Request) {
     ({ state } = await callGateway<{ state: string }>("/api/auth/oauth/state", {
       provider: "linkedin",
       returnTo,
+      redirectUri,
     }));
   } catch {
     state = undefined;
@@ -36,4 +40,14 @@ export async function GET(request: Request) {
   authUrl.searchParams.set("state", state);
 
   return Response.redirect(authUrl);
+}
+
+function resolveLinkedInRedirectUri(requestUrl: URL) {
+  if (PRODUCTION_HOSTS.has(requestUrl.hostname)) {
+    return new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin).toString();
+  }
+  return (
+    process.env.LINKEDIN_REDIRECT_URI ||
+    new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin).toString()
+  );
 }

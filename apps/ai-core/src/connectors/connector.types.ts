@@ -73,17 +73,46 @@ export type DeleteConnectorInput = {
 };
 
 export type GoogleOAuthProvider = "gmail" | "calendar";
+export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom";
 
 export type StartOAuthInput = {
   userId?: string;
-  provider: GoogleOAuthProvider;
+  provider: ConnectorOAuthProvider;
   returnTo?: string;
+  calComClientId?: string;
+  calComClientSecret?: string;
+  /** Which Cal.com OAuth client to use - they're separate approved apps per
+   * data-residency org, not a single client that works everywhere. */
+  calComRegion?: "global" | "eu";
 };
 
 export type CompleteOAuthInput = {
   userId?: string;
   code: string;
   state?: string;
+};
+
+export type StartCalComOAuthInput = {
+  userId?: string;
+  returnTo?: string;
+};
+
+export type CompleteCalComOAuthInput = {
+  userId?: string;
+  code: string;
+  state?: string;
+};
+
+/** Decrypted Cal.com OAuth token payload. expiresAt is epoch ms. */
+export type CalComOAuthSecret = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  clientId?: string;
+  clientSecret?: string;
+  /** Which Cal.com org's OAuth endpoints this token was issued by - global
+   * and cal.eu are separate instances, so a refresh must hit the same one. */
+  region?: "global" | "eu";
 };
 
 export type CompleteOAuthResult = ConnectorSummary & { returnTo?: string };

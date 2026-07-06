@@ -51,7 +51,17 @@ type CalComOAuthClient = {
    * clients created with "Use PKCE" don't issue one at all. */
   clientSecret?: string;
   source: "env" | "custom";
+  /** Cal.com's EU data-residency org (cal.eu) is a fully separate instance
+   * from the global cal.com one, each with its own approved OAuth client —
+   * these travel with the client since they're not independently choosable. */
+  appBaseUrl: string;
+  apiBaseUrl: string;
 };
+
+const CALCOM_REGION_URLS = {
+  global: { appBaseUrl: "https://app.cal.com", apiBaseUrl: "https://api.cal.com" },
+  eu: { appBaseUrl: "https://app.cal.eu", apiBaseUrl: "https://api.cal.eu" },
+} as const;
 
 @Injectable()
 export class ConnectorService {
@@ -214,14 +224,15 @@ export class ConnectorService {
         numberSecret(payload.expiresAt) ??
         numberSecret(payload.expiry_date) ??
         tokenExpiresAt(numberSecret(payload.expires_in));
-      const oauthClient = calComOAuthClientFromPayload(payload) ?? calComOAuthClientFromEnv();
+      const storedRegion = payload.region === "eu" ? "eu" : "global";
+      const oauthClient = calComOAuthClientFromPayload(payload) ?? calComOAuthClientFromEnv(storedRegion);
 
       if (!accessToken) return null;
       if (!refreshToken || !expiresAt || expiresAt > Date.now() + 60_000) {
         return { kind: "oauth", accessToken };
       }
 
-      return oauthClient ? this.refreshCalComOAuth(account, refreshToken, oauthClient) : null;
+      return oauthClient ? this.refreshCalComOAuth(account, refreshToken, oauthClient, storedRegion) : null;
     }
 
     const apiKey = stringSecret(payload.apiKey);
@@ -342,6 +353,7 @@ export class ConnectorService {
     let codeChallenge: string | undefined;
 
     if (input.provider === "calcom") {
+      const region = input.calComRegion === "eu" ? "eu" : "global";
       const customClientId = stringSecret(input.calComClientId?.trim());
       const customClientSecret = stringSecret(input.calComClientSecret?.trim());
       if ((customClientId && !customClientSecret) || (!customClientId && customClientSecret)) {
@@ -351,13 +363,13 @@ export class ConnectorService {
         };
       }
       calComOAuthClient = customClientId && customClientSecret
-        ? { clientId: customClientId, clientSecret: customClientSecret, source: "custom" }
-        : calComOAuthClientFromEnv();
+        ? { clientId: customClientId, clientSecret: customClientSecret, source: "custom", ...CALCOM_REGION_URLS[region] }
+        : calComOAuthClientFromEnv(region);
 
       if (!calComOAuthClient) {
         return {
           status: "missing_config" as const,
-          message: "Enter Cal.com OAuth client credentials or configure CALCOM_CLIENT_ID",
+          message: `Cal.com OAuth isn't configured for the ${region} region`,
         };
       }
 
@@ -365,7 +377,10 @@ export class ConnectorService {
         statePayload = {
           clientId: calComOAuthClient.clientId,
           clientSecret: calComOAuthClient.clientSecret,
+          region,
         };
+      } else {
+        statePayload = { region };
       }
 
       // Generate a PKCE pair unconditionally: harmless for a confidential
@@ -427,9 +442,10 @@ export class ConnectorService {
     const userId = storedState.userId;
 
     if (provider === "calcom") {
+      const region = regionFromEncryptedState(this.vault, storedState.encryptedPayload);
       const oauthClient =
         calComOAuthClientFromEncryptedState(this.vault, storedState.encryptedPayload) ??
-        calComOAuthClientFromEnv();
+        calComOAuthClientFromEnv(region);
       if (!oauthClient) {
         throw new Error("Cal.com OAuth client credentials are missing");
       }
@@ -442,6 +458,7 @@ export class ConnectorService {
         returnTo: storedState.returnTo,
         oauthClient,
         codeVerifier,
+        region,
       });
     }
 
@@ -497,6 +514,7 @@ export class ConnectorService {
     returnTo?: string;
     oauthClient: CalComOAuthClient;
     codeVerifier?: string;
+    region: "global" | "eu";
   }): Promise<CompleteOAuthResult> {
     const tokenJson = await exchangeCalComToken({
       clientId: input.oauthClient.clientId,
@@ -505,6 +523,7 @@ export class ConnectorService {
       grantType: "authorization_code",
       code: input.code,
       codeVerifier: input.codeVerifier,
+      apiBaseUrl: input.oauthClient.apiBaseUrl,
     });
 
     const accessToken = stringSecret(tokenJson.access_token);
@@ -516,11 +535,12 @@ export class ConnectorService {
 
     const expiresAt = Date.now() + expiresIn * 1000;
     const grantedScopes = splitScopes(stringSecret(tokenJson.scope)) ?? input.scopes;
-    const profile = await fetchCalComProfile(accessToken).catch(() => null);
+    const profile = await fetchCalComProfile(accessToken, input.oauthClient.apiBaseUrl).catch(() => null);
     const secret: CalComOAuthSecret = {
       accessToken,
       refreshToken,
       expiresAt,
+      region: input.region,
       ...(input.oauthClient.source === "custom"
         ? {
             clientId: input.oauthClient.clientId,
@@ -554,12 +574,14 @@ export class ConnectorService {
     account: ConnectedAccount,
     refreshToken: string,
     oauthClient: CalComOAuthClient,
+    region: "global" | "eu",
   ): Promise<CalComAuth | null> {
     const tokenJson = await exchangeCalComToken({
       clientId: oauthClient.clientId,
       clientSecret: oauthClient.clientSecret,
       grantType: "refresh_token",
       refreshToken,
+      apiBaseUrl: oauthClient.apiBaseUrl,
     }).catch(() => null);
     if (!tokenJson) return null;
 
@@ -573,6 +595,7 @@ export class ConnectorService {
       accessToken,
       refreshToken: nextRefreshToken,
       expiresAt,
+      region,
       ...(oauthClient.source === "custom"
         ? {
             clientId: oauthClient.clientId,
@@ -689,7 +712,7 @@ function authorizationUrlForProvider(
   codeChallenge?: string,
 ): string {
   if (provider === "calcom") {
-    const url = new URL("/auth/oauth2/authorize", env.CALCOM_OAUTH_APP_BASE_URL);
+    const url = new URL("/auth/oauth2/authorize", calComOAuthClient?.appBaseUrl ?? CALCOM_REGION_URLS.global.appBaseUrl);
     url.searchParams.set("client_id", calComOAuthClient?.clientId ?? env.CALCOM_CLIENT_ID ?? "");
     url.searchParams.set("redirect_uri", env.CALCOM_REDIRECT_URI);
     url.searchParams.set("state", state);
@@ -712,15 +735,18 @@ function authorizationUrlForProvider(
   return url.toString();
 }
 
-function calComOAuthClientFromEnv(): CalComOAuthClient | undefined {
+function calComOAuthClientFromEnv(region: "global" | "eu" = "global"): CalComOAuthClient | undefined {
   // A client secret is optional here: Cal.com's platform OAuth clients created
   // with "Use PKCE" (the recommended, non-mobile-only mode too) never issue
   // one — the PKCE code_verifier/code_challenge exchange replaces it.
-  return env.CALCOM_CLIENT_ID
+  const clientId = region === "eu" ? env.CALCOM_EU_CLIENT_ID : env.CALCOM_CLIENT_ID;
+  const clientSecret = region === "eu" ? env.CALCOM_EU_CLIENT_SECRET : env.CALCOM_CLIENT_SECRET;
+  return clientId
     ? {
-        clientId: env.CALCOM_CLIENT_ID,
-        clientSecret: env.CALCOM_CLIENT_SECRET || undefined,
+        clientId,
+        clientSecret: clientSecret || undefined,
         source: "env",
+        ...CALCOM_REGION_URLS[region],
       }
     : undefined;
 }
@@ -730,7 +756,10 @@ function calComOAuthClientFromPayload(
 ): CalComOAuthClient | undefined {
   const clientId = stringSecret(payload.clientId) ?? stringSecret(payload.client_id);
   const clientSecret = stringSecret(payload.clientSecret) ?? stringSecret(payload.client_secret);
-  return clientId ? { clientId, clientSecret, source: "custom" } : undefined;
+  const region = payload.region === "eu" ? "eu" : "global";
+  return clientId
+    ? { clientId, clientSecret, source: "custom", ...CALCOM_REGION_URLS[region] }
+    : undefined;
 }
 
 /** RFC 7636 code_verifier: 43-128 chars from [A-Za-z0-9-._~]. base64url of 32
@@ -767,6 +796,18 @@ function codeVerifierFromEncryptedState(
   }
 }
 
+function regionFromEncryptedState(
+  vault: ConnectorVaultService,
+  encryptedPayload: string | undefined,
+): "global" | "eu" {
+  if (!encryptedPayload) return "global";
+  try {
+    return vault.decrypt(encryptedPayload).region === "eu" ? "eu" : "global";
+  } catch {
+    return "global";
+  }
+}
+
 type CalComTokenJson = Record<string, string | number | boolean | null>;
 
 async function exchangeCalComToken(
@@ -778,12 +819,14 @@ async function exchangeCalComToken(
         code: string;
         redirectUri: string;
         codeVerifier?: string;
+        apiBaseUrl: string;
       }
     | {
         clientId: string;
         clientSecret?: string;
         grantType: "refresh_token";
         refreshToken: string;
+        apiBaseUrl: string;
       },
 ): Promise<CalComTokenJson> {
   const body =
@@ -803,7 +846,7 @@ async function exchangeCalComToken(
           refresh_token: input.refreshToken,
         };
 
-  const response = await fetch(`${env.CALCOM_OAUTH_API_BASE_URL}/v2/auth/oauth2/token`, {
+  const response = await fetch(`${input.apiBaseUrl}/v2/auth/oauth2/token`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -819,8 +862,9 @@ async function exchangeCalComToken(
 
 async function fetchCalComProfile(
   accessToken: string,
+  apiBaseUrl: string,
 ): Promise<{ email?: string; username?: string } | null> {
-  const response = await fetch(`${env.CALCOM_OAUTH_API_BASE_URL}/v2/me`, {
+  const response = await fetch(`${apiBaseUrl}/v2/me`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) return null;

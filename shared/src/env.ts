@@ -131,19 +131,19 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:3000/api/auth/google/callback"),
+  // Cal.com's EU data-residency org (cal.eu) is a fully separate instance
+  // from the global cal.com one - each needs its own approved OAuth client,
+  // since a client created on one is unknown to the other. The plain data
+  // API (bookings/event-types) stays on the global domain regardless; only
+  // the OAuth handshake itself is regional.
   CALCOM_CLIENT_ID: z.string().optional(),
   CALCOM_CLIENT_SECRET: z.string().optional(),
+  CALCOM_EU_CLIENT_ID: z.string().optional(),
+  CALCOM_EU_CLIENT_SECRET: z.string().optional(),
   CALCOM_REDIRECT_URI: z
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/calcom/callback"),
-  // Cal.com's EU data-residency org (cal.eu) is a fully separate instance -
-  // an OAuth client created there is only known to app.cal.eu, not the
-  // global app.cal.com. Override both when the platform OAuth client lives
-  // on that org. The plain data API (bookings/event-types) stays on the
-  // global domain regardless; only the OAuth handshake itself is regional.
-  CALCOM_OAUTH_APP_BASE_URL: z.string().url().default("https://app.cal.com"),
-  CALCOM_OAUTH_API_BASE_URL: z.string().url().default("https://api.cal.com"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

@@ -689,7 +689,7 @@ function authorizationUrlForProvider(
   codeChallenge?: string,
 ): string {
   if (provider === "calcom") {
-    const url = new URL("https://app.cal.com/auth/oauth2/authorize");
+    const url = new URL("/auth/oauth2/authorize", env.CALCOM_OAUTH_APP_BASE_URL);
     url.searchParams.set("client_id", calComOAuthClient?.clientId ?? env.CALCOM_CLIENT_ID ?? "");
     url.searchParams.set("redirect_uri", env.CALCOM_REDIRECT_URI);
     url.searchParams.set("state", state);
@@ -803,7 +803,7 @@ async function exchangeCalComToken(
           refresh_token: input.refreshToken,
         };
 
-  const response = await fetch("https://api.cal.com/v2/auth/oauth2/token", {
+  const response = await fetch(`${env.CALCOM_OAUTH_API_BASE_URL}/v2/auth/oauth2/token`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -820,7 +820,7 @@ async function exchangeCalComToken(
 async function fetchCalComProfile(
   accessToken: string,
 ): Promise<{ email?: string; username?: string } | null> {
-  const response = await fetch("https://api.cal.com/v2/me", {
+  const response = await fetch(`${env.CALCOM_OAUTH_API_BASE_URL}/v2/me`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) return null;

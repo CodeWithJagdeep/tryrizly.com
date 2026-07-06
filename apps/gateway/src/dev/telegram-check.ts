@@ -154,6 +154,20 @@ async function main() {
     checks.push(["unlinked chat -> ignored, never reaches ai-core", calls.length === 0]);
   }
 
+  // Scenario 9: Telegram can deliver duplicate /start messages, or the user can
+  // tap an old deep link after the chat is already linked. Treat that as
+  // already-linked instead of an expired-link failure.
+  {
+    const { svc, calls } = fakeGateway([]);
+    const auth = {
+      consumeTelegramLinkToken: async () => null,
+      findTelegramLinkByChat: async () => ({ userId: "owner@example.com", email: "owner@example.com" }),
+    } as unknown as AuthRepository;
+    const tg = new TelegramService(svc, new MemoryApprovalStore(), new MemoryConversationStore(), auth);
+    await tg.handleUpdate({ message: { chat: { id: 42 }, text: "/start old-token" } });
+    checks.push(["duplicate/old /start for linked chat -> no ai-core call", calls.length === 0]);
+  }
+
   let ok = true;
   for (const [name, pass] of checks) {
     console.log(`${pass ? "PASS" : "FAIL"}  ${name}`);

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   aiBudgetForPlan,
+  billableCreditsForAiTask,
+  billableUsdForAiTask,
   CREDIT_PACKS,
   creditsForPlan,
   creditsForUsd,
@@ -30,6 +32,14 @@ describe("credits conversion", () => {
     // flagged mid-session before the per-day aggregation fix.
     expect(creditsForUsd(0.0001)).toBe(0);
     expect(creditsForUsd(0.0001)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("bills every AI task as whole credits with a one-credit minimum", () => {
+    expect(billableCreditsForAiTask(0)).toBe(1);
+    expect(billableCreditsForAiTask(0.00075)).toBe(1);
+    expect(billableCreditsForAiTask(0.005)).toBe(1);
+    expect(billableCreditsForAiTask(0.0051)).toBe(2);
+    expect(billableUsdForAiTask(0.00075)).toBe(0.005);
   });
 });
 

@@ -2,7 +2,14 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { Pool } from "pg";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
-import { aiBudgetForPlan, isCreditPackId, CREDIT_PACKS, usdForCredits } from "@heyriz/shared/billing/plan-budgets";
+import {
+  aiBudgetForPlan,
+  isCreditPackId,
+  CREDIT_PACKS,
+  creditsForPlan,
+  creditsForUsd,
+  usdForCredits,
+} from "@heyriz/shared/billing/plan-budgets";
 
 type SubscriptionRow = { plan_id: string; status: string };
 type TrialRow = { plan_id: string; ends_at: Date; consumed: boolean };
@@ -12,6 +19,13 @@ type CycleRow = {
   current_period_end: Date | null;
   trial_ends_at: Date | null;
   created_at: Date;
+};
+type RolloverRow = {
+  cycle_start: Date;
+  cycle_end: Date | null;
+  plan_id: string;
+  base_credits: number;
+  rollover_credits: number;
 };
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "authenticated", "trialing"]);
@@ -52,6 +66,111 @@ export class PlanBudgetService implements OnModuleDestroy {
   /** Public wrapper for the header credits badge — just the plan id, e.g. "free" | "starter" | "pro" | "business". */
   async getPlanId(userId: string): Promise<string> {
     return this.currentPlanId(userId);
+  }
+
+  /**
+   * Rollover is cycle-local and persisted when a cycle is first observed:
+   * 50% of the previous cycle's unused credits, capped at the current plan's
+   * included credit limit. The first observed cycle gets no rollover, because
+   * there is no trustworthy prior balance to carry forward.
+   */
+  async rolloverCreditsForCycle(input: {
+    userId: string;
+    planId: string;
+    cycleStart: Date;
+    cycleEnd: Date | null;
+    previousSpendCredits: number;
+  }): Promise<number> {
+    if (!this.pool || !input.cycleEnd) return 0;
+    try {
+      await this.ensureRolloverTable();
+      const existing = await this.pool.query<{ rollover_credits: number }>(
+        `select rollover_credits from ai_credit_rollovers
+         where user_id = $1 and cycle_start = $2
+         limit 1`,
+        [input.userId, input.cycleStart],
+      );
+      const currentBaseCredits = creditsForPlan(input.planId);
+      if (existing.rows[0]) {
+        await this.pool.query(
+          `update ai_credit_rollovers
+              set cycle_end = $3, plan_id = $4, base_credits = $5
+            where user_id = $1 and cycle_start = $2`,
+          [input.userId, input.cycleStart, input.cycleEnd, input.planId, currentBaseCredits],
+        );
+        return Number(existing.rows[0].rollover_credits) || 0;
+      }
+
+      const previous = await this.pool.query<RolloverRow>(
+        `select cycle_start, cycle_end, plan_id, base_credits, rollover_credits
+         from ai_credit_rollovers
+         where user_id = $1 and cycle_start < $2
+         order by cycle_start desc
+         limit 1`,
+        [input.userId, input.cycleStart],
+      );
+
+      let rolloverCredits = 0;
+      const prev = previous.rows[0];
+      if (prev) {
+        const previousTopUpCredits = creditsForUsd(
+          await this.topUpUsdBetween(input.userId, prev.cycle_start, input.cycleStart),
+        );
+        const previousTotalCredits =
+          Number(prev.base_credits) +
+          Number(prev.rollover_credits) +
+          previousTopUpCredits;
+        const unusedCredits = Math.max(0, previousTotalCredits - input.previousSpendCredits);
+        rolloverCredits = Math.min(currentBaseCredits, Math.floor(unusedCredits * 0.5));
+      }
+
+      await this.pool.query(
+        `insert into ai_credit_rollovers
+           (user_id, cycle_start, cycle_end, plan_id, base_credits, rollover_credits)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (user_id, cycle_start) do update set
+           cycle_end = excluded.cycle_end,
+           plan_id = excluded.plan_id,
+           base_credits = excluded.base_credits`,
+        [
+          input.userId,
+          input.cycleStart,
+          input.cycleEnd,
+          input.planId,
+          currentBaseCredits,
+          rolloverCredits,
+        ],
+      );
+      return rolloverCredits;
+    } catch (error) {
+      logger.warn("plan budget: rollover lookup failed, ignoring rollover", {
+        userId: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  async previousRolloverCycleStart(userId: string, cycleStart: Date): Promise<Date | undefined> {
+    if (!this.pool) return undefined;
+    try {
+      await this.ensureRolloverTable();
+      const previous = await this.pool.query<{ cycle_start: Date }>(
+        `select cycle_start
+         from ai_credit_rollovers
+         where user_id = $1 and cycle_start < $2
+         order by cycle_start desc
+         limit 1`,
+        [userId, cycleStart],
+      );
+      return previous.rows[0]?.cycle_start;
+    } catch (error) {
+      logger.warn("plan budget: previous rollover cycle lookup failed", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
   }
 
   /**
@@ -132,6 +251,54 @@ export class PlanBudgetService implements OnModuleDestroy {
       });
       return 0;
     }
+  }
+
+  private async topUpUsdBetween(userId: string, since: Date, before: Date): Promise<number> {
+    if (!this.pool) return 0;
+    try {
+      const result = await this.pool.query<{ plan_id: string }>(
+        `select plan_id from billing_purchases
+         where user_id = $1
+           and status in ('paid', 'captured')
+           and created_at >= $2
+           and created_at < $3`,
+        [userId, since, before],
+      );
+      let usd = 0;
+      for (const row of result.rows) {
+        if (isCreditPackId(row.plan_id)) {
+          usd += usdForCredits(CREDIT_PACKS[row.plan_id].credits);
+        }
+      }
+      return usd;
+    } catch (error) {
+      logger.warn("plan budget: previous top-up lookup failed, ignoring top-ups", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  private async ensureRolloverTable() {
+    if (!this.pool) return;
+    await this.pool.query(`
+      create table if not exists ai_credit_rollovers (
+        user_id text not null,
+        cycle_start timestamptz not null,
+        cycle_end timestamptz,
+        plan_id text not null,
+        base_credits integer not null,
+        rollover_credits integer not null default 0,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (user_id, cycle_start)
+      )
+    `);
+    await this.pool.query(`
+      create index if not exists ai_credit_rollovers_user_cycle_idx
+        on ai_credit_rollovers (user_id, cycle_start desc)
+    `);
   }
 
   private async currentPlanId(userId: string): Promise<string> {

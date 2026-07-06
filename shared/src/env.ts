@@ -41,6 +41,9 @@ const schema = z.object({
   MONGODB_URL: z.string().optional(),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   AI_PROVIDER: z.enum(["rules", "grok", "openai"]).default("rules"),
+  // Comma-separated emails allowed to see cross-user AI spend (admin usage digest/view).
+  // The first entry is who the daily Telegram usage digest is sent to.
+  ADMIN_EMAILS: z.string().optional(),
   // Web Push (browser notifications for users without Telegram linked)
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
@@ -134,6 +137,13 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/calcom/callback"),
+  // Cal.com's EU data-residency org (cal.eu) is a fully separate instance -
+  // an OAuth client created there is only known to app.cal.eu, not the
+  // global app.cal.com. Override both when the platform OAuth client lives
+  // on that org. The plain data API (bookings/event-types) stays on the
+  // global domain regardless; only the OAuth handshake itself is regional.
+  CALCOM_OAUTH_APP_BASE_URL: z.string().url().default("https://app.cal.com"),
+  CALCOM_OAUTH_API_BASE_URL: z.string().url().default("https://api.cal.com"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

@@ -209,14 +209,18 @@ export class LlmRouterService {
     return rulesClassify(compact);
   }
 
+  /**
+   * Honors AI_PROVIDER as a preference when it names a configured provider;
+   * otherwise falls through to whichever provider actually has credentials.
+   * A route defaulting to an unconfigured vendor (e.g. no Grok key) must
+   * still land somewhere usable instead of silently degrading every task
+   * that hits this fallback to the rules-only path.
+   */
   private getProvider(): LlmProvider | undefined {
-    if (env.AI_PROVIDER === "grok" && this.grok.isConfigured()) {
-      return this.grok;
-    }
-    if (env.AI_PROVIDER === "openai" && this.openai.isConfigured()) {
-      return this.openai;
-    }
-    return undefined;
+    const preferred = env.AI_PROVIDER ? this.byName[env.AI_PROVIDER] : undefined;
+    if (preferred?.isConfigured()) return preferred;
+
+    return [this.anthropic, this.openai, this.grok].find((provider) => provider.isConfigured());
   }
 }
 

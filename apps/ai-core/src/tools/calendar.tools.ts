@@ -1,12 +1,12 @@
 import type { GoogleService } from "../google/google.service";
 import type { CalendarEvent } from "../google/google.types";
-import { zonedTimeToUtc } from "../lib/timezone";
+import { localDateTimeToUtc, zonedTimeToUtc } from "../lib/timezone";
 import type { HeyRizTool } from "./tool.types";
 
 type BriefingPayload = {
-  /** "today" (default) or "next" for the upcoming window. */
+  /** "today" (default) or "next" for the upcoming 24-hour window. */
   range?: "today" | "next";
-  /** ISO date strings for an arbitrary date window (used by the calendar month view). */
+  /** ISO date strings for an arbitrary date window. */
   startDate?: string;
   endDate?: string;
 };
@@ -18,7 +18,7 @@ export function createCalendarBriefingTool(
     name: "calendar_briefing",
     category: "calendar",
     description:
-      "Read the principal's real calendar for today (or the next 24h) and summarize the schedule and the next meeting.",
+      "Read the principal's real calendar for today, the next 24h, or a specific start/end window and summarize the schedule.",
     approvalRequired: false,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -28,7 +28,12 @@ export function createCalendarBriefingTool(
         : payload.range === "next"
           ? now
           : startOfDay(now, context.timezone);
-      const end = payload.endDate ? new Date(payload.endDate) : endOfDay(now, context.timezone);
+      const end = payload.endDate
+        ? new Date(payload.endDate)
+        : payload.range === "next"
+          ? new Date(now.getTime() + 24 * 60 * 60 * 1000)
+          : endOfDay(start, context.timezone);
+      const windowLabel = calendarWindowLabel(start, end, context.timezone, payload.range);
 
       const res = await google.listEvents(userId, {
         timeMin: start,
@@ -46,7 +51,13 @@ export function createCalendarBriefingTool(
       return {
         tool: "calendar_briefing",
         status: "ok",
-        message: summarizeSchedule(res.events, context.honorific, context.timezone, next),
+        message: summarizeSchedule(
+          res.events,
+          context.honorific,
+          context.timezone,
+          windowLabel,
+          next,
+        ),
         data: {
           count: res.events.length,
           events: res.events,
@@ -274,20 +285,21 @@ function summarizeSchedule(
   events: CalendarEvent[],
   honorific: string,
   timezone: string,
+  windowLabel: string,
   next?: CalendarEvent,
 ): string {
   if (events.length === 0) {
-    return `Your calendar is clear today, ${honorific}.`;
+    return `Your calendar is clear ${windowLabel}, ${honorific}.`;
   }
 
   const lines = events.map((e) => formatScheduleLine(e, timezone)).join("; ");
 
   const nextLine = next
-    ? ` Next up: ${next.title} in ${minutesUntil(next.start as string)} min.`
+    ? ` Next up: ${next.title} at ${fmtTime(next.start, timezone)}.`
     : "";
 
   const count = events.length;
-  return `${count} item${count === 1 ? "" : "s"} today — ${lines}.${nextLine}`;
+  return `${count} item${count === 1 ? "" : "s"} ${windowLabel} — ${lines}.${nextLine}`;
 }
 
 /** Already-finished events are marked "(completed)" instead of listed as if still open. */
@@ -328,4 +340,61 @@ function fmtTime(iso: string | undefined, timezone: string): string {
 
 function minutesUntil(iso: string): number {
   return Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 60_000));
+}
+
+function calendarWindowLabel(
+  start: Date,
+  end: Date,
+  timezone: string,
+  range?: BriefingPayload["range"],
+): string {
+  if (range === "next") return "in the next 24 hours";
+
+  const startDay = dayKey(start, timezone);
+  const endDay = dayKey(end, timezone);
+  const today = dayKey(new Date(), timezone);
+  const tomorrow = dayKey(addLocalDays(new Date(), timezone, 1), timezone);
+
+  if (startDay === today && endDay === today) return "today";
+  if (startDay === tomorrow && endDay === tomorrow) return "tomorrow";
+  if (startDay === endDay) {
+    return `on ${start.toLocaleDateString("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    })}`;
+  }
+
+  const startLabel = start.toLocaleDateString("en-US", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+  });
+  const endLabel = end.toLocaleDateString("en-US", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+  });
+  return `from ${startLabel} to ${endLabel}`;
+}
+
+function dayKey(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function addLocalDays(date: Date, timezone: string, days: number): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return localDateTimeToUtc(get("year"), get("month"), get("day") + days, 12, 0, timezone);
 }

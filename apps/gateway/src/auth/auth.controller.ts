@@ -150,11 +150,15 @@ export class AuthController {
   @Post("oauth/state")
   async createState(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: { provider?: string; returnTo?: string },
+    @Body() body: { provider?: string; returnTo?: string; redirectUri?: string },
   ) {
     this.requireInternal(secret);
     if (!body.provider) return { error: "provider is required" };
-    const state = await this.auth.createOAuthState(body.provider, body.returnTo || "/dashboard");
+    const state = await this.auth.createOAuthState(
+      body.provider,
+      body.returnTo || "/dashboard",
+      body.redirectUri,
+    );
     return { state };
   }
 

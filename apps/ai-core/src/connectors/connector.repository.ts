@@ -14,6 +14,7 @@ const inMemoryOAuthStates = new Map<
     userId: string;
     provider: ConnectorProvider;
     returnTo?: string;
+    encryptedPayload?: string;
     expiresAt: Date;
   }
 >();
@@ -297,6 +298,7 @@ export class ConnectorRepository implements OnModuleDestroy {
     userId: string;
     provider: ConnectorProvider;
     returnTo?: string;
+    encryptedPayload?: string;
     expiresAt: Date;
   }): Promise<void> {
     if (!this.pool) {
@@ -306,35 +308,56 @@ export class ConnectorRepository implements OnModuleDestroy {
 
     await this.ensureTable();
     await this.pool.query(
-      `insert into connector_oauth_states (state_id, user_id, provider, return_to, expires_at)
-       values ($1, $2, $3, $4, $5)`,
-      [input.stateId, input.userId, input.provider, input.returnTo ?? null, input.expiresAt],
+      `insert into connector_oauth_states (state_id, user_id, provider, return_to, encrypted_payload, expires_at)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [
+        input.stateId,
+        input.userId,
+        input.provider,
+        input.returnTo ?? null,
+        input.encryptedPayload ?? null,
+        input.expiresAt,
+      ],
     );
   }
 
   async consumeOAuthState(
     stateId: string,
     provider: ConnectorProvider,
-  ): Promise<{ userId: string; returnTo?: string } | undefined> {
+  ): Promise<{ userId: string; returnTo?: string; encryptedPayload?: string } | undefined> {
     if (!this.pool) {
       const record = inMemoryOAuthStates.get(stateId);
       inMemoryOAuthStates.delete(stateId);
       if (!record || record.provider !== provider || record.expiresAt.getTime() < Date.now()) {
         return undefined;
       }
-      return { userId: record.userId, returnTo: record.returnTo };
+      return {
+        userId: record.userId,
+        returnTo: record.returnTo,
+        encryptedPayload: record.encryptedPayload,
+      };
     }
 
     await this.ensureTable();
     await this.pool.query("delete from connector_oauth_states where expires_at < now()");
-    const result = await this.pool.query<{ userId: string; returnTo: string | null }>(
+    const result = await this.pool.query<{
+      userId: string;
+      returnTo: string | null;
+      encryptedPayload: string | null;
+    }>(
       `delete from connector_oauth_states
         where state_id = $1 and provider = $2 and expires_at >= now()
-        returning user_id as "userId", return_to as "returnTo"`,
+        returning user_id as "userId", return_to as "returnTo", encrypted_payload as "encryptedPayload"`,
       [stateId, provider],
     );
     const row = result.rows[0];
-    return row ? { userId: row.userId, returnTo: row.returnTo ?? undefined } : undefined;
+    return row
+      ? {
+          userId: row.userId,
+          returnTo: row.returnTo ?? undefined,
+          encryptedPayload: row.encryptedPayload ?? undefined,
+        }
+      : undefined;
   }
 
   async onModuleDestroy() {
@@ -375,10 +398,14 @@ export class ConnectorRepository implements OnModuleDestroy {
         user_id text not null,
         provider text not null,
         return_to text,
+        encrypted_payload text,
         expires_at timestamptz not null,
         created_at timestamptz not null default now()
       )
     `);
+    await this.pool.query(
+      "alter table connector_oauth_states add column if not exists encrypted_payload text",
+    );
     await this.pool.query(
       "create index if not exists connector_oauth_states_expires on connector_oauth_states (expires_at)",
     );

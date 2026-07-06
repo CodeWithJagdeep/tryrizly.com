@@ -120,6 +120,11 @@ export class AiCoreService {
     return this.budgetGate.summary(body.userId ?? env.DEFAULT_USER_ID);
   }
 
+  /** All users' spend, highest first — admin-only usage view. */
+  listAllUsage(body: { sinceDays?: number }) {
+    return this.budgetGate.adminSummary(body.sinceDays ?? 30);
+  }
+
   /** Open follow-up tasks + pending BullMQ reminders, for the dashboard's Scheduled view. */
   async listScheduled(body: { userId?: string }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
@@ -294,8 +299,11 @@ export class AiCoreService {
     return this.proactive.morningBrief(userId);
   }
 
-  proactiveSync(body: { userId?: string }) {
-    return this.proactive.syncMeetingReminders(body.userId ?? env.DEFAULT_USER_ID);
+  proactiveSync(body: { userId?: string; source?: "calendar" | "calcom" }) {
+    return this.proactive.syncMeetingReminders(
+      body.userId ?? env.DEFAULT_USER_ID,
+      body.source ?? "calendar",
+    );
   }
 
   /**
@@ -306,7 +314,13 @@ export class AiCoreService {
    */
   async ingestEmailSpine(data: SpineJobData) {
     const sender = parseHeader(data.from);
-    const senderName = cleanSenderHint(data.senderName) ?? sender.name;
+    const senderName =
+      cleanSenderHint(data.contactCandidate?.name) ??
+      cleanSenderHint(data.senderName) ??
+      sender.name;
+    const senderEmail = data.contactCandidate?.isRealContact && data.contactCandidate.email
+      ? data.contactCandidate.email
+      : sender.email;
     // Parse CC header into extra participants
     const ccParticipants = parseCcHeader(data.cc ?? "").map((p) => ({
       ...p,
@@ -325,10 +339,12 @@ export class AiCoreService {
         {
           ...sender,
           name: senderName,
+          email: senderEmail,
           role: "sender",
           senderType: data.senderType,
           isAutomated: data.isAutomated,
           isMarketing: data.isMarketing,
+          contactCandidate: data.contactCandidate,
         },
         ...ccParticipants,
       ],
@@ -548,9 +564,17 @@ export class AiCoreService {
     return this.vectorMemory.remember(body);
   }
 
-  listEmailMemories(body: { userId?: string; limit?: number }) {
+  async listEmailMemories(body: { userId?: string; limit?: number; includeLowValue?: boolean }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    return this.vectorMemory.listBySource(userId, "gmail", body.limit ?? 50);
+    const limit = body.limit ?? 50;
+    const fetchLimit = body.includeLowValue ? limit : Math.max(limit * 5, limit);
+    const memories = await this.vectorMemory.listBySource(userId, "gmail", fetchLimit);
+
+    if (body.includeLowValue) return memories.slice(0, limit);
+
+    return memories
+      .filter((memory) => !LOW_VALUE_EMAIL_CATEGORIES.has(String(memory.metadata.category ?? "")))
+      .slice(0, limit);
   }
 
   async scheduleReminder(body: ReminderRequest) {
@@ -716,6 +740,8 @@ export class AiCoreService {
   }
 }
 
+const LOW_VALUE_EMAIL_CATEGORIES = new Set(["newsletter", "general_low", "otp"]);
+
 function parseConnectorProvider(provider: string | undefined): ConnectorProvider | undefined {
   const allowed = new Set([
     "google", "gmail", "calendar", "telegram", "postgres", "mongodb", "razorpay",
@@ -740,6 +766,7 @@ function parseCcHeader(cc: string): { name?: string; email?: string }[] {
 }
 
 const PHONE_RE = /(?:\+?\d[\d\s\-().]{7,}\d)/g;
+const PHONE_CONTEXT_RE = /\b(phone|mobile|tel|telephone|cell|call|whatsapp|wa|contact)\b/i;
 const LINKEDIN_RE = /https?:\/\/(?:www\.)?linkedin\.com\/in\/[\w-]+\/?/gi;
 const GITHUB_RE = /https?:\/\/(?:www\.)?github\.com\/(?!features|marketplace|pricing|topics|orgs\b)[\w-]+\/?/gi;
 const EMAIL_IN_BODY_RE = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
@@ -758,7 +785,7 @@ async function enrichContactsFromBody(
   // Work only on the last 800 chars — signatures live at the bottom.
   const tail = body.slice(-800);
 
-  const phones = [...new Set((tail.match(PHONE_RE) ?? []).map((p) => p.trim()))].slice(0, 3);
+  const phones = extractSignaturePhones(tail).slice(0, 3);
   const linkedins = [...new Set((tail.match(LINKEDIN_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
   const githubs = [...new Set((tail.match(GITHUB_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
   const bodyEmails = [...new Set((tail.match(EMAIL_IN_BODY_RE) ?? []).map((e) => e.toLowerCase()))].slice(0, 5);
@@ -771,8 +798,8 @@ async function enrichContactsFromBody(
 
     for (const phone of phones) {
       await resolver.attachAlias(userId, entityId, {
-        alias: phone,
-        normalized: phone.replace(/\D/g, ""),
+        alias: phone.alias,
+        normalized: phone.normalized,
         kind: "phone",
         source: "email_body",
         confidence: 0.7,
@@ -789,4 +816,40 @@ async function enrichContactsFromBody(
       }).catch(() => undefined);
     }
   }
+}
+
+function extractSignaturePhones(text: string): Array<{ alias: string; normalized: string }> {
+  const phones = new Map<string, string>();
+
+  for (const match of text.matchAll(PHONE_RE)) {
+    const alias = match[0].trim();
+    const digits = alias.replace(/\D/g, "");
+    const index = match.index ?? 0;
+    if (!isPlausiblePhone(alias, digits, text, index)) continue;
+    const normalized = alias.startsWith("+") ? `+${digits}` : digits;
+    phones.set(normalized, alias);
+  }
+
+  return [...phones.entries()].map(([normalized, alias]) => ({ alias, normalized }));
+}
+
+function isPlausiblePhone(
+  alias: string,
+  digits: string,
+  source: string,
+  index: number,
+): boolean {
+  // E.164 max is 15 digits. Longer values are usually order IDs, tracking IDs,
+  // verification artifacts, or encoded timestamps, not phone numbers.
+  if (digits.length < 10 || digits.length > 15) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+
+  const context = source.slice(
+    Math.max(0, index - 32),
+    Math.min(source.length, index + alias.length + 32),
+  );
+  const hasPhoneLabel = PHONE_CONTEXT_RE.test(context);
+  const hasPhoneFormatting = alias.includes("+") || /[\s().-]/.test(alias);
+
+  return hasPhoneLabel || hasPhoneFormatting;
 }

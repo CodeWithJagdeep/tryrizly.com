@@ -106,6 +106,7 @@ export class EmailPipelineService {
       senderType: facts.senderType,
       isAutomated: facts.isAutomated,
       isMarketing: facts.isMarketing,
+      contactCandidate: facts.contactCandidate,
       cc: msgRes.connected ? msgRes.message.cc : undefined,
     }).catch((e: unknown) =>
       logger.warn("spine: enqueue failed", {

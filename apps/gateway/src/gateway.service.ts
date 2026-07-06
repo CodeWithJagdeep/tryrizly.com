@@ -1,9 +1,15 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ClientProxy, ClientProxyFactory, Transport } from "@nestjs/microservices";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, timeout, TimeoutError } from "rxjs";
 import { env } from "@heyriz/shared/env";
 
 type ProxyPayload = Record<string, unknown>;
+
+// A handler that throws before returning a proper RPC response (e.g. a
+// synchronous error in a microservice message handler) can leave this call
+// waiting forever with no reply ever coming back — bound it so a backend bug
+// surfaces as a fast error instead of an indefinitely "stuck" request.
+const AI_CORE_CALL_TIMEOUT_MS = 20_000;
 
 @Injectable()
 export class GatewayService implements OnModuleDestroy {
@@ -35,8 +41,17 @@ export class GatewayService implements OnModuleDestroy {
     };
   }
 
-  sendToAiCore<TResponse>(pattern: string, payload: ProxyPayload) {
-    return firstValueFrom(this.aiCoreClient.send<TResponse>(pattern, payload));
+  async sendToAiCore<TResponse>(pattern: string, payload: ProxyPayload) {
+    try {
+      return await firstValueFrom(
+        this.aiCoreClient.send<TResponse>(pattern, payload).pipe(timeout(AI_CORE_CALL_TIMEOUT_MS)),
+      );
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        throw new Error(`ai_core_timeout:${pattern}`);
+      }
+      throw error;
+    }
   }
 
   async onModuleDestroy() {

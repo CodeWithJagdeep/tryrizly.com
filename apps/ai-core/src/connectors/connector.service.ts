@@ -59,6 +59,10 @@ export class ConnectorService {
     const userId = input.userId ?? "default";
     const provider = input.provider;
 
+    if (!provider || typeof input.secret !== "object" || input.secret === null) {
+      throw new Error("invalid_connector_payload:missing_provider_or_secret");
+    }
+
     if (provider === "mongodb") {
       const connectionUrl = input.secret.connectionUrl;
       if (typeof connectionUrl !== "string" || !connectionUrl) {

@@ -81,12 +81,15 @@ function greetingEmoji(): string {
   return "🌙";
 }
 
+// Text shades are dark (-700) for readability on this page's white/light
+// backgrounds - a light shade (-300) reads fine on a dark UI but is nearly
+// invisible here, which is exactly what made grid event chips unreadable.
 const EVENT_COLORS = [
-  "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  "bg-violet-500/20 text-violet-300 border-violet-500/30",
-  "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-  "bg-rose-500/20 text-rose-300 border-rose-500/30",
-  "bg-sky-500/20 text-sky-300 border-sky-500/30",
+  "bg-blue-50 text-blue-700 border-blue-200",
+  "bg-violet-50 text-violet-700 border-violet-200",
+  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "bg-rose-50 text-rose-700 border-rose-200",
+  "bg-sky-50 text-sky-700 border-sky-200",
 ];
 
 function eventColor(title: string) {
@@ -129,12 +132,22 @@ function calendarCacheKey(year: number, month: number) {
   return `${CALENDAR_CACHE_PREFIX}:${year}:${month}`;
 }
 
+// A transient backend hiccup (an outage, a provider error) can otherwise get
+// cached as a false "this month has nothing" snapshot that then outlives the
+// hiccup for the rest of the browser tab's session — cap how long a read is
+// trusted instead of caching forever.
+const CALENDAR_CACHE_TTL_MS = 2 * 60 * 1000;
+
+type CachedCalendarPayload = CalendarPayload & { cachedAt: number };
+
 function readCalendarCache(year: number, month: number): CalendarPayload | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(calendarCacheKey(year, month));
     if (!raw) return null;
-    return JSON.parse(raw) as CalendarPayload;
+    const cached = JSON.parse(raw) as CachedCalendarPayload;
+    if (Date.now() - cached.cachedAt > CALENDAR_CACHE_TTL_MS) return null;
+    return cached;
   } catch {
     return null;
   }
@@ -143,7 +156,8 @@ function readCalendarCache(year: number, month: number): CalendarPayload | null 
 function writeCalendarCache(year: number, month: number, payload: CalendarPayload) {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(calendarCacheKey(year, month), JSON.stringify(payload));
+    const cached: CachedCalendarPayload = { ...payload, cachedAt: Date.now() };
+    window.sessionStorage.setItem(calendarCacheKey(year, month), JSON.stringify(cached));
   } catch {
     // Ignore storage failures; the live fetch still keeps the page correct.
   }
@@ -562,13 +576,13 @@ export function CalendarClient() {
                 <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </span>
-            <span className="text-amber-200/90">
+            <span className="text-amber-800">
               Telegram isn&apos;t linked — reminders and notifications won&apos;t be delivered.
             </span>
           </div>
           <a
             href="/dashboard/telegram"
-            className="shrink-0 rounded-md border border-amber-500/30 px-3 py-1 text-xs font-medium text-amber-300 transition hover:border-amber-500/60 hover:text-amber-200"
+            className="shrink-0 rounded-md border border-amber-400 px-3 py-1 text-xs font-medium text-amber-800 transition hover:border-amber-500 hover:text-amber-900"
           >
             Link Telegram →
           </a>
@@ -691,7 +705,7 @@ export function CalendarClient() {
                       {dayReminders.slice(0, 1).map((r) => (
                         <span
                           key={r.id}
-                          className="flex items-center gap-1 truncate rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-amber-300"
+                          className="flex items-center gap-1 truncate rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-amber-800"
                         >
                           <BellDot />
                           {r.message}
@@ -837,7 +851,7 @@ export function CalendarClient() {
                                 href={ev.hangoutLink}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mt-2 inline-flex items-center gap-1 rounded-md bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-300 transition hover:bg-blue-500/25"
+                                className="mt-2 inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
                               >
                                 <VideoIcon />
                                 Join call
@@ -960,7 +974,7 @@ export function CalendarClient() {
 
             {/* Error banner */}
             {submitError && (
-              <div className="mx-6 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {submitError}
               </div>
             )}
@@ -969,14 +983,14 @@ export function CalendarClient() {
             {dialogTab === "reminder" && (
               <div className="flex flex-col gap-4 px-6 py-5">
                 {telegramLinked === false && (
-                  <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-3.5 py-3">
-                    <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true">
+                  <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3">
+                    <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true">
                       <path d="M8 2L1.5 13.5h13L8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                       <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                     </svg>
-                    <p className="text-xs leading-5 text-amber-200/80">
+                    <p className="text-xs leading-5 text-amber-800">
                       Telegram isn&apos;t linked yet.{" "}
-                      <a href="/dashboard/telegram" className="font-semibold underline underline-offset-2 hover:text-amber-200">
+                      <a href="/dashboard/telegram" className="font-semibold underline underline-offset-2 hover:text-amber-900">
                         Connect it
                       </a>{" "}
                       so Riz can actually deliver this reminder to you.
@@ -1226,7 +1240,7 @@ function DailyBriefing({
 
                 {/* Next up pill */}
                 {nextEvent && minsUntilNext !== null && minsUntilNext >= 0 && minsUntilNext <= 120 && (
-                  <span className="flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-300">
+                  <span className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
                     <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
                     {minsUntilNext <= 5
                       ? `${nextEvent.title} starting now`
@@ -1254,7 +1268,7 @@ function DailyBriefing({
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="ml-0.5 text-blue-400 transition hover:text-blue-300"
+                        className="ml-0.5 text-blue-600 transition hover:text-blue-700"
                         title="Join call"
                       >
                         <VideoIcon />

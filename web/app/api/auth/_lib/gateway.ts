@@ -14,6 +14,7 @@ export async function callGateway<T>(path: string, body?: unknown): Promise<T> {
     method: body === undefined ? "GET" : "POST",
     headers: gatewayHeaders(body !== undefined),
     body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
   });
   return (await res.json()) as T;
 }
@@ -22,6 +23,7 @@ export async function deleteGateway<T>(path: string): Promise<{ ok: boolean; sta
   const res = await fetch(`${gatewayUrl}${path}`, {
     method: "DELETE",
     headers: gatewayHeaders(false),
+    cache: "no-store",
   });
   return {
     ok: res.ok,
@@ -35,6 +37,7 @@ export async function patchGateway<T>(path: string, body: unknown): Promise<{ ok
     method: "PATCH",
     headers: gatewayHeaders(true),
     body: JSON.stringify(body),
+    cache: "no-store",
   });
   return {
     ok: res.ok,

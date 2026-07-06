@@ -70,17 +70,21 @@ function parseSummary(raw: string) {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  payment_due:      "bg-red-500/15 text-red-300 border-red-500/20",
-  meeting_request:  "bg-blue-500/15 text-blue-300 border-blue-500/20",
-  investor_update:  "bg-violet-500/15 text-violet-300 border-violet-500/20",
-  follow_up_needed: "bg-amber-500/15 text-amber-300 border-amber-500/20",
-  general_high:     "bg-orange-500/15 text-orange-300 border-orange-500/20",
-  account_alert:    "bg-red-500/15 text-red-300 border-red-500/20",
+  payment_due:      "bg-red-50 text-red-700 border-red-200",
+  meeting_request:  "bg-blue-50 text-blue-700 border-blue-200",
+  investor_update:  "bg-violet-50 text-violet-700 border-violet-200",
+  follow_up_needed: "bg-amber-50 text-amber-700 border-amber-200",
+  general_high:     "bg-orange-50 text-orange-700 border-orange-200",
+  account_alert:    "bg-red-50 text-red-700 border-red-200",
   general_medium:   "bg-slate-100 text-slate-600 border-slate-300",
   general_low:      "bg-slate-100 text-slate-500 border-slate-200",
   newsletter:       "bg-slate-100 text-slate-500 border-slate-200",
   otp:              "bg-slate-100 text-slate-500 border-slate-200",
 };
+
+// Pure marketing/OTP noise - hidden from the "All" tab's default view,
+// still visible under Updates for anyone who goes looking for it.
+const LOW_VALUE_CATEGORIES = new Set(["newsletter", "otp", "general_low"]);
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
@@ -135,7 +139,7 @@ export function EmailsClient() {
   const labels = data.categoryLabels ?? {};
 
   const counts: Record<Tab, number> = {
-    all: emails.length,
+    all: emails.filter((e) => !LOW_VALUE_CATEGORIES.has(e.category)).length,
     followups: emailTasks.length,
     sent: sentEmails.length,
     business: emails.filter((e) => e.tab === "business").length,
@@ -143,7 +147,13 @@ export function EmailsClient() {
   };
 
   const emailTab = activeTab === "all" || activeTab === "business" || activeTab === "updates";
-  const tabFiltered = activeTab === "all" ? emails : emails.filter((e) => e.tab === activeTab);
+  // "All" means "everything worth your attention" - pure newsletter/OTP noise
+  // still shows up, just under the Updates tab where someone would go
+  // looking for it, not mixed into the default view.
+  const tabFiltered =
+    activeTab === "all"
+      ? emails.filter((e) => !LOW_VALUE_CATEGORIES.has(e.category))
+      : emails.filter((e) => e.tab === activeTab);
   const displayedEmails = query.trim()
     ? tabFiltered.filter(
         (e) =>
@@ -237,7 +247,7 @@ export function EmailsClient() {
 
         {/* Error */}
         {!loading && error && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-5 py-4 text-sm text-red-300">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -392,7 +402,7 @@ function EmailTableRow({
             {catLabel}
           </span>
           {email.sample ? (
-            <span className="border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+            <span className="border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
               Sample
             </span>
           ) : null}
@@ -442,7 +452,7 @@ function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
               <td className="px-4 py-4 text-sm text-slate-700">{task.summary}</td>
               <td className="px-4 py-4 text-sm text-slate-600">{task.source}</td>
               <td className="px-4 py-4">
-                <span className="border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-300">
+                <span className="border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
                   {task.status || "open"}
                 </span>
               </td>
@@ -473,7 +483,7 @@ function SentTable({ emails }: { emails: SentEmail[] }) {
               <td className="px-4 py-4 text-sm text-slate-700">{email.to}</td>
               <td className="px-4 py-4 text-sm text-slate-700">{email.subject}</td>
               <td className="px-4 py-4">
-                <span className="border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                <span className="border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                   {email.sample ? "Sample" : email.status}
                 </span>
               </td>
@@ -533,7 +543,7 @@ function EmailItem({
             {catLabel}
           </span>
           {email.sample && (
-            <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+            <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
               Sample
             </span>
           )}

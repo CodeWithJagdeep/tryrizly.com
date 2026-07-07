@@ -111,7 +111,8 @@ export class ConnectorService {
       provider === "razorpay" ||
       provider === "stripe" ||
       provider === "paypal" ||
-      provider === "mpesa";
+      provider === "mpesa" ||
+      provider === "calcom";
     let account: ConnectedAccount;
 
     if (isMultiAccount && input.accountId) {

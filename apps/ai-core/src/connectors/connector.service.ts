@@ -489,17 +489,20 @@ export class ConnectorService {
       string,
       string | number | boolean | null
     >;
+    const accessToken = typeof tokenJson.access_token === "string" ? tokenJson.access_token : undefined;
+    const profile = accessToken ? await fetchGoogleProfile(accessToken).catch(() => null) : null;
     const account = await this.repository.upsert({
       userId,
       provider,
       authType: "oauth",
-      label: providerLabel(provider),
+      label: profile?.email ? `${providerLabel(provider)} (${profile.email})` : providerLabel(provider),
       status: "connected",
       encryptedPayload: this.vault.encrypt(tokenJson),
       scopes,
       metadata: {
         setup: "oauth",
         hasRefreshToken: Boolean(tokenJson.refresh_token),
+        ...(profile?.email ? { accountEmail: profile.email } : {}),
       },
     });
 
@@ -872,6 +875,15 @@ async function fetchCalComProfile(
     data?: { email?: string; username?: string };
   };
   return payload.data ?? null;
+}
+
+async function fetchGoogleProfile(accessToken: string): Promise<{ email?: string } | null> {
+  const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json()) as { email?: string };
+  return payload ?? null;
 }
 
 function stringSecret(value: unknown): string | undefined {

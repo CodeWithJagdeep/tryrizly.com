@@ -746,8 +746,17 @@ export class AiCoreService {
     if (!res.connected) return { connected: false as const };
 
     const original = res.message;
+    // HTML-only messages have no text/plain part — give the drafting prompt
+    // a stripped-tag fallback rather than an empty body.
+    const plainSource = original.body || stripHtml(original.bodyHtml ?? "");
     const principalName = await this.preferences.getDisplayName(userId);
-    const text = await draftBody(this.llmRouter, userId, original, body.instructions, principalName);
+    const text = await draftBody(
+      this.llmRouter,
+      userId,
+      { ...original, body: plainSource },
+      body.instructions,
+      principalName,
+    );
 
     return {
       connected: true as const,
@@ -821,6 +830,14 @@ export class AiCoreService {
 }
 
 const LOW_VALUE_EMAIL_CATEGORIES = new Set(["newsletter", "general_low", "otp"]);
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function parseConnectorProvider(provider: string | undefined): ConnectorProvider | undefined {
   const allowed = new Set([

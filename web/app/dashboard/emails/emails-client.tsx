@@ -473,9 +473,37 @@ function stripScripts(html: string): string {
   return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
 }
 
+// Remote <img>/<source> src (and CSS background-image url(...)) are the
+// classic email tracking-pixel vector — loading them tells the sender you
+// opened the mail and leaks your IP. Neuter them by default; inline cid:
+// images we already resolved server-side to data: URIs are unaffected since
+// they never touch the network.
+const REMOTE_IMAGE_PATTERN = /\ssrc=(["'])(?:https?:)?\/\/[^"']*\1/gi;
+const REMOTE_SRCSET_PATTERN = /\ssrcset=(["'])[^"']*\1/gi;
+const REMOTE_BG_PATTERN = /url\(\s*(['"]?)(?:https?:)?\/\/[^)'"]*\1\s*\)/gi;
+
+function hasRemoteImages(html: string): boolean {
+  // .test() on a shared `g`-flag regex mutates lastIndex, so reset before
+  // each use or repeated calls silently miss matches after the first.
+  REMOTE_IMAGE_PATTERN.lastIndex = 0;
+  REMOTE_BG_PATTERN.lastIndex = 0;
+  return REMOTE_IMAGE_PATTERN.test(html) || REMOTE_BG_PATTERN.test(html);
+}
+
+function blockRemoteImages(html: string): string {
+  return html
+    .replace(REMOTE_IMAGE_PATTERN, (m) => ` data-blocked${m}`)
+    .replace(REMOTE_SRCSET_PATTERN, (m) => ` data-blocked${m}`)
+    .replace(REMOTE_BG_PATTERN, "none");
+}
+
 function EmailBodyFrame({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(200);
+  const [imagesAllowed, setImagesAllowed] = useState(false);
+
+  const remoteImagesPresent = hasRemoteImages(html);
+  const safeHtml = imagesAllowed ? html : blockRemoteImages(html);
 
   const doc = `<!doctype html><html><head><meta charset="utf-8" />
 <base target="_blank" />
@@ -485,20 +513,34 @@ function EmailBodyFrame({ html }: { html: string }) {
   a { color: #2563eb; }
   table { max-width: 100%; }
 </style>
-</head><body>${stripScripts(html)}</body></html>`;
+</head><body>${stripScripts(safeHtml)}</body></html>`;
 
   return (
-    <iframe
-      ref={iframeRef}
-      title="Email body"
-      srcDoc={doc}
-      sandbox="allow-same-origin allow-popups"
-      onLoad={() => {
-        const body = iframeRef.current?.contentDocument?.body;
-        if (body) setHeight(body.scrollHeight + 16);
-      }}
-      style={{ width: "100%", height, border: "none" }}
-    />
+    <div>
+      {remoteImagesPresent && !imagesAllowed && (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0">Images are blocked to protect your privacy — senders can use them to track when you open an email.</span>
+          <button
+            type="button"
+            onClick={() => setImagesAllowed(true)}
+            className="shrink-0 self-start rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 transition hover:bg-amber-100 sm:self-auto"
+          >
+            Show images
+          </button>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        title="Email body"
+        srcDoc={doc}
+        sandbox="allow-same-origin allow-popups"
+        onLoad={() => {
+          const body = iframeRef.current?.contentDocument?.body;
+          if (body) setHeight(body.scrollHeight + 16);
+        }}
+        style={{ width: "100%", height, border: "none" }}
+      />
+    </div>
   );
 }
 

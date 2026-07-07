@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, ChatIcon, CheckCircleIcon, MailIcon, LayersIcon, VideoIcon } from "./icons";
+import { CalendarIcon, ChatIcon, MailIcon, LayersIcon, VideoIcon } from "./icons";
 import { toggleSidebar } from "../lib/sidebar-store";
 
 const items = [
   { href: "/dashboard", icon: ChatIcon, label: "Chat" },
-  { href: "/dashboard/approvals", icon: CheckCircleIcon, label: "Approvals" },
   { href: "/dashboard/emails", icon: MailIcon, label: "Emails" },
   { href: "/dashboard/calendar", icon: CalendarIcon, label: "Calendar" },
   { href: "/dashboard/meetings", icon: VideoIcon, label: "Meetings" },

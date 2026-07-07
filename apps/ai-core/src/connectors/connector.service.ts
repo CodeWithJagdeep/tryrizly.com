@@ -101,9 +101,17 @@ export class ConnectorService {
 
     const encryptedPayload = this.vault.encrypt(input.secret);
 
-    // For multi-account providers (postgres/mongodb), insert a new row.
-    // For others, upsert by (userId, provider) so there's always exactly one.
-    const isMultiAccount = provider === "postgres" || provider === "mongodb";
+    // For multi-account (credential-based) providers, insert a new row per
+    // account. For everything else, upsert by (userId, provider) so there's
+    // always exactly one. Keep in sync with MULTI_ACCOUNT_PROVIDERS in
+    // web/app/dashboard/connectors/connectors-client.tsx.
+    const isMultiAccount =
+      provider === "postgres" ||
+      provider === "mongodb" ||
+      provider === "razorpay" ||
+      provider === "stripe" ||
+      provider === "paypal" ||
+      provider === "mpesa";
     let account: ConnectedAccount;
 
     if (isMultiAccount && input.accountId) {

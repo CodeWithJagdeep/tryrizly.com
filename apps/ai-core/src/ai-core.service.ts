@@ -17,6 +17,7 @@ import type {
 import { EmailPipelineService } from "./email/email-pipeline.service";
 import type { EmailCategory, ExtractedEmailFacts } from "./email/email.types";
 import { GoogleService } from "./google/google.service";
+import { draftBody, ensureRe, fillAndGuardPlaceholders } from "./tools/gmail.tools";
 import { primaryUpdatesInboxQuery } from "./google/gmail-search";
 import { AutoMemoryService } from "./memory/auto-memory.service";
 import { VectorMemoryService } from "./memory/vector-memory.service";
@@ -711,16 +712,95 @@ export class AiCoreService {
     subject: string;
     body: string;
     sendAt: string;
+    threadId?: string;
+    inReplyTo?: string;
   }) {
     const userId = payload.userId ?? env.DEFAULT_USER_ID;
     const sendAt = new Date(payload.sendAt);
     if (isNaN(sendAt.getTime())) throw new Error("invalid_sendAt");
 
     await enqueueOutboundEmail(
-      { userId, to: payload.to, subject: payload.subject, body: payload.body },
+      {
+        userId,
+        to: payload.to,
+        subject: payload.subject,
+        body: payload.body,
+        threadId: payload.threadId,
+        inReplyTo: payload.inReplyTo,
+      },
       sendAt,
     );
     return { ok: true, sendAt: sendAt.toISOString() };
+  }
+
+  async getGmailMessage(body: { userId?: string; messageId: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.getMessage(userId, body.messageId, "full");
+    if (!res.connected) return { connected: false as const };
+    return { connected: true as const, message: res.message };
+  }
+
+  async draftEmailReply(body: { userId?: string; messageId: string; instructions?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.getMessage(userId, body.messageId, "full");
+    if (!res.connected) return { connected: false as const };
+
+    const original = res.message;
+    const principalName = await this.preferences.getDisplayName(userId);
+    const text = await draftBody(this.llmRouter, userId, original, body.instructions, principalName);
+
+    return {
+      connected: true as const,
+      to: original.from,
+      subject: ensureRe(original.subject),
+      body: text,
+      threadId: original.threadId,
+      inReplyTo: original.messageIdHeader,
+    };
+  }
+
+  async sendEmailReply(payload: {
+    userId?: string;
+    to: string;
+    subject: string;
+    body: string;
+    threadId?: string;
+    inReplyTo?: string;
+    sendAt?: string;
+  }) {
+    const userId = payload.userId ?? env.DEFAULT_USER_ID;
+    const principalName = await this.preferences.getDisplayName(userId);
+    const guarded = fillAndGuardPlaceholders(payload.body, principalName);
+    if (guarded.leftoverPlaceholder) {
+      return { ok: false as const, error: "unfilled_placeholder", placeholder: guarded.leftoverPlaceholder };
+    }
+
+    if (payload.sendAt) {
+      const sendAt = new Date(payload.sendAt);
+      if (isNaN(sendAt.getTime())) throw new Error("invalid_sendAt");
+      await enqueueOutboundEmail(
+        {
+          userId,
+          to: payload.to,
+          subject: payload.subject,
+          body: guarded.body,
+          threadId: payload.threadId,
+          inReplyTo: payload.inReplyTo,
+        },
+        sendAt,
+      );
+      return { ok: true as const, scheduled: true as const, sendAt: sendAt.toISOString() };
+    }
+
+    const res = await this.google.sendMessage(userId, {
+      to: payload.to,
+      subject: payload.subject,
+      body: guarded.body,
+      threadId: payload.threadId,
+      inReplyTo: payload.inReplyTo,
+    });
+    if (!res.connected) return { ok: false as const, error: "not_connected" };
+    return { ok: true as const, scheduled: false as const, messageId: res.messageId, threadId: res.threadId };
   }
 
   private selectToolForEvent(source: HeyRizEventSource) {

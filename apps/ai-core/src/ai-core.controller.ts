@@ -155,9 +155,46 @@ export class AiCoreController {
 
   @MessagePattern("email.scheduleOutbound")
   scheduleOutboundEmail(
-    @Payload() payload: { userId?: string; to: string; subject: string; body: string; sendAt: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      to: string;
+      subject: string;
+      body: string;
+      sendAt: string;
+      threadId?: string;
+      inReplyTo?: string;
+    },
   ) {
     return this.aiCoreService.scheduleOutboundEmail(payload);
+  }
+
+  @MessagePattern("gmail.getMessage")
+  getGmailMessage(@Payload() payload: { userId?: string; messageId: string }) {
+    return this.aiCoreService.getGmailMessage(payload);
+  }
+
+  @MessagePattern("email.draftReply")
+  draftEmailReply(
+    @Payload() payload: { userId?: string; messageId: string; instructions?: string },
+  ) {
+    return this.aiCoreService.draftEmailReply(payload);
+  }
+
+  @MessagePattern("email.sendReply")
+  sendEmailReply(
+    @Payload()
+    payload: {
+      userId?: string;
+      to: string;
+      subject: string;
+      body: string;
+      threadId?: string;
+      inReplyTo?: string;
+      sendAt?: string;
+    },
+  ) {
+    return this.aiCoreService.sendEmailReply(payload);
   }
 
   @MessagePattern("proactive.weeklyDigest")

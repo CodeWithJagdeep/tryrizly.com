@@ -184,6 +184,25 @@ export class GatewayController {
     return this.gatewayService.sendToAiCore("email.scheduleOutbound", body);
   }
 
+  @Post("api/emails/:messageId/draft-reply")
+  draftEmailReply(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Param("messageId") messageId: string,
+    @Body() body: { userId?: string; instructions?: string },
+  ) {
+    this.requireInternal(secret);
+    return this.gatewayService.sendToAiCore("email.draftReply", { ...body, messageId });
+  }
+
+  @Post("api/emails/send")
+  sendEmailReply(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: ProxyPayload,
+  ) {
+    this.requireInternal(secret);
+    return this.gatewayService.sendToAiCore("email.sendReply", body);
+  }
+
   @Post("api/events")
   ingestEvent(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
@@ -393,6 +412,19 @@ export class GatewayController {
       limit: parseInt(limit, 10) || 50,
       includeLowValue: includeLowValue === "true",
     });
+  }
+
+  // Must stay registered after the literal "api/emails/inbox" and
+  // "api/emails/processed" GET routes above, or this param route would
+  // shadow them (Express matches same-method routes in registration order).
+  @Get("api/emails/:messageId")
+  getEmailMessage(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Param("messageId") messageId: string,
+    @Query("userId") userId = "default",
+  ) {
+    this.requireInternal(secret);
+    return this.gatewayService.sendToAiCore("gmail.getMessage", { userId, messageId });
   }
 
   @Get("api/usage")

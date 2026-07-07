@@ -132,6 +132,17 @@ export class EmailClassifierService {
       const isAutomated = normalizeBoolean(parsed?.isAutomated);
       const isMarketing = normalizeBoolean(parsed?.isMarketing);
 
+      if (!parsed?.summary?.trim()) {
+        // The model returned parseable JSON but dropped the summary field —
+        // this is the silent path that used to leave the user-facing
+        // notification with zero body context. Log it so a spike is visible
+        // instead of only showing up as vague user reports.
+        logger.warn("email classifier: model omitted summary, using body snippet", {
+          category,
+          hadRawResponse: Boolean(raw),
+        });
+      }
+
       return {
         category,
         person: parsed?.person?.trim() || undefined,
@@ -157,7 +168,7 @@ export class EmailClassifierService {
         isAutomated,
         isMarketing,
         replyIntent: normalizeReplyIntent(parsed?.replyIntent),
-        summary: parsed?.summary?.trim() || `Email from ${input.from}`,
+        summary: parsed?.summary?.trim() || this.bodySnippetSummary(input.from, truncatedBody),
         confidence: normalizeConfidence(parsed?.confidence),
       };
     } catch (error) {
@@ -195,6 +206,16 @@ export class EmailClassifierService {
 
     logger.warn("email classifier: unparseable datetime, dropping", { value: trimmed });
     return undefined;
+  }
+
+  /** First real sentence/line of the body, so a degraded classification still carries actual content instead of just the sender. */
+  private bodySnippetSummary(from: string, body: string): string {
+    const snippet = body
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 140);
+    if (!snippet) return `Email from ${from}`;
+    return `${shortFrom(from)}: ${snippet}${body.length > 140 ? "…" : ""}`;
   }
 
   private rulesClassify(input: {
@@ -330,7 +351,7 @@ export class EmailClassifierService {
     return {
       category: "general_medium",
       person: shortFrom(input.from),
-      summary: `Email from ${shortFrom(input.from)}: ${input.subject.slice(0, 60)}`,
+      summary: this.bodySnippetSummary(input.from, input.body || input.subject),
       entities: [shortFrom(input.from)],
       contactCandidate: inferContactCandidateFromHeader(input.from, {
         senderType: "unknown",

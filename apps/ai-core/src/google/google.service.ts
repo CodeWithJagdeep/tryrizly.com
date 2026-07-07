@@ -277,7 +277,41 @@ export class GoogleService {
     if (!res.connected) return res;
 
     const data = (await res.response.json()) as GoogleGmailMessage;
-    return { connected: true, message: toGmailMessage(data) };
+    const message = toGmailMessage(data);
+
+    // Inline (cid:) images reference a separate attachment part — fetch and
+    // splice each one in as a data URI so the HTML renders like it does in
+    // Gmail, instead of showing broken image icons.
+    if (message.bodyHtml?.includes("cid:")) {
+      for (const img of collectInlineImages(data.payload)) {
+        if (!message.bodyHtml.includes(`cid:${img.contentId}`)) continue;
+        const att = await this.getAttachment(userId, id, img.attachmentId);
+        if (att.connected && att.data) {
+          const base64 = Buffer.from(att.data, "base64url").toString("base64");
+          message.bodyHtml = message.bodyHtml.split(`cid:${img.contentId}`).join(
+            `data:${img.mimeType};base64,${base64}`,
+          );
+        }
+      }
+    }
+
+    return { connected: true, message };
+  }
+
+  async getAttachment(
+    userId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<GoogleResult<{ data: string }>> {
+    const res = await this.gfetch(
+      userId,
+      "gmail",
+      `${GMAIL_BASE}/users/me/messages/${messageId}/attachments/${attachmentId}`,
+    );
+    if (!res.connected) return res;
+
+    const data = (await res.response.json()) as { data?: string };
+    return { connected: true, data: data.data ?? "" };
   }
 
   async getThreadMessages(
@@ -510,7 +544,7 @@ type GoogleGmailMessage = {
   payload?: {
     headers?: Array<{ name: string; value: string }>;
     mimeType?: string;
-    body?: { data?: string };
+    body?: { data?: string; attachmentId?: string };
     parts?: GoogleGmailMessage["payload"][];
   };
 };
@@ -552,6 +586,7 @@ function toGmailMessage(data: GoogleGmailMessage): GmailMessage {
     labelIds: data.labelIds ?? [],
     messageIdHeader: header("Message-ID") || undefined,
     body: extractPlainBody(data.payload),
+    bodyHtml: extractHtmlBody(data.payload) || undefined,
   };
 }
 
@@ -564,8 +599,45 @@ function extractPlainBody(payload: GoogleGmailMessage["payload"]): string {
     const text = extractPlainBody(part);
     if (text) return text;
   }
-  if (payload.body?.data) return decodeBase64Url(payload.body.data);
+  // Only fall back to the raw body for genuinely plain (or type-less) parts —
+  // a lone text/html part must NOT land here, or its markup renders as text.
+  if (payload.body?.data && (!payload.mimeType || payload.mimeType === "text/plain")) {
+    return decodeBase64Url(payload.body.data);
+  }
   return "";
+}
+
+function extractHtmlBody(payload: GoogleGmailMessage["payload"]): string {
+  if (!payload) return "";
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return decodeBase64Url(payload.body.data);
+  }
+  for (const part of payload.parts ?? []) {
+    const html = extractHtmlBody(part);
+    if (html) return html;
+  }
+  return "";
+}
+
+function collectInlineImages(
+  payload: GoogleGmailMessage["payload"],
+): Array<{ contentId: string; attachmentId: string; mimeType: string }> {
+  if (!payload) return [];
+  const results: Array<{ contentId: string; attachmentId: string; mimeType: string }> = [];
+  const contentIdHeader = (payload.headers ?? []).find(
+    (h) => h.name.toLowerCase() === "content-id",
+  )?.value;
+  if (contentIdHeader && payload.body?.attachmentId && payload.mimeType?.startsWith("image/")) {
+    results.push({
+      contentId: contentIdHeader.replace(/^<|>$/g, ""),
+      attachmentId: payload.body.attachmentId,
+      mimeType: payload.mimeType,
+    });
+  }
+  for (const part of payload.parts ?? []) {
+    results.push(...collectInlineImages(part));
+  }
+  return results;
 }
 
 function buildRawMessage(input: SendOrDraftInput): string {

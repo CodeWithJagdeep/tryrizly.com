@@ -11,6 +11,7 @@ type GmailMessage = {
   snippet: string;
   date: string;
   body: string;
+  bodyHtml?: string;
   messageIdHeader?: string;
 };
 

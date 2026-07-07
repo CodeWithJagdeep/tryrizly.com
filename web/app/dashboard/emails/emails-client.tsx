@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -462,8 +462,45 @@ type GmailMessageDetail = {
   subject: string;
   date: string;
   body: string;
+  bodyHtml?: string;
   messageIdHeader?: string;
 };
+
+// Sandboxed (no allow-scripts) iframe is the safe way to render arbitrary
+// email HTML — this only strips <script> defensively; script execution is
+// already blocked by the sandbox regardless of what's in the markup.
+function stripScripts(html: string): string {
+  return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+}
+
+function EmailBodyFrame({ html }: { html: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(200);
+
+  const doc = `<!doctype html><html><head><meta charset="utf-8" />
+<base target="_blank" />
+<style>
+  body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.5; color: #1e293b; word-wrap: break-word; overflow-wrap: anywhere; }
+  img { max-width: 100%; height: auto; }
+  a { color: #2563eb; }
+  table { max-width: 100%; }
+</style>
+</head><body>${stripScripts(html)}</body></html>`;
+
+  return (
+    <iframe
+      ref={iframeRef}
+      title="Email body"
+      srcDoc={doc}
+      sandbox="allow-same-origin allow-popups"
+      onLoad={() => {
+        const body = iframeRef.current?.contentDocument?.body;
+        if (body) setHeight(body.scrollHeight + 16);
+      }}
+      style={{ width: "100%", height, border: "none" }}
+    />
+  );
+}
 
 function EmailDetailSheet({
   email,
@@ -605,7 +642,11 @@ function EmailDetailSheet({
             </div>
           )}
           {!loading && !loadError && message && (
-            <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body}</div>
+            message.bodyHtml ? (
+              <EmailBodyFrame html={message.bodyHtml} />
+            ) : (
+              <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body}</div>
+            )
           )}
         </div>
 

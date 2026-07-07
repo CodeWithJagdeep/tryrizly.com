@@ -45,6 +45,8 @@ export type GmailThreadSummary = {
 export type GmailMessage = GmailThreadSummary & {
   cc?: string;
   body: string;
+  /** Raw text/html part with inline (cid:) images resolved to data URIs, when present. */
+  bodyHtml?: string;
   messageIdHeader?: string;
 };
 

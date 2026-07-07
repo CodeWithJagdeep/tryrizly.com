@@ -178,11 +178,11 @@ export function EmailsClient() {
   return (
     <main className="min-h-screen bg-white text-slate-900">
       {/* Header */}
-      <header className="border-b border-slate-200 px-6 pt-5">
-        <div className="flex items-center justify-between pb-4">
-          <div>
+      <header className="border-b border-slate-200 px-4 pt-5 sm:px-6">
+        <div className="flex items-center justify-between gap-3 pb-4">
+          <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight">Emails</h1>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 truncate text-sm text-slate-500">
               Analysed by Riz as they arrive via webhook
             </p>
           </div>
@@ -190,10 +190,10 @@ export function EmailsClient() {
             type="button"
             onClick={() => void load(true)}
             disabled={refreshing || loading}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
@@ -211,14 +211,14 @@ export function EmailsClient() {
           />
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0">
+        {/* Tabs — horizontally scrollable so they never overflow the viewport on phones */}
+        <div className="-mx-4 flex gap-0 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
           {TABS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => setActiveTab(key)}
-              className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              className={`-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 ${
                 activeTab === key
                   ? "border-slate-900 text-slate-900"
                   : "border-transparent text-slate-500 hover:text-slate-600"
@@ -237,7 +237,7 @@ export function EmailsClient() {
         </div>
       </header>
 
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-4 py-6 sm:px-6">
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
@@ -256,16 +256,16 @@ export function EmailsClient() {
         {!loading && !error && (
           <div className="flex flex-col gap-6">
             {emailTab && displayedEmails.length > 0 ? (
-              <EmailTable
+              <EmailList
                 emails={displayedEmails}
                 labels={labels}
                 onRefresh={() => void load(true)}
                 onOpen={setOpenEmail}
               />
             ) : activeTab === "followups" && displayedTasks.length > 0 ? (
-              <FollowupTable tasks={displayedTasks} />
+              <FollowupList tasks={displayedTasks} />
             ) : activeTab === "sent" && displayedSent.length > 0 ? (
-              <SentTable emails={displayedSent} />
+              <SentList emails={displayedSent} />
             ) : (
               <div className="flex flex-col items-center gap-3 py-20 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
@@ -332,6 +332,106 @@ export function EmailsClient() {
 }
 
 // ── Email row ─────────────────────────────────────────────────────────────────
+
+// The table needs real horizontal width for its columns — below `sm` that
+// forces a scrollbar, so phones get a stacked card list instead.
+function EmailList({
+  emails,
+  labels,
+  onRefresh,
+  onOpen,
+}: {
+  emails: ProcessedEmail[];
+  labels: Record<string, string>;
+  onRefresh: () => void;
+  onOpen: (email: ProcessedEmail) => void;
+}) {
+  return (
+    <>
+      <div className="hidden sm:block">
+        <EmailTable emails={emails} labels={labels} onRefresh={onRefresh} onOpen={onOpen} />
+      </div>
+      <div className="flex flex-col gap-2 sm:hidden">
+        {emails.map((email) => (
+          <EmailCard key={email.id} email={email} labels={labels} onRefresh={onRefresh} onOpen={onOpen} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function EmailCard({
+  email,
+  labels,
+  onRefresh,
+  onOpen,
+}: {
+  email: ProcessedEmail;
+  labels: Record<string, string>;
+  onRefresh: () => void;
+  onOpen: (email: ProcessedEmail) => void;
+}) {
+  const { from, subject, body } = parseSummary(email.summary);
+  const catColor = CATEGORY_COLORS[email.category] ?? CATEGORY_COLORS.general_medium;
+  const catLabel = labels[email.category] ?? email.category;
+  const initials = (from || subject || "E").charAt(0).toUpperCase();
+  const [acting, setActing] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  async function act(label: string, msg: string) {
+    if (email.sample) return;
+    setActing(label);
+    try {
+      await chatAction(msg);
+      setDone(label);
+      onRefresh();
+    } finally {
+      setActing(null);
+    }
+  }
+
+  const canOpen = !email.sample && !!email.messageId;
+
+  return (
+    <div
+      onClick={() => canOpen && onOpen(email)}
+      className={`rounded-xl border border-slate-200 bg-white p-3 transition active:bg-slate-50 ${canOpen ? "cursor-pointer" : ""}`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-semibold text-slate-900">{from || email.person || "Unknown"}</p>
+            <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.createdAt)}</span>
+          </div>
+          <p className="mt-0.5 truncate text-sm text-slate-700">{subject || email.summary}</p>
+          {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{body}</p> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className={`border px-2 py-0.5 text-[10px] font-semibold ${catColor}`}>{catLabel}</span>
+            {email.sample ? (
+              <span className="border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                Sample
+              </span>
+            ) : null}
+            {email.dueDate ? <span className="text-[11px] text-amber-600">Due {email.dueDate}</span> : null}
+          </div>
+        </div>
+      </div>
+      {!email.sample && (
+        <div className="mt-2 flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <ActionButton
+            label="Remind"
+            active={acting === "Remind"}
+            done={done === "Remind"}
+            onClick={() => act("Remind", `Remind me to follow up on this email from ${from || "someone"}: ${subject || email.summary}`)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EmailTable({
   emails,
@@ -649,8 +749,8 @@ function EmailDetailSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
+      <div className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">
               {message?.subject || parseSummary(email.summary).subject || "Email"}
@@ -671,7 +771,7 @@ function EmailDetailSheet({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {loading && (
             <div className="flex items-center justify-center gap-3 py-12">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
@@ -693,7 +793,7 @@ function EmailDetailSheet({
         </div>
 
         {!loading && !loadError && message && (
-          <div className="border-t border-slate-200 px-6 py-4">
+          <div className="border-t border-slate-200 px-4 py-4 sm:px-6">
             {!replyOpen ? (
               <button
                 type="button"
@@ -726,37 +826,39 @@ function EmailDetailSheet({
                 {sendError && <p className="text-sm text-red-700">{sendError}</p>}
                 {sendSuccess && <p className="text-sm text-emerald-700">{sendSuccess}</p>}
 
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                   {scheduling && (
                     <input
                       type="datetime-local"
                       value={scheduledFor}
                       onChange={(e) => setScheduledFor(e.target.value)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-300 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-300 focus:outline-none sm:w-auto"
                     />
                   )}
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-500 transition hover:text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!replyBody.trim() || submitting !== null}
-                    onClick={() =>
-                      scheduling ? void submitReply("schedule") : setScheduling(true)
-                    }
-                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-40"
-                  >
-                    {submitting === "schedule" ? "Scheduling…" : "Schedule"}
-                  </button>
+                  <div className="flex gap-2 sm:contents">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="flex-1 rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-500 transition hover:text-slate-700 sm:flex-none"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!replyBody.trim() || submitting !== null}
+                      onClick={() =>
+                        scheduling ? void submitReply("schedule") : setScheduling(true)
+                      }
+                      className="flex-1 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-40 sm:flex-none"
+                    >
+                      {submitting === "schedule" ? "Scheduling…" : "Schedule"}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     disabled={!replyBody.trim() || submitting !== null}
                     onClick={() => void submitReply("send")}
-                    className="rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40"
+                    className="w-full rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40 sm:w-auto"
                   >
                     {submitting === "send" ? "Sending…" : "Send now"}
                   </button>
@@ -776,6 +878,31 @@ function CloseIcon() {
       <path d="M18 6 6 18" />
       <path d="M6 6l12 12" />
     </svg>
+  );
+}
+
+function FollowupList({ tasks }: { tasks: EmailTask[] }) {
+  return (
+    <>
+      <div className="hidden sm:block">
+        <FollowupTable tasks={tasks} />
+      </div>
+      <div className="flex flex-col gap-2 sm:hidden">
+        {tasks.map((task) => (
+          <div key={task.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-slate-700 leading-snug">{task.summary}</p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                  {task.status || "open"}
+                </span>
+                <span className="text-[11px] text-slate-400">{task.source} · {timeAgo(task.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -807,6 +934,30 @@ function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SentList({ emails }: { emails: SentEmail[] }) {
+  return (
+    <>
+      <div className="hidden sm:block">
+        <SentTable emails={emails} />
+      </div>
+      <div className="flex flex-col gap-2 sm:hidden">
+        {emails.map((email) => (
+          <div key={email.id} className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-sm font-semibold text-slate-900">{email.to}</p>
+              <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.sentAt)}</span>
+            </div>
+            <p className="mt-0.5 truncate text-sm text-slate-700">{email.subject}</p>
+            <span className="mt-1.5 inline-block border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+              {email.sample ? "Sample" : email.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

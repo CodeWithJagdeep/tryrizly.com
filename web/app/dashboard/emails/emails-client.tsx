@@ -62,6 +62,17 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// Extracted due "dates" are date-only (stored at UTC midnight) or loose
+// natural-language text from the LLM ("Friday", "next week"). Read the ISO
+// ones back with timeZone: "UTC" so the calendar date shown never shifts a
+// day off for the viewer's local offset — anything unparsable passes through.
+function formatDueDate(raw: string): string {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 // Stored as "Email from X (subject): AI summary"
 function parseSummary(raw: string) {
   const match = raw.match(/^Email from (.+?) \((.+?)\): ([\s\S]+)$/);
@@ -415,7 +426,7 @@ function EmailCard({
                 Sample
               </span>
             ) : null}
-            {email.dueDate ? <span className="text-[11px] text-amber-600">Due {email.dueDate}</span> : null}
+            {email.dueDate ? <span className="text-[11px] text-amber-600">Due {formatDueDate(email.dueDate)}</span> : null}
           </div>
         </div>
       </div>
@@ -531,7 +542,7 @@ function EmailTableRow({
           ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{email.dueDate || "-"}</td>
+      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDueDate(email.dueDate) || "-"}</td>
       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.createdAt)}</td>
       <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
         {email.sample ? (
@@ -1044,7 +1055,7 @@ function EmailItem({
             </span>
           )}
           {email.person && <span className="text-[11px] text-slate-400">· {email.person}</span>}
-          {email.dueDate && <span className="text-[11px] text-amber-500/70">· Due {email.dueDate}</span>}
+          {email.dueDate && <span className="text-[11px] text-amber-500/70">· Due {formatDueDate(email.dueDate)}</span>}
         </div>
 
         {/* Action row */}

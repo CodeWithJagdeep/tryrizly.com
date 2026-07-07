@@ -90,6 +90,8 @@ export type OutboundEmailJobData = {
   to: string;
   subject: string;
   body: string;
+  threadId?: string;
+  inReplyTo?: string;
 };
 
 export type EmailEventJobName = "email-event";

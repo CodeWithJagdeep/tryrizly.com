@@ -111,6 +111,7 @@ export function EmailsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
+  const [openEmail, setOpenEmail] = useState<ProcessedEmail | null>(null);
 
   async function load(showRefreshing = false) {
     if (showRefreshing) setRefreshing(true);
@@ -255,7 +256,12 @@ export function EmailsClient() {
         {!loading && !error && (
           <div className="flex flex-col gap-6">
             {emailTab && displayedEmails.length > 0 ? (
-              <EmailTable emails={displayedEmails} labels={labels} onRefresh={() => void load(true)} />
+              <EmailTable
+                emails={displayedEmails}
+                labels={labels}
+                onRefresh={() => void load(true)}
+                onOpen={setOpenEmail}
+              />
             ) : activeTab === "followups" && displayedTasks.length > 0 ? (
               <FollowupTable tasks={displayedTasks} />
             ) : activeTab === "sent" && displayedSent.length > 0 ? (
@@ -313,6 +319,14 @@ export function EmailsClient() {
           </div>
         )}
       </div>
+
+      {openEmail && (
+        <EmailDetailSheet
+          email={openEmail}
+          onClose={() => setOpenEmail(null)}
+          onSent={() => void load(true)}
+        />
+      )}
     </main>
   );
 }
@@ -323,10 +337,12 @@ function EmailTable({
   emails,
   labels,
   onRefresh,
+  onOpen,
 }: {
   emails: ProcessedEmail[];
   labels: Record<string, string>;
   onRefresh: () => void;
+  onOpen: (email: ProcessedEmail) => void;
 }) {
   return (
     <div className="overflow-x-auto bg-white">
@@ -343,7 +359,7 @@ function EmailTable({
         </thead>
         <tbody>
           {emails.map((email) => (
-            <EmailTableRow key={email.id} email={email} labels={labels} onRefresh={onRefresh} />
+            <EmailTableRow key={email.id} email={email} labels={labels} onRefresh={onRefresh} onOpen={onOpen} />
           ))}
         </tbody>
       </table>
@@ -355,10 +371,12 @@ function EmailTableRow({
   email,
   labels,
   onRefresh,
+  onOpen,
 }: {
   email: ProcessedEmail;
   labels: Record<string, string>;
   onRefresh: () => void;
+  onOpen: (email: ProcessedEmail) => void;
 }) {
   const { from, subject, body } = parseSummary(email.summary);
   const catColor = CATEGORY_COLORS[email.category] ?? CATEGORY_COLORS.general_medium;
@@ -379,8 +397,13 @@ function EmailTableRow({
     }
   }
 
+  const canOpen = !email.sample && !!email.messageId;
+
   return (
-    <tr className="border-t border-slate-200 bg-white align-top transition hover:bg-slate-50">
+    <tr
+      onClick={() => canOpen && onOpen(email)}
+      className={`border-t border-slate-200 bg-white align-top transition hover:bg-slate-50 ${canOpen ? "cursor-pointer" : ""}`}
+    >
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600">
@@ -410,7 +433,7 @@ function EmailTableRow({
       </td>
       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{email.dueDate || "-"}</td>
       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.createdAt)}</td>
-      <td className="px-4 py-4 text-right">
+      <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
         {email.sample ? (
           <span className="text-xs text-slate-500">Sample</span>
         ) : (
@@ -421,16 +444,255 @@ function EmailTableRow({
               done={done === "Remind"}
               onClick={() => act("Remind", `Remind me to follow up on this email from ${from || "someone"}: ${subject || email.summary}`)}
             />
-            <ActionButton
-              label="Draft"
-              active={acting === "Draft"}
-              done={done === "Draft"}
-              onClick={() => act("Draft", `Draft a reply to this email from ${from || "someone"}: ${subject || email.summary}`)}
-            />
           </div>
         )}
       </td>
     </tr>
+  );
+}
+
+// ── Email detail bottom sheet ────────────────────────────────────────────────
+
+type GmailMessageDetail = {
+  id: string;
+  threadId: string;
+  from: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  date: string;
+  body: string;
+  messageIdHeader?: string;
+};
+
+function EmailDetailSheet({
+  email,
+  onClose,
+  onSent,
+}: {
+  email: ProcessedEmail;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [message, setMessage] = useState<GmailMessageDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
+  const [submitting, setSubmitting] = useState<"send" | "schedule" | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMessage() {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const res = await fetch(`/api/emails/${encodeURIComponent(email.messageId)}`);
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const data = (await res.json()) as GmailMessageDetail;
+        if (!cancelled) setMessage(data);
+      } catch (e) {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Couldn't load this email");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadMessage();
+    return () => {
+      cancelled = true;
+    };
+  }, [email.messageId]);
+
+  async function draftWithAi() {
+    setDrafting(true);
+    setSendError(null);
+    try {
+      const res = await fetch(`/api/emails/${encodeURIComponent(email.messageId)}/draft-reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const data = (await res.json()) as { body?: string };
+      setReplyBody(data.body ?? "");
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : "Couldn't draft a reply");
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  async function submitReply(mode: "send" | "schedule") {
+    if (!message || !replyBody.trim()) return;
+    if (mode === "schedule" && !scheduledFor) {
+      setSendError("Pick a date and time to schedule this reply.");
+      return;
+    }
+    setSubmitting(mode);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/emails/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          to: message.from,
+          subject: message.subject.match(/^re:/i) ? message.subject : `Re: ${message.subject}`,
+          body: replyBody,
+          threadId: message.threadId,
+          inReplyTo: message.messageIdHeader,
+          ...(mode === "schedule" ? { sendAt: new Date(scheduledFor).toISOString() } : {}),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || data.error || `Error ${res.status}`);
+      }
+      setSendSuccess(mode === "schedule" ? "Reply scheduled." : "Reply sent.");
+      onSent();
+      setTimeout(onClose, 900);
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : "Couldn't send this reply");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {message?.subject || parseSummary(email.summary).subject || "Email"}
+            </p>
+            {message && (
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                From {message.from} · {formatDate(message.date)}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {loading && (
+            <div className="flex items-center justify-center gap-3 py-12">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+              <span className="text-sm text-slate-500">Loading email…</span>
+            </div>
+          )}
+          {!loading && loadError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+              {loadError}
+            </div>
+          )}
+          {!loading && !loadError && message && (
+            <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body}</div>
+          )}
+        </div>
+
+        {!loading && !loadError && message && (
+          <div className="border-t border-slate-200 px-6 py-4">
+            {!replyOpen ? (
+              <button
+                type="button"
+                onClick={() => setReplyOpen(true)}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
+              >
+                Reply
+              </button>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Reply to {message.from}
+                  </p>
+                  <ActionButton
+                    label="Draft with AI"
+                    active={drafting}
+                    done={false}
+                    onClick={() => void draftWithAi()}
+                  />
+                </div>
+                <textarea
+                  value={replyBody}
+                  onChange={(e) => setReplyBody(e.target.value)}
+                  rows={8}
+                  placeholder="Write your reply, or draft one with AI…"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+                />
+
+                {sendError && <p className="text-sm text-red-700">{sendError}</p>}
+                {sendSuccess && <p className="text-sm text-emerald-700">{sendSuccess}</p>}
+
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {scheduling && (
+                    <input
+                      type="datetime-local"
+                      value={scheduledFor}
+                      onChange={(e) => setScheduledFor(e.target.value)}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-300 focus:outline-none"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-500 transition hover:text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!replyBody.trim() || submitting !== null}
+                    onClick={() =>
+                      scheduling ? void submitReply("schedule") : setScheduling(true)
+                    }
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-40"
+                  >
+                    {submitting === "schedule" ? "Scheduling…" : "Schedule"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!replyBody.trim() || submitting !== null}
+                    onClick={() => void submitReply("send")}
+                    className="rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40"
+                  >
+                    {submitting === "send" ? "Sending…" : "Send now"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </svg>
   );
 }
 

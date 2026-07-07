@@ -232,18 +232,15 @@ export function createSendEmailTool(
       // Placeholder guard: models leave template tokens like "[Your Name]" in
       // the body and still send. Fill the sign-off we know; refuse on the rest
       // rather than putting a literal placeholder in front of a real recipient.
-      let body = payload.body;
-      if (context.principalName) {
-        body = body.replace(/\[\s*(?:your|my)?\s*name\s*\]/gi, context.principalName);
-      }
-      const leftoverPlaceholder = body.match(/\[[A-Za-z][^\]\n]{1,40}\]/);
-      if (leftoverPlaceholder) {
+      const guarded = fillAndGuardPlaceholders(payload.body, context.principalName);
+      if (guarded.leftoverPlaceholder) {
         return {
           tool: "send_email",
           status: "not_implemented",
-          message: `The draft still has an unfilled placeholder ${leftoverPlaceholder[0]}, ${context.honorific} — tell me what goes there and I'll send it.`,
+          message: `The draft still has an unfilled placeholder ${guarded.leftoverPlaceholder}, ${context.honorific} — tell me what goes there and I'll send it.`,
         };
       }
+      const body = guarded.body;
 
       // Server-side recovery net: don't trust the model to have carried these
       // forward from the draft step — a dropped threadId/inReplyTo silently
@@ -275,7 +272,20 @@ export function createSendEmailTool(
   };
 }
 
-async function draftBody(
+/** Fills a known sign-off name into "[Your Name]"-style tokens and flags any leftover placeholder. */
+export function fillAndGuardPlaceholders(
+  body: string,
+  principalName?: string,
+): { body: string; leftoverPlaceholder?: string } {
+  let filled = body;
+  if (principalName) {
+    filled = filled.replace(/\[\s*(?:your|my)?\s*name\s*\]/gi, principalName);
+  }
+  const leftover = filled.match(/\[[A-Za-z][^\]\n]{1,40}\]/);
+  return leftover ? { body: filled, leftoverPlaceholder: leftover[0] } : { body: filled };
+}
+
+export async function draftBody(
   llm: LlmRouterService,
   userId: string,
   original: GmailMessage | undefined,
@@ -375,7 +385,7 @@ function inboxSummary(
   return `${high.length} need you now, ${honorific}: ${list}. ${medium} more batched, ${low} low-priority.`;
 }
 
-function ensureRe(subject: string): string {
+export function ensureRe(subject: string): string {
   return /^re:/i.test(subject) ? subject : `Re: ${subject}`;
 }
 

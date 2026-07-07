@@ -21,14 +21,14 @@ export class OutboundEmailWorkerService implements OnModuleInit, OnModuleDestroy
     this.worker = new Worker<OutboundEmailJobData, void, OutboundEmailJobName>(
       queueNames.outboundEmail,
       async (job) => {
-        const { userId, to, subject, body } = job.data;
+        const { userId, to, subject, body, threadId, inReplyTo } = job.data;
         logger.info("outbound email job started", { jobId: job.id, to });
 
         await firstValueFrom(
           this.aiCore.send("tool.execute", {
             userId,
             name: "send_email",
-            payload: { to, subject, body, approved: true },
+            payload: { to, subject, body, threadId, inReplyTo, approved: true },
             source: "scheduled",
           }),
         );

@@ -1,4 +1,5 @@
 import { callGateway } from "@/app/api/auth/_lib/gateway";
+import { demoMeetings, isDemoUser } from "@/app/api/_lib/demo-dashboard-data";
 import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 type CalendarEvent = {
@@ -59,6 +60,23 @@ export async function GET(request: Request) {
     rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     rangeEnd = rangeStart + 86_400_000 - 1;
     payload = { range: "today" };
+  }
+
+  if (isDemoUser(session.userId)) {
+    return Response.json({
+      connected: true,
+      googleConnected: true,
+      message: "Demo calendar loaded",
+      events: demoMeetings().map((meeting) => ({
+        id: meeting.id,
+        title: meeting.title,
+        start: meeting.start,
+        end: meeting.end,
+        allDay: meeting.allDay,
+        location: meeting.location,
+        hangoutLink: meeting.meetingUrl,
+      })),
+    });
   }
 
   const [google, calcomUpcoming, calcomPast] = await Promise.all([

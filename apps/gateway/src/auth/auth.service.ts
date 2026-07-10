@@ -149,8 +149,7 @@ export class AuthService {
     const data: { returnTo: string; redirectUri?: string } = {
       returnTo: sanitizeReturnPath(returnTo),
     };
-    const normalizedRedirectUri =
-      provider === "linkedin" ? normalizeLinkedInRedirectUri(redirectUri) : undefined;
+    const normalizedRedirectUri = normalizeOAuthRedirectUri(provider, redirectUri);
     if (normalizedRedirectUri) data.redirectUri = normalizedRedirectUri;
     await this.repo.setOAuthState(provider, state, data, OAUTH_STATE_TTL_MS);
     return state;
@@ -169,7 +168,7 @@ export class AuthService {
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI,
+        redirect_uri: stateRecord.redirectUri || env.GOOGLE_LOGIN_REDIRECT_URI,
         client_id: env.GOOGLE_CLIENT_ID,
         client_secret: env.GOOGLE_CLIENT_SECRET,
       }),
@@ -311,7 +310,7 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function normalizeLinkedInRedirectUri(value: string | undefined): string | undefined {
+function normalizeOAuthRedirectUri(provider: string, value: string | undefined): string | undefined {
   if (!value) return undefined;
 
   let url: URL;
@@ -322,11 +321,15 @@ function normalizeLinkedInRedirectUri(value: string | undefined): string | undef
   }
 
   const normalized = url.toString();
-  if (env.LINKEDIN_REDIRECT_URI && normalized === env.LINKEDIN_REDIRECT_URI) {
+  const envRedirectUri = provider === "google" ? env.GOOGLE_LOGIN_REDIRECT_URI : env.LINKEDIN_REDIRECT_URI;
+  const callbackPath =
+    provider === "google" ? "/api/auth/google/callback" : "/api/auth/oauth/linkedin/callback";
+
+  if (envRedirectUri && normalized === envRedirectUri) {
     return normalized;
   }
   if (
-    url.pathname === "/api/auth/oauth/linkedin/callback" &&
+    url.pathname === callbackPath &&
     !url.search &&
     !url.hash &&
     url.protocol === "https:" &&
@@ -335,7 +338,7 @@ function normalizeLinkedInRedirectUri(value: string | undefined): string | undef
     return normalized;
   }
   if (
-    url.pathname === "/api/auth/oauth/linkedin/callback" &&
+    url.pathname === callbackPath &&
     !url.search &&
     !url.hash &&
     url.protocol === "http:" &&

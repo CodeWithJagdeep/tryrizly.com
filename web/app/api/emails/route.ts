@@ -1,4 +1,5 @@
 import { callGateway } from "@/app/api/auth/_lib/gateway";
+import { demoEmails, demoEmailTasks, isDemoUser } from "@/app/api/_lib/demo-dashboard-data";
 import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 type MemoryRow = {
@@ -93,6 +94,15 @@ function toTab(category: string): ProcessedEmail["tab"] {
 export async function GET() {
   const session = await requireSession();
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
+
+  if (isDemoUser(session.userId)) {
+    return Response.json({
+      emails: demoEmails(),
+      emailTasks: demoEmailTasks(),
+      categoryLabels: CATEGORY_LABELS,
+      gmailConnected: true,
+    });
+  }
 
   const params = new URLSearchParams({ userId: session.userId, limit: "60" });
 

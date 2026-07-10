@@ -1,5 +1,6 @@
 import { callGateway } from "../../_lib/gateway";
 import { normalizeEmail, sanitizeReturnPath, setAuthCookie, signAuthToken } from "../../_lib/auth-store";
+import { getAuthRedirectBaseUrl } from "../../_lib/redirect-url";
 
 type CompleteResult = {
   identity?: { email: string; name?: string; needsOnboarding?: boolean; tokenVersion?: number };
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const baseUrl = process.env.WEB_APP_URL || url.origin;
+  const baseUrl = getAuthRedirectBaseUrl(url);
 
   if (!code || !state) {
     return Response.redirect(`${baseUrl}/login?error=google_missing_code`);

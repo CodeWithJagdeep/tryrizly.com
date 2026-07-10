@@ -1,15 +1,20 @@
 import { callGateway } from "../_lib/gateway";
 import { sanitizeReturnPath } from "../_lib/auth-store";
+import { getAuthRedirectBaseUrl } from "../_lib/redirect-url";
+
+const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
+const PRODUCTION_HOSTS = new Set(["getrizly.com", "www.getrizly.com"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 export async function GET(request: Request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_LOGIN_REDIRECT_URI;
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     return Response.json({ message: "Google OAuth env vars are missing" }, { status: 500 });
   }
 
   const url = new URL(request.url);
+  const redirectUri = resolveGoogleRedirectUri(url);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
   let stateResult: { state?: string; error?: string };
@@ -17,13 +22,14 @@ export async function GET(request: Request) {
     stateResult = await callGateway<{ state?: string; error?: string }>("/api/auth/oauth/state", {
       provider: "google",
       returnTo,
+      redirectUri,
     });
   } catch {
     stateResult = {};
   }
 
   if (!stateResult.state) {
-    const baseUrl = process.env.WEB_APP_URL || new URL(request.url).origin;
+    const baseUrl = getAuthRedirectBaseUrl(new URL(request.url));
     return Response.redirect(`${baseUrl}/login?error=google_state_init_failed`);
   }
 
@@ -35,4 +41,14 @@ export async function GET(request: Request) {
   authUrl.searchParams.set("state", stateResult.state);
 
   return Response.redirect(authUrl);
+}
+
+function resolveGoogleRedirectUri(requestUrl: URL) {
+  if (PRODUCTION_HOSTS.has(requestUrl.hostname)) {
+    return new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
+  }
+  if (LOCAL_HOSTS.has(requestUrl.hostname)) {
+    return new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
+  }
+  return process.env.GOOGLE_LOGIN_REDIRECT_URI || new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
 }

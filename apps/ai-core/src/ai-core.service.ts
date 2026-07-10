@@ -578,6 +578,12 @@ export class AiCoreService {
       .slice(0, limit);
   }
 
+  async listChatMemories(body: { userId?: string; limit?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const limit = body.limit ?? 50;
+    return this.vectorMemory.listBySource(userId, "telegram", limit);
+  }
+
   async scheduleReminder(body: ReminderRequest) {
     if (!body.message || (!body.runAt && !body.repeat)) {
       throw new Error("message_and_runAt_or_repeat_required");

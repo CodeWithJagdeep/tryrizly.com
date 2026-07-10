@@ -1,4 +1,5 @@
 import { callGateway } from "@/app/api/auth/_lib/gateway";
+import { demoMeetings, isDemoUser } from "@/app/api/_lib/demo-dashboard-data";
 import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 type Body = {
@@ -64,6 +65,14 @@ type CalComBooking = {
 export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
+
+  if (isDemoUser(session.userId)) {
+    return Response.json({
+      connected: true,
+      googleConnected: true,
+      meetings: demoMeetings(),
+    });
+  }
 
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");

@@ -14,6 +14,8 @@ import {
   StripeIcon,
   TelegramIcon,
 } from "./components/ConnectorIcons";
+import { HeroWorkflowTabs } from "./components/home/HeroWorkflowTabs";
+import { WorkflowAreaPreview } from "./components/home/WorkflowAreaPreview";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
@@ -205,6 +207,14 @@ const controlPoints = [
   },
 ];
 
+const heroMetrics = [
+  { value: "10+", label: "Work apps connected" },
+  { value: "0", label: "Sensitive actions without approval" },
+  { value: "24/7", label: "Inbox, calendar, and revenue watch" },
+];
+
+const heroTrustSignals = ["Human-approved actions", "Read-only business data", "Telegram-first control"];
+
 function HomeStyles() {
   return (
     <style
@@ -243,7 +253,7 @@ export default function Home() {
       <main className="bg-white text-black">
         <Hero />
         <StackStrip />
-        <OperatingLoop />
+        <PersonalAiSection />
         <Capabilities />
         <TelegramDay />
         <DashboardSection />
@@ -255,77 +265,79 @@ export default function Home() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Hero: copy left, live Telegram approval right                       */
+/* Hero: centered copy with live Telegram approval preview             */
 /* ------------------------------------------------------------------ */
 
 function Hero() {
   return (
-    <section className="border-b-2 border-black/10 bg-white">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-14 px-6 pb-20 pt-20 md:px-10 lg:grid-cols-[1.05fr_0.95fr] lg:px-14 lg:pt-24">
-        <div>
-          <span className="mb-8 inline-flex items-center gap-2 border-2 border-black bg-black px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-white">
-            <TelegramIcon className="h-3.5 w-3.5" />
-            Telegram-first AI operator
-          </span>
+    <section className="relative overflow-hidden border-b border-black/10 bg-white">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(32,21,28,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(32,21,28,0.045)_1px,transparent_1px)] bg-[size:56px_56px]" />
+      <div className="absolute left-0 top-0 h-full w-28 bg-[linear-gradient(90deg,#ffffff_0%,rgba(255,255,255,0)_100%)]" />
+      <div className="absolute right-0 top-0 h-full w-28 bg-[linear-gradient(270deg,#ffffff_0%,rgba(255,255,255,0)_100%)]" />
+      <div className="absolute left-1/2 top-0 h-full w-px bg-black/[0.04]" />
+      <div className="absolute left-[12%] top-20 hidden h-36 w-px rotate-[-18deg] bg-black/10 md:block" />
+      <div className="absolute right-[14%] top-28 hidden h-44 w-px rotate-[18deg] bg-black/10 md:block" />
 
-          <h1 className="mb-7 text-4xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-[3.4rem]">
-            Run your whole day from <span className="text-[#FE7F2D]">one Telegram thread</span>
-          </h1>
+      <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-0 pt-20 text-center md:px-10 lg:px-14 lg:pt-24">
+        <span className="mb-6 text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
+          AI operations, governed
+        </span>
 
-          <p className="mb-9 max-w-xl text-lg leading-relaxed text-gray-500">
-            Rizly watches your inbox, calendar, and revenue, then asks before anything sensitive runs.
-          </p>
+        <h1 className="max-w-4xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl lg:text-[3.85rem]">
+          Your day, your rules, all from one Telegram thread.
+        </h1>
 
-          <div className="flex flex-wrap gap-4">
-            <Link
-              href="/signup"
-              className="inline-flex items-center border-2 border-black bg-[#FE7F2D] px-7 py-3.5 text-sm font-semibold text-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-x-0 active:translate-y-0 active:shadow-none"
-            >
-              Start free trial
-            </Link>
-            <Link
-              href="/product/ai-operator"
-              className="inline-flex items-center border-2 border-black bg-white px-7 py-3.5 text-sm font-semibold text-black transition-colors hover:bg-black hover:text-white"
-            >
-              See the AI operator
-            </Link>
-          </div>
+        <p className="mt-6 max-w-2xl text-sm leading-6 text-gray-600 md:text-base">
+          Rizly gives founders and operators one place to watch work signals, prepare decisions, and approve sensitive actions from Telegram.
+        </p>
+
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/signup"
+            className="inline-flex h-12 items-center justify-center rounded-md bg-[#ff4f00] px-6 text-base font-normal text-white shadow-[0_14px_30px_-18px_rgba(255,79,0,0.9)] transition hover:translate-y-[-1px] hover:bg-[#e94700] hover:shadow-[0_18px_36px_-18px_rgba(255,79,0,0.95)]"
+          >
+            Start free trial
+          </Link>
+          <Link
+            href="/product/ai-operator"
+            className="inline-flex h-11 items-center justify-center rounded-md border border-black/70 bg-white px-5 text-sm font-normal text-black transition hover:border-black hover:bg-black hover:text-white"
+          >
+            See the AI operator
+          </Link>
         </div>
 
-        <div className="overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
-          <div className="flex items-center justify-between border-b-2 border-black bg-black/[0.02] px-5 py-3">
-            <div className="flex items-center gap-3">
-              <span className="text-[13px] font-semibold">Riz</span>
-              <span className="text-[12px] font-medium text-gray-400">via Telegram</span>
+        <div className="mt-14 grid w-full max-w-4xl grid-cols-1 gap-0 overflow-hidden rounded-lg border border-black/10 bg-white/75 shadow-[0_24px_70px_-55px_rgba(32,21,28,0.8)] backdrop-blur md:grid-cols-3">
+          {heroMetrics.map((metric) => (
+            <div key={metric.label} className="border-b border-black/10 px-6 py-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
+              <div className="text-2xl font-normal tracking-tight text-[#20151c]">{metric.value}</div>
+              <div className="mt-2 text-xs leading-5 text-[#20151c]">{metric.label}</div>
             </div>
-            <span className="border-2 border-black bg-[#FE7F2D]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-black">
-              Morning brief
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[11px] font-normal uppercase tracking-[0.08em] text-gray-500">
+          {heroTrustSignals.map((signal) => (
+            <span key={signal} className="inline-flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+              {signal}
             </span>
+          ))}
+        </div>
+
+        <div className="relative mt-12 w-full max-w-4xl overflow-hidden rounded-t-xl border-x border-t border-black/10 bg-[#f3f0ed] px-5 pb-0 pt-8 shadow-[0_35px_100px_-70px_rgba(32,21,28,0.95)] md:px-12 md:pt-10">
+          <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,transparent_0%,#ff4f00_45%,#ff4f00_55%,transparent_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.62)_0%,rgba(255,255,255,0)_45%)]" />
+          <div className="relative">
+          <div className="mx-auto max-w-xl">
+            <span className="text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
+              For operators
+            </span>
+            <h2 className="mt-4 text-xl font-normal tracking-tight text-[#20151c] md:text-2xl">
+              Get started in minutes
+            </h2>
           </div>
-          <div className="space-y-4 px-5 py-5">
-            <div className="flex justify-start">
-              <div className="max-w-sm rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 text-sm leading-relaxed text-black">
-                Good morning. 3 urgent emails, 2 meetings today, and one failed Stripe payment overnight. Your 10:30 with Markus conflicts with the sprint review.
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <div className="max-w-xs rounded-2xl rounded-tr-sm bg-[#FE7F2D] px-4 py-3 text-sm text-white">
-                Move the sprint review and draft a reply to the investor email.
-              </div>
-            </div>
-            <div className="flex justify-start">
-              <div className="max-w-sm rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 text-sm leading-relaxed text-black">
-                Sprint review fits at 2 PM, no conflicts. Reply to Priya is drafted in your tone. Want me to run both?
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button className="border-2 border-black bg-[#FE7F2D] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black">
-                Approve both
-              </button>
-              <button className="border-2 border-black bg-white px-4 py-2 text-[13px] font-semibold text-black transition-colors hover:bg-black hover:text-white">
-                Let me edit
-              </button>
-            </div>
+
+          <HeroWorkflowTabs />
           </div>
         </div>
       </div>
@@ -340,21 +352,47 @@ function Hero() {
 function StackStrip() {
   const row = [...connectorStack, ...connectorStack];
   return (
-    <section className="border-b-2 border-black/10 bg-[#fcfcfc] py-10">
-      <p className="mb-6 px-6 text-center text-sm font-medium text-gray-500">
+    <section className="py-12">
+      <p className="mb-7 px-6 text-center text-sm font-normal text-gray-500">
         Connect the stack you already run. Telegram stays the control surface.
       </p>
-      <div className="overflow-hidden">
-        <div className="rizly-marquee flex w-max gap-4 px-2">
+      <div className="relative overflow-hidden">
+        <div className="rizly-marquee flex w-max gap-8 px-2">
           {row.map(({ name, Icon }, index) => (
             <div
               key={`${name}-${index}`}
-              className="flex items-center gap-3 border-2 border-black bg-white px-5 py-2.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              className="flex items-center gap-2.5 px-1 py-2"
             >
               <Icon className="h-5 w-5" />
-              <span className="whitespace-nowrap text-[13px] font-semibold">{name}</span>
+              <span className="whitespace-nowrap text-[13px] font-normal text-gray-600">{name}</span>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Personal AI workflow promise                                        */
+/* ------------------------------------------------------------------ */
+
+function PersonalAiSection() {
+  return (
+    <section className="px-6 py-20 md:px-10 lg:px-14">
+      <div className="mx-auto max-w-[88rem]">
+        <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
+          Built around you
+        </span>
+        <h2 className="max-w-4xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+          Your work keeps moving, even when you are not in the dashboard.
+        </h2>
+        <p className="mt-6 max-w-2xl text-sm leading-6 text-gray-600 md:text-base">
+          Rizly watches the places work actually happens, prepares the next step, and brings you only the moments that need a decision.
+        </p>
+
+        <div className="mt-14">
+          <WorkflowAreaPreview />
         </div>
       </div>
     </section>
@@ -381,7 +419,7 @@ function OperatingLoop() {
     <section className="border-b-2 border-black/10 bg-white px-6 py-24 md:px-10 lg:px-14">
       <div className="mx-auto max-w-7xl">
         <div className="mb-14 max-w-2xl">
-          <span className="mb-4 block text-[13px] font-semibold uppercase tracking-[0.4em] text-[#FE7F2D]">
+          <span className="mb-4 block text-[13px] font-semibold uppercase tracking-[0.4em] text-gray-500">
             How it operates
           </span>
           <h2 className="text-3xl font-semibold leading-tight md:text-4xl">
@@ -393,7 +431,7 @@ function OperatingLoop() {
           {loopSteps.map((step, index) => (
             <div
               key={step.title}
-              className={`border-black p-8 ${index === 2 ? "bg-[#FE7F2D]/5" : "bg-white"} ${loopCellBorders(index)}`}
+              className={`border-black p-8 ${index === 2 ? "bg-gray-50" : "bg-white"} ${loopCellBorders(index)}`}
             >
               <span className="mb-6 flex h-10 w-10 items-center justify-center border-2 border-black bg-black font-mono text-sm font-semibold text-white">
                 {index + 1}
@@ -473,7 +511,7 @@ function Capabilities() {
             <article
               key={group.title}
               className={`border-2 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] ${
-                group.tone === "tint" ? "bg-[#FE7F2D]/5" : "bg-white"
+                group.tone === "tint" ? "bg-gray-50" : "bg-white"
               }`}
             >
               <div className="mb-6 flex h-12 w-12 items-center justify-center border-2 border-black bg-white">
@@ -503,7 +541,7 @@ function TelegramDay() {
     <section className="border-b-2 border-black/10 bg-white px-6 py-24 md:px-10 lg:px-14">
       <div className="mx-auto max-w-7xl">
         <div className="mb-14 text-center">
-          <span className="mb-4 block text-[13px] font-semibold uppercase tracking-[0.4em] text-[#FE7F2D]">
+          <span className="mb-4 block text-[13px] font-semibold uppercase tracking-[0.4em] text-gray-500">
             A day on Telegram
           </span>
           <h2 className="text-3xl font-semibold leading-tight md:text-4xl">
@@ -557,7 +595,7 @@ function TelegramMoment({
         </div>
         {actions ? (
           <div className="mt-4 flex gap-2">
-            <span className="border-2 border-black bg-[#FE7F2D] px-4 py-1.5 text-xs font-semibold text-white">Yes, send</span>
+            <span className="border-2 border-black bg-black px-4 py-1.5 text-xs font-semibold text-white">Yes, send</span>
             <span className="border-2 border-black bg-white px-4 py-1.5 text-xs font-semibold text-black">Edit first</span>
           </div>
         ) : null}
@@ -593,7 +631,7 @@ function DashboardSection() {
         <div className="overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
           <div className="flex items-center justify-between border-b-2 border-black bg-black/[0.02] px-5 py-3">
             <span className="text-[13px] font-semibold">Rizly dashboard</span>
-            <span className="border-2 border-black bg-[#FE7F2D]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest">
+            <span className="border-2 border-black bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest">
               Approvals
             </span>
           </div>
@@ -604,7 +642,7 @@ function DashboardSection() {
                   <div
                     key={page}
                     className={`px-3 py-2 text-[13px] ${
-                      index === 1 ? "border-2 border-black bg-[#FE7F2D]/10 font-semibold" : "text-gray-500"
+                      index === 1 ? "border-2 border-black bg-gray-100 font-semibold" : "text-gray-500"
                     }`}
                   >
                     {page}
@@ -638,7 +676,7 @@ function DashboardApproval({ title, detail }: { title: string; detail: string })
     <article className="border-2 border-black bg-white p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-sm font-semibold">{title}</p>
-        <span className="bg-[#FE7F2D]/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-[#c95f15]">
+        <span className="bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-gray-600">
           pending
         </span>
       </div>
@@ -671,7 +709,7 @@ function ControlSection() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {controlPoints.map((point) => (
             <article key={point.title} className="flex gap-5 border-2 border-black bg-[#fcfcfc] p-7">
-              <span className="mt-1 h-4 w-4 shrink-0 border-2 border-black bg-[#FE7F2D]" />
+              <span className="mt-1 h-4 w-4 shrink-0 border-2 border-black bg-gray-300" />
               <div>
                 <h3 className="mb-2 text-lg font-semibold">{point.title}</h3>
                 <p className="text-sm leading-relaxed text-gray-500">{point.body}</p>
@@ -699,7 +737,7 @@ function FinalCta() {
       </p>
       <Link
         href="/signup"
-        className="inline-flex items-center gap-2 border-2 border-[#FE7F2D] bg-[#FE7F2D] px-8 py-4 font-semibold text-white shadow-[6px_6px_0px_0px_rgba(255,255,255,0.15)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
+        className="inline-flex items-center gap-2 border-2 border-white bg-[linear-gradient(135deg,#ffffff_0%,#e5e7eb_100%)] px-8 py-4 text-base font-normal text-black shadow-[6px_6px_0px_0px_rgba(255,255,255,0.15)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
       >
         Start free trial
       </Link>

@@ -1,4 +1,5 @@
 import { callGateway } from "@/app/api/auth/_lib/gateway";
+import { demoPeople, isDemoUser } from "@/app/api/_lib/demo-dashboard-data";
 import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 type PersonRow = {
@@ -123,6 +124,10 @@ function isPlausiblePhone(value: string) {
 export async function GET() {
   const session = await requireSession();
   if (!session) return Response.json({ message: "Unauthenticated" }, { status: 401 });
+
+  if (isDemoUser(session.userId)) {
+    return Response.json({ people: demoPeople(), gmailConnected: true });
+  }
 
   const params = new URLSearchParams({ userId: session.userId, limit: "200" });
   const [people, connectorsRaw] = await Promise.all([

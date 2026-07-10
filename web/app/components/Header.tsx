@@ -131,22 +131,21 @@ function DropdownNav({ group }: { group: DropdownGroup }) {
 export function Header({ session }: { session: Session | null }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const headerClassName = 'w-full bg-white/95 font-neue-haas backdrop-blur-md';
+  const headerClassName = 'w-full bg-white font-neue-haas';
   const pricingClassName = 'hidden h-11 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
   const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black xl:inline-flex';
   const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
   const mobileLineClassName = 'bg-slate-950';
 
   return (
-    <div className="sticky top-0 z-50 w-full">
-      {/* Promotional Header */}
-      <div className="w-full border-b border-black/10 bg-white">
-        <div className="flex flex-1 items-center justify-start px-8 py-3 overflow-hidden">
+    <div className="sticky top-0 z-50 w-full bg-white">
+      <div className="w-full bg-white">
+        <div className="flex flex-1 items-center justify-start overflow-hidden px-8 py-3">
           <a
-            className="flex items-center gap-3 text-[13px] font-semibold text-gray-600 hover:text-[#FE7F2D] transition-colors whitespace-nowrap"
+            className="flex items-center gap-3 whitespace-nowrap text-[13px] font-normal text-gray-600 transition-colors hover:text-black"
             href="/agent"
           >
-            <span className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-2 py-0.5 text-[10px] font-semibold text-white uppercase tracking-tighter">
+            <span className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-2 py-0.5 text-[10px] font-normal uppercase tracking-tighter text-white">
               New
             </span>
             Meet Riz, your AI agent&nbsp;→
@@ -194,7 +193,7 @@ export function Header({ session }: { session: Session | null }) {
                 Log in
               </Link>
               <Link
-                className="inline-flex h-11 items-center justify-center bg-[#FE7F2D] px-5 text-[15px] font-medium text-white transition hover:opacity-90 active:scale-[0.98]"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] px-5 text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
                 href="/signup"
               >
                 Get started
@@ -264,7 +263,7 @@ export function Header({ session }: { session: Session | null }) {
               <Link
                 onClick={() => setIsMobileMenuOpen(false)}
                 href="/dashboard"
-                className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
+                className="mt-2 flex h-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
               >
                 Go to dashboard
               </Link>
@@ -279,7 +278,7 @@ export function Header({ session }: { session: Session | null }) {
                 </Link>
                 <Link
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="mt-2 flex h-12 items-center justify-center rounded-full bg-[#FE7F2D] text-[15px] font-semibold text-white transition hover:bg-[#e56e1f] active:scale-[0.98]"
+                  className="mt-2 flex h-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
                   href="/signup"
                 >
                   Get started

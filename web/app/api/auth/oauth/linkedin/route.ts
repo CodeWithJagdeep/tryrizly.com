@@ -1,5 +1,6 @@
 import { callGateway } from "../../_lib/gateway";
 import { sanitizeReturnPath } from "../../_lib/auth-store";
+import { getAuthRedirectBaseUrl } from "../../_lib/redirect-url";
 
 const LINKEDIN_CALLBACK_PATH = "/api/auth/oauth/linkedin/callback";
 const PRODUCTION_HOSTS = new Set(["getrizly.com", "www.getrizly.com"]);
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
   }
 
   if (!state) {
-    const baseUrl = process.env.WEB_APP_URL || new URL(request.url).origin;
+    const baseUrl = getAuthRedirectBaseUrl(url);
     return Response.redirect(`${baseUrl}/login?error=linkedin_state_init_failed`);
   }
 

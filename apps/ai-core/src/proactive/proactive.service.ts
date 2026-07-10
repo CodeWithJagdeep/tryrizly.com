@@ -19,6 +19,18 @@ import { DecisionService } from "../spine/decision.service";
 
 const MIN = 60_000;
 const MEMORY_TIMEOUT_MS = 800;
+const URGENT_MEETING_WINDOW_MIN = 60;
+const URGENT_EMAIL_SCORE = 0.7;
+const URGENT_TASK_PATTERN = /\b(urgent|asap|overdue|deadline|today|blocker|blocking)\b/i;
+const TODAY_TIER_CAP = 6;
+const FOLLOWUP_DELAY_MS = 4 * 60 * MIN;
+
+type BriefItem = {
+  text: string;
+  score: number;
+  urgent: boolean;
+  followupKey?: string;
+};
 
 /**
  * The proactive engine. Composes the morning brief and, per upcoming meeting,
@@ -72,8 +84,8 @@ export class ProactiveService {
       });
 
     const events = calendar?.connected ? calendar.events : [];
-    const eventLines = await Promise.all(
-      events.map((event) => this.enrichEventLine(userId, event, timezone)),
+    const eventItems = await Promise.all(
+      events.map((event) => this.scoreEventItem(userId, event, timezone)),
     );
 
     const calComAuth = await this.connectors.getCalComSecret(userId).catch(() => null);
@@ -96,7 +108,7 @@ export class ProactiveService {
             return [] as CalComBooking[];
           })
       : [];
-    const calComLines = calComBookings.map((booking) => this.enrichCalComLine(booking, timezone));
+    const calComItems = calComBookings.map((booking) => this.scoreCalComItem(booking, timezone));
 
     const openTasks = await this.tasks.listOpen(userId).catch((error: unknown) => {
       logger.warn("morning brief task fetch failed", {
@@ -125,18 +137,38 @@ export class ProactiveService {
 
     const header = `Good morning, ${honorific}. ${meetingCountPhrase(calendar, events.length + calComBookings.length, Boolean(calComAuth))}`;
 
-    const bullets = [
-      ...(calendar?.connected ? eventLines : []),
-      ...calComLines,
-      ...openTasks.slice(0, 5).map((task) => `Task: ${task.summary}`),
-      ...pendingEmails.slice(0, 3).map((hit) => truncate(hit.summary, 80)),
-      ...(metricsLine ? [metricsLine] : []),
+    const taskItems: BriefItem[] = openTasks.map((task) => this.scoreTaskItem(task));
+    const emailItems: BriefItem[] = pendingEmails.map((hit) => this.scoreEmailItem(hit));
+    const metricsItem: BriefItem[] = metricsLine
+      ? [{ text: metricsLine, score: 20, urgent: false }]
+      : [];
+
+    const allItems = [
+      ...(calendar?.connected ? eventItems : []),
+      ...calComItems,
+      ...taskItems,
+      ...emailItems,
+      ...metricsItem,
     ];
 
+    const urgentItems = allItems.filter((i) => i.urgent).sort((a, b) => b.score - a.score);
+    const todayItems = allItems
+      .filter((i) => !i.urgent)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, TODAY_TIER_CAP);
+
+    await this.scheduleFollowups(userId, honorific, urgentItems);
+
+    const sections: string[] = [];
+    if (urgentItems.length > 0) {
+      sections.push(`Needs attention now:\n${urgentItems.map((i) => `- ${i.text}`).join("\n")}`);
+    }
+    if (todayItems.length > 0) {
+      sections.push(`Today:\n${todayItems.map((i) => `- ${i.text}`).join("\n")}`);
+    }
+
     const baseText =
-      bullets.length === 0
-        ? `${header}\n\nNothing flagged.`
-        : `${header}\n\n${bullets.map((b) => `- ${b}`).join("\n")}`;
+      sections.length === 0 ? `${header}\n\nNothing flagged.` : `${header}\n\n${sections.join("\n\n")}`;
 
     const suggestions = await this.suggestNextActions(userId, baseText);
     const text = suggestions
@@ -362,27 +394,86 @@ export class ProactiveService {
     return { connected: true, scheduled };
   }
 
-  private async enrichEventLine(
+  private async scoreEventItem(
     userId: string,
     event: CalendarEvent,
     timezone: string,
-  ): Promise<string> {
-    if (event.allDay) return `all-day ${event.title}`;
+  ): Promise<BriefItem> {
+    if (event.allDay) return { text: `all-day ${event.title}`, score: 0, urgent: false };
     // Already-finished events are marked "(completed)" rather than listed as
     // if still open — relevant when the brief is re-run later in the day.
     const endMs = Date.parse(event.end ?? event.start ?? "");
     if (!Number.isNaN(endMs) && endMs < Date.now()) {
-      return `${event.title} (completed)`;
+      return { text: `${event.title} (completed)`, score: -1000, urgent: false };
     }
-    return `${fmtTime(event.start, timezone)} ${event.title}`;
+    const startMs = Date.parse(event.start ?? "");
+    const minutesUntil = Number.isNaN(startMs) ? Infinity : (startMs - Date.now()) / MIN;
+    return {
+      text: `${fmtTime(event.start, timezone)} ${event.title}`,
+      score: 1000 - minutesUntil,
+      urgent: minutesUntil >= 0 && minutesUntil <= URGENT_MEETING_WINDOW_MIN,
+    };
   }
 
-  private enrichCalComLine(booking: CalComBooking, timezone: string): string {
+  private scoreCalComItem(booking: CalComBooking, timezone: string): BriefItem {
     const endMs = Date.parse(booking.endTime ?? booking.startTime ?? "");
     if (!Number.isNaN(endMs) && endMs < Date.now()) {
-      return `${booking.title} (completed) [Cal.com]`;
+      return { text: `${booking.title} (completed) [Cal.com]`, score: -1000, urgent: false };
     }
-    return `${fmtTime(booking.startTime, timezone)} ${booking.title} [Cal.com]`;
+    const startMs = Date.parse(booking.startTime ?? "");
+    const minutesUntil = Number.isNaN(startMs) ? Infinity : (startMs - Date.now()) / MIN;
+    return {
+      text: `${fmtTime(booking.startTime, timezone)} ${booking.title} [Cal.com]`,
+      score: 1000 - minutesUntil,
+      urgent: minutesUntil >= 0 && minutesUntil <= URGENT_MEETING_WINDOW_MIN,
+    };
+  }
+
+  private scoreTaskItem(task: { id: string; summary: string; createdAt: Date | string }): BriefItem {
+    const urgent = URGENT_TASK_PATTERN.test(task.summary);
+    const ageDays = (Date.now() - new Date(task.createdAt).getTime()) / (24 * 60 * MIN);
+    return {
+      text: `Task: ${task.summary}`,
+      score: urgent ? 500 : Math.min(ageDays, 10) * 10,
+      urgent,
+      followupKey: `task:${task.id}`,
+    };
+  }
+
+  private scoreEmailItem(hit: { id: string; summary: string; score: number }): BriefItem {
+    const urgent = hit.score >= URGENT_EMAIL_SCORE;
+    return {
+      text: truncate(hit.summary, 80),
+      score: hit.score * 1000,
+      urgent,
+      followupKey: `email:${hit.id}`,
+    };
+  }
+
+  // Best-effort re-nudge: re-sends the same urgent item a few hours later so
+  // it doesn't only get mentioned once at 8am and then disappear. This does
+  // NOT re-check whether the task/email is still open by delivery time — a
+  // true "still unresolved?" recheck would need its own job querying current
+  // state, not just replaying the brief text.
+  private async scheduleFollowups(userId: string, honorific: string, urgentItems: BriefItem[]) {
+    const runAt = new Date(Date.now() + FOLLOWUP_DELAY_MS).toISOString();
+    for (const item of urgentItems) {
+      if (!item.followupKey) continue;
+      await enqueueReminder({
+        userId,
+        message: `Following up, ${honorific} — this was flagged urgent this morning: ${item.text}`,
+        runAt,
+        source: "calendar",
+        dedupeKey: `followup:${userId}:${item.followupKey}:${dayKey(new Date())}`,
+        metadata: { kind: "brief_followup" },
+      }).catch((error: unknown) => {
+        logger.warn("morning brief followup schedule failed", {
+          userId,
+          followupKey: item.followupKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
   }
 
   private async eventMemoryHint(

@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
+import { Eyebrow } from "../../components/product/Eyebrow";
+import { FaqAccordion } from "../../components/product/FaqAccordion";
+import { HeroGlow } from "../../components/product/HeroGlow";
+import { PhoneVideo } from "../../components/product/PhoneVideo";
+import { ProductCta } from "../../components/product/ProductCta";
+import { ScreenshotPanel } from "../../components/product/ScreenshotPanel";
+import { Testimonial } from "../../components/product/Testimonial";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
@@ -16,16 +23,16 @@ export const metadata: Metadata = {
 };
 
 const inbox = [
-  { from: "Priya Shah — Lightspeed", subject: "Re: Intro call next week", tag: "Needs a decision", color: "#FE7F2D" },
+  { from: "Priya Shah — Lightspeed", subject: "Re: Intro call next week", tag: "Needs a decision", color: "#ff4f00" },
   { from: "Calendly", subject: "New meeting request: Thu 2pm", tag: "Meeting request", color: "#3B82F6" },
   { from: "Stripe", subject: "Payment failed for invoice #4471", tag: "Payment", color: "#22c55e" },
   { from: "Product Hunt Weekly", subject: "This week's top launches", tag: "Noise", color: "#9CA3AF" },
-  { from: "Markus — Gradient Ventures", subject: "Term sheet — let's close by Friday", tag: "Needs a decision", color: "#FE7F2D" },
+  { from: "Markus — Gradient Ventures", subject: "Term sheet — let's close by Friday", tag: "Needs a decision", color: "#ff4f00" },
   { from: "LinkedIn", subject: "5 people viewed your profile", tag: "Noise", color: "#9CA3AF" },
 ];
 
 const capabilities = [
-  { title: "Triaged by what it actually is", description: "Every new email is classified — noise, payment due, meeting request, or investor update — not just marked read or unread." },
+  { title: "Triaged by what it actually is", description: "Every new email is classified, noise, payment due, meeting request, or investor update, not just marked read or unread." },
   { title: "Drafts in your voice", description: "Riz drafts replies that sound like you, learned from how you actually write. Nothing sends until you approve it." },
   { title: "Tracks commitments", description: "Promises and follow-ups mentioned in threads are tracked automatically, so nothing quietly slips through the cracks." },
 ];
@@ -51,54 +58,49 @@ const audiences = [
 
 export default function EmailTriagePage() {
   return (
-    <main>
-      <section className="pt-32 pb-16 px-10 text-center relative border-b-2 border-black/10 overflow-hidden bg-white">
-        <div
-          className="absolute inset-0 pointer-events-none -z-10 opacity-[0.05]"
-          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "40px 40px" }}
-        ></div>
-        <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-4 py-1.5 border-2 border-black bg-black text-white text-[11px] font-semibold uppercase tracking-[0.3em] mb-8">
-            Rizly / Email Triage
-          </span>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Your inbox, <br /><span className="text-[#FE7F2D]">already sorted</span>
+    <main className="bg-white text-black">
+      <section className="relative overflow-hidden border-b border-black/10 bg-white">
+        <HeroGlow />
+        <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
+          <Eyebrow>Rizly / Email triage</Eyebrow>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+            Your inbox, <span className="text-[#ff4f00]">already sorted</span>
           </h1>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Stop opening your inbox to guess what matters. Riz reads every message first and tells you only what needs a decision.
           </p>
         </div>
       </section>
 
       {/* Stats */}
-      <section className="px-10 md:px-14 py-16 border-b-2 border-black/10 bg-black text-white">
-        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-14 md:px-10 lg:px-14">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 text-center md:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="block text-3xl font-semibold text-[#FE7F2D] mb-2">{stat.value}</span>
-              <span className="block text-[12px] font-semibold uppercase tracking-widest text-white/60">{stat.label}</span>
+              <span className="mb-2 block text-3xl font-normal text-[#20151c]">{stat.value}</span>
+              <span className="block text-xs uppercase tracking-[0.1em] text-gray-500">{stat.label}</span>
             </div>
           ))}
         </div>
       </section>
 
       {/* Live inbox visual */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-3xl mx-auto">
-          <div className="border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="border-b-2 border-black bg-black/[0.02] px-5 py-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold">Inbox — 6 new</span>
-              <span className="text-[11px] font-semibold text-[#FE7F2D] uppercase tracking-widest">Triaged by Riz</span>
+      <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-3xl">
+          <div className="overflow-hidden rounded-2xl bg-[#f7f7f6] shadow-[0_30px_80px_-60px_rgba(32,21,28,0.4)]">
+            <div className="flex items-center justify-between border-b border-black/5 bg-white px-6 py-4">
+              <span className="text-sm font-normal text-[#20151c]">Inbox — 6 new</span>
+              <span className="text-xs uppercase tracking-[0.1em] text-[#ff4f00]">Triaged by Riz</span>
             </div>
-            <div className="divide-y divide-black/10">
+            <div className="divide-y divide-black/[0.06]">
               {inbox.map((mail) => (
-                <div key={mail.subject} className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-black/[0.02] transition-colors">
+                <div key={mail.subject} className="flex items-center justify-between gap-4 px-6 py-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{mail.from}</p>
-                    <p className="text-sm text-gray-500 truncate">{mail.subject}</p>
+                    <p className="truncate text-sm font-normal text-[#20151c]">{mail.from}</p>
+                    <p className="truncate text-sm text-gray-500">{mail.subject}</p>
                   </div>
                   <span
-                    className="shrink-0 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white"
+                    className="shrink-0 rounded-full px-3 py-1 text-[10px] font-normal uppercase tracking-widest text-white"
                     style={{ backgroundColor: mail.color }}
                   >
                     {mail.tag}
@@ -111,59 +113,65 @@ export default function EmailTriagePage() {
       </section>
 
       {/* Capabilities */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto grid max-w-[88rem] grid-cols-1 gap-5 md:grid-cols-3">
           {capabilities.map((item) => (
-            <div key={item.title} className="p-8 border-2 border-black bg-[#fcfcfc] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-              <h3 className="text-lg font-semibold mb-3">{item.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{item.description}</p>
+            <div key={item.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
+              <h3 className="mb-3 text-lg font-normal text-[#20151c]">{item.title}</h3>
+              <p className="text-sm leading-6 text-gray-600">{item.description}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Drafted reply mockup */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Then it drafts</span>
-            <h2 className="text-2xl md:text-3xl font-semibold">A reply, ready to approve</h2>
+      {/* Real dashboard screenshot */}
+      <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-10 text-center">
+            <Eyebrow>In your dashboard</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+              Every triaged thread, one clean view
+            </h2>
           </div>
-          <div className="overflow-hidden border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <div className="flex items-center gap-3 border-b-2 border-black bg-black/[0.02] px-5 py-3">
-              <span className="text-[13px] font-semibold text-black">Riz</span>
-              <span className="text-[12px] font-medium text-gray-400">via Telegram</span>
-            </div>
-            <div className="px-5 py-5">
-              <p className="text-sm leading-relaxed text-gray-600">
-                Priya from Lightspeed wants to schedule a call this week. I've drafted a reply offering
-                Wednesday or Thursday afternoon and pulled the two open slots from your calendar.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button className="border-2 border-black bg-[#FE7F2D] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black">
-                  Approve reply
-                </button>
-                <button className="border-2 border-black bg-white px-4 py-2 text-[13px] font-semibold text-black transition-colors hover:bg-black hover:text-white">
-                  Edit before sending
-                </button>
-              </div>
-            </div>
+          <ScreenshotPanel
+            src="/images/emails.png"
+            width={1588}
+            height={779}
+            alt="Rizly dashboard email triage view"
+            caption="The full inbox view in your Rizly dashboard"
+          />
+        </div>
+      </section>
+
+      {/* Drafted reply mockup with real video */}
+      <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-12 text-center">
+            <Eyebrow>Then it drafts</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+              A reply, ready to approve
+            </h2>
+          </div>
+          <div className="flex justify-center">
+            <PhoneVideo src="/video/telegram_mail.mp4" width={416} height={848} className="w-full max-w-[260px]" />
           </div>
         </div>
       </section>
 
       {/* Who it's for */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Who it's for</span>
-            <h2 className="text-2xl md:text-4xl font-semibold">Built for inboxes that never stop</h2>
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-[88rem]">
+          <div className="mb-14 text-center">
+            <Eyebrow>Who it&apos;s for</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+              Built for inboxes that never stop
+            </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {audiences.map((audience) => (
-              <div key={audience.title} className="p-8 border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                <h3 className="text-lg font-semibold mb-3">{audience.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{audience.description}</p>
+              <div key={audience.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
+                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{audience.title}</h3>
+                <p className="text-sm leading-6 text-gray-600">{audience.description}</p>
               </div>
             ))}
           </div>
@@ -171,54 +179,43 @@ export default function EmailTriagePage() {
       </section>
 
       {/* Trust */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-black text-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Why founders trust it</span>
-          <h2 className="text-2xl md:text-4xl font-semibold mb-8">Nothing sends without you</h2>
-          <p className="text-lg text-white/50 leading-relaxed mb-10">
-            Riz drafts every reply and waits. Your Gmail OAuth token is encrypted at rest and only used
-            server-side to process the messages you've authorized.
+      <section className="relative overflow-hidden bg-[#20151c] px-6 py-20 text-center md:px-10 lg:px-14">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto max-w-2xl">
+          <Eyebrow light>Why founders trust it</Eyebrow>
+          <h2 className="text-3xl font-normal leading-tight tracking-tight text-white [text-wrap:balance] md:text-4xl">
+            Nothing sends without you
+          </h2>
+          <p className="mt-6 text-sm leading-6 text-white/50 md:text-base">
+            Riz drafts every reply and waits. Your Gmail OAuth token is encrypted at rest and only used server-side to
+            process the messages you&apos;ve authorized.
           </p>
-          <a href="/trust" className="text-[#FE7F2D] font-semibold hover:text-white transition-colors">
-            See how trust works →
+          <a href="/trust" className="mt-6 inline-block text-sm text-white/70 underline underline-offset-4 transition hover:text-white">
+            See how trust works &rarr;
           </a>
         </div>
       </section>
 
-      {/* Testimonial */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xl md:text-2xl font-medium leading-relaxed mb-6">
-            "My inbox used to be the first thing I dreaded every morning. Now I get a Telegram message with the three things that actually need me."
-          </p>
-          <span className="text-[12px] font-semibold uppercase tracking-widest text-gray-400">— Early access founder</span>
+      <Testimonial
+        quote="My inbox used to be the first thing I dreaded every morning. Now I get a Telegram message with the three things that actually need me."
+        author="Early access founder"
+      />
+
+      {/* FAQ */}
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            Common questions
+          </h2>
+          <FaqAccordion items={questions} />
         </div>
       </section>
 
-      {/* Mini FAQ */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-semibold mb-10 text-center">Common questions</h2>
-          <div className="space-y-6">
-            {questions.map((item) => (
-              <div key={item.q} className="border-2 border-black p-6 bg-[#fcfcfc] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <h3 className="text-base font-semibold mb-2">{item.q}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{item.a}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-10 md:px-14 py-24 bg-[#fcfcfc] text-center">
-        <h2 className="text-2xl md:text-3xl font-semibold mb-6">Connect Gmail in under a minute</h2>
-        <a
-          href="/signup"
-          className="inline-flex items-center gap-2 border-2 border-black bg-[#FE7F2D] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
-        >
-          Start free trial
-        </a>
-      </section>
+      <ProductCta title="Connect Gmail in under a minute" />
     </main>
   );
 }

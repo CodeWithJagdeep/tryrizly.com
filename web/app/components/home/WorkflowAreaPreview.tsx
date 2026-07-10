@@ -13,7 +13,7 @@ const areas = [
     detail:
       "It becomes the place where your work context comes together: inbox notes, meeting history, people, and pending actions all stay close to the conversation.",
     cta: "Start with chat",
-    screenshot: null,
+    screenshot: { src: "/images/chats.png", width: 1582, height: 714 },
   },
   {
     label: "Emails",

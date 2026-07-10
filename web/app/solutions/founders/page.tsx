@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import { Eyebrow } from "../../components/product/Eyebrow";
+import { FaqAccordion } from "../../components/product/FaqAccordion";
+import { HeroGlow } from "../../components/product/HeroGlow";
+import { ProductCta } from "../../components/product/ProductCta";
+import { Testimonial } from "../../components/product/Testimonial";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
@@ -36,7 +41,7 @@ const moments = [
 const questions = [
   { q: "Will Riz reply to investors on its own?", a: "Never without your approval. It drafts a reply and waits for you to review, edit, or send it yourself." },
   { q: "Can it handle fundraising-specific context?", a: "Yes. Riz tracks your ARR, churn, and key metrics from connected sources so drafts and prep packets have real numbers, not placeholders." },
-  { q: "What if I only want it watching my inbox?", a: "That's fine. Connect Gmail and Calendar alone — revenue monitoring and other integrations are entirely optional." },
+  { q: "What if I only want it watching my inbox?", a: "That's fine. Connect Gmail and Calendar alone, revenue monitoring and other integrations are entirely optional." },
 ];
 
 const comparison = [
@@ -54,69 +59,71 @@ const stages = [
 
 export default function FoundersPage() {
   return (
-    <main>
-      <section className="pt-32 pb-16 px-10 text-center relative border-b-2 border-black/10 overflow-hidden bg-white">
-        <div
-          className="absolute inset-0 pointer-events-none -z-10 opacity-[0.05]"
-          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "40px 40px" }}
-        ></div>
-        <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-4 py-1.5 border-2 border-black bg-black text-white text-[11px] font-semibold uppercase tracking-[0.3em] mb-8">
-            Rizly / For Founders
-          </span>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Keep investor, customer, <br /><span className="text-[#FE7F2D]">and ops work from slipping</span>
+    <main className="bg-white text-black">
+      <section className="relative overflow-hidden border-b border-black/10 bg-white">
+        <HeroGlow />
+        <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
+          <Eyebrow>Rizly / For founders</Eyebrow>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+            Keep investor, customer, <span className="text-[#ff4f00]">and ops work from slipping</span>
           </h1>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Founders wear a hundred hats. Riz runs quietly in the background so nothing important gets lost between them.
+          <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
+            Founders wear a hundred hats. Riz runs quietly in the background so nothing important gets lost between
+            them.
           </p>
         </div>
       </section>
 
       {/* Stats */}
-      <section className="px-10 md:px-14 py-16 border-b-2 border-black/10 bg-black text-white">
-        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-14 md:px-10 lg:px-14">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 text-center md:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="block text-3xl font-semibold text-[#FE7F2D] mb-2">{stat.value}</span>
-              <span className="block text-[12px] font-semibold uppercase tracking-widest text-white/60">{stat.label}</span>
+              <span className="mb-2 block text-3xl font-normal text-[#20151c]">{stat.value}</span>
+              <span className="block text-xs uppercase tracking-[0.1em] text-gray-500">{stat.label}</span>
             </div>
           ))}
         </div>
       </section>
 
       {/* Pain points */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">The problem</span>
-            <h2 className="text-2xl md:text-4xl font-semibold">Where founders lose time and trust</h2>
+      <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-[88rem]">
+          <div className="mb-14 text-center">
+            <Eyebrow>The problem</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+              Where founders lose time and trust
+            </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {painPoints.map((point) => (
-              <div key={point.title} className="p-8 border-2 border-black bg-[#fcfcfc] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                <h3 className="text-lg font-semibold mb-3">{point.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{point.description}</p>
+              <div key={point.title} className="rounded-2xl bg-[#f7f7f6] p-8">
+                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{point.title}</h3>
+                <p className="text-sm leading-6 text-gray-600">{point.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Day in the life — timeline */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">A day with Riz</span>
-            <h2 className="text-2xl md:text-4xl font-semibold">Running quietly in the background</h2>
-          </div>
-          <div className="relative border-l-2 border-black/10 ml-3">
+      {/* Day in the life */}
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-5xl">
+          <Eyebrow>A day with Riz</Eyebrow>
+          <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            Running quietly in the background
+          </h2>
+
+          <div className="mt-14 space-y-10">
             {moments.map((moment) => (
-              <div key={moment.time} className="relative pl-10 pb-14 last:pb-0">
-                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-[#FE7F2D] border-2 border-black"></div>
-                <span className="font-mono text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2 block">{moment.time}</span>
-                <h3 className="text-lg font-semibold mb-2">{moment.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed max-w-xl">{moment.detail}</p>
+              <div key={moment.time} className="flex flex-col gap-3 border-l-2 border-black/10 pl-8 md:flex-row md:gap-8">
+                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-[#ff4f00] md:w-24">
+                  {moment.time}
+                </span>
+                <div>
+                  <h3 className="text-lg font-normal text-[#20151c]">{moment.title}</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{moment.detail}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -124,22 +131,24 @@ export default function FoundersPage() {
       </section>
 
       {/* Before / after */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Before and after</span>
-            <h2 className="text-2xl md:text-4xl font-semibold">What changes once Riz is running</h2>
+      <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-14 text-center">
+            <Eyebrow>Before and after</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+              What changes once Riz is running
+            </h2>
           </div>
-          <div className="border-2 border-black bg-[#fcfcfc] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] divide-y-2 divide-black">
+          <div className="divide-y divide-black/[0.06] overflow-hidden rounded-2xl bg-[#fcfcfc] shadow-[0_30px_80px_-60px_rgba(32,21,28,0.4)]">
             {comparison.map((row) => (
-              <div key={row.without} className="grid grid-cols-1 md:grid-cols-2 divide-y-2 md:divide-y-0 md:divide-x-2 divide-black">
+              <div key={row.without} className="grid grid-cols-1 divide-y divide-black/[0.06] md:grid-cols-2 md:divide-x md:divide-y-0">
                 <div className="p-6">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-2 block">Without Riz</span>
-                  <p className="text-sm text-gray-500 leading-relaxed">{row.without}</p>
+                  <span className="mb-2 block text-xs uppercase tracking-[0.1em] text-gray-400">Without Riz</span>
+                  <p className="text-sm leading-6 text-gray-600">{row.without}</p>
                 </div>
-                <div className="p-6 bg-[#FE7F2D]/5">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-2 block">With Riz</span>
-                  <p className="text-sm text-gray-700 leading-relaxed">{row.with}</p>
+                <div className="bg-[#fff7f3] p-6">
+                  <span className="mb-2 block text-xs uppercase tracking-[0.1em] text-[#ff4f00]">With Riz</span>
+                  <p className="text-sm leading-6 text-[#20151c]">{row.with}</p>
                 </div>
               </div>
             ))}
@@ -147,18 +156,20 @@ export default function FoundersPage() {
         </div>
       </section>
 
-      {/* Covers the whole founder journey */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Coverage</span>
-            <h2 className="text-2xl md:text-4xl font-semibold">From fundraising to day-to-day ops</h2>
+      {/* Coverage */}
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-[88rem]">
+          <div className="mb-14 text-center">
+            <Eyebrow>Coverage</Eyebrow>
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+              From fundraising to day-to-day ops
+            </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {stages.map((stage) => (
-              <div key={stage.title} className="p-8 border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                <h3 className="text-lg font-semibold mb-3">{stage.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{stage.detail}</p>
+              <div key={stage.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
+                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{stage.title}</h3>
+                <p className="text-sm leading-6 text-gray-600">{stage.detail}</p>
               </div>
             ))}
           </div>
@@ -166,54 +177,43 @@ export default function FoundersPage() {
       </section>
 
       {/* Trust */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-black text-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Why founders trust it</span>
-          <h2 className="text-2xl md:text-4xl font-semibold mb-8">Your inbox stays yours</h2>
-          <p className="text-lg text-white/50 leading-relaxed mb-10 max-w-2xl mx-auto">
-            OAuth tokens are encrypted at rest. Every draft waits for your review. Riz never sends
-            anything to an investor, customer, or teammate without you saying go.
+      <section className="relative overflow-hidden bg-[#20151c] px-6 py-20 text-center md:px-10 lg:px-14">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto max-w-2xl">
+          <Eyebrow light>Why founders trust it</Eyebrow>
+          <h2 className="text-3xl font-normal leading-tight tracking-tight text-white [text-wrap:balance] md:text-4xl">
+            Your inbox stays yours
+          </h2>
+          <p className="mt-6 text-sm leading-6 text-white/50 md:text-base">
+            OAuth tokens are encrypted at rest. Every draft waits for your review. Riz never sends anything to an
+            investor, customer, or teammate without you saying go.
           </p>
-          <a href="/trust" className="text-[#FE7F2D] font-semibold hover:text-white transition-colors">
-            See how trust works →
+          <a href="/trust" className="mt-6 inline-block text-sm text-white/70 underline underline-offset-4 transition hover:text-white">
+            See how trust works &rarr;
           </a>
         </div>
       </section>
 
-      {/* Testimonial */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
-        <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xl md:text-2xl font-medium leading-relaxed mb-6">
-            "I raised my seed round while running three other fires. Riz was the only reason I didn't drop a single investor thread."
-          </p>
-          <span className="text-[12px] font-semibold uppercase tracking-widest text-gray-400">— Early access founder</span>
+      <Testimonial
+        quote="I raised my seed round while running three other fires. Riz was the only reason I didn't drop a single investor thread."
+        author="Early access founder"
+      />
+
+      {/* FAQ */}
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            Common questions
+          </h2>
+          <FaqAccordion items={questions} />
         </div>
       </section>
 
-      {/* Mini FAQ */}
-      <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-semibold mb-10 text-center">Common questions</h2>
-          <div className="space-y-6">
-            {questions.map((item) => (
-              <div key={item.q} className="border-2 border-black p-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <h3 className="text-base font-semibold mb-2">{item.q}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{item.a}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-10 md:px-14 py-24 bg-white text-center">
-        <h2 className="text-2xl md:text-3xl font-semibold mb-6">Reclaim your day</h2>
-        <a
-          href="/signup"
-          className="inline-flex items-center gap-2 border-2 border-black bg-[#FE7F2D] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
-        >
-          Start free trial
-        </a>
-      </section>
+      <ProductCta title="Reclaim your day" />
     </main>
   );
 }

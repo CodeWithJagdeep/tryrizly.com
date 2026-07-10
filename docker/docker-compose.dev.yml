@@ -34,6 +34,7 @@ services:
       - "4000:4000"
     volumes:
       - ../apps/gateway/src:/app/apps/gateway/src
+      - ../apps/gateway/public:/app/apps/gateway/public
       - ../shared/src:/app/shared/src
       - gateway_node_modules:/app/node_modules
     depends_on:

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CalendarIcon, GmailIcon } from "../../components/ConnectorIcons";
 import { ChatIcon, UsersIcon, VideoIcon } from "../../dashboard/components/icons";
+import { isLocalMedia, mediaUrl } from "../../../lib/media";
 
 const areas = [
   {
@@ -13,7 +14,7 @@ const areas = [
     detail:
       "It becomes the place where your work context comes together: inbox notes, meeting history, people, and pending actions all stay close to the conversation.",
     cta: "Start with chat",
-    screenshot: { src: "/images/chats.png", width: 1582, height: 714 },
+    screenshot: { src: mediaUrl("/images/chats.png"), width: 1582, height: 714 },
   },
   {
     label: "Emails",
@@ -120,6 +121,7 @@ function ScreenshotSlot({
             alt={alt}
             fill
             quality={100}
+            unoptimized={isLocalMedia}
             className="object-cover object-left-top"
             sizes="(min-width: 1280px) 700px, (min-width: 1024px) 55vw, 100vw"
           />

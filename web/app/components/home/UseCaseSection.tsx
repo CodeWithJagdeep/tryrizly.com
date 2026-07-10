@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { mediaUrl } from "../../../lib/media";
 
 const useCases = [
   {
@@ -10,7 +11,7 @@ const useCases = [
     description:
       "Investor threads triaged by urgency, calendar conflicts caught before they bite, and revenue signals folded into one daily brief.",
     href: "/solutions/founders",
-    video: { src: "/video/telegram_meeting.mp4", width: 448, height: 848 },
+    video: { src: mediaUrl("/video/telegram_meeting.mp4"), width: 448, height: 848 },
   },
   {
     label: "Busy operators",
@@ -18,7 +19,7 @@ const useCases = [
     description:
       "Every inbound message and meeting is weighed against what you actually care about, then handed to you as one Telegram decision.",
     href: "/solutions/busy-operators",
-    video: { src: "/video/telegram_mail.mp4", width: 416, height: 848 },
+    video: { src: mediaUrl("/video/telegram_mail.mp4"), width: 416, height: 848 },
   },
   {
     label: "Revenue teams",
@@ -26,7 +27,7 @@ const useCases = [
     description:
       "Churn risk, failed payments, and MRR movement land next to your inbox and calendar, pulled from a durable memory you can query.",
     href: "/solutions/revenue-teams",
-    video: { src: "/video/telegram_meeting_reminder.mp4", width: 448, height: 848 },
+    video: { src: mediaUrl("/video/telegram_meeting_reminder.mp4"), width: 448, height: 848 },
   },
 ];
 

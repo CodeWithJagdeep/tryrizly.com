@@ -40,9 +40,10 @@ COPY apps/ai-core/package.json ./apps/ai-core/
 COPY apps/worker/package.json ./apps/worker/
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Compiled artifacts (shared package + app)
+# Compiled artifacts (shared package + app) + static marketing assets served at runtime
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/apps/gateway/dist ./apps/gateway/dist
+COPY apps/gateway/public ./apps/gateway/public
 
 EXPOSE 4000
 

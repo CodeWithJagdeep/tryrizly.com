@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { mediaUrl } from "../../../lib/media";
 
 const tabs = [
   {
     name: "Brief",
     badge: "Morning brief",
     leftTitle: "Riz via Telegram",
-    video: { src: "/video/telegram_mail.mp4", width: 416, height: 848 },
+    video: { src: mediaUrl("/video/telegram_mail.mp4"), width: 416, height: 848 },
     rightTitle: "What Riz prepares",
     rules: ["Inbox summary", "Calendar conflict check", "Revenue signal"],
   },
@@ -15,7 +16,7 @@ const tabs = [
     name: "Approve",
     badge: "Approval prompt",
     leftTitle: "Riz waiting for you",
-    video: { src: "/video/telegram_meeting.mp4", width: 448, height: 848 },
+    video: { src: mediaUrl("/video/telegram_meeting.mp4"), width: 448, height: 848 },
     rightTitle: "Approval rules",
     rules: ["Ask before sending email", "Ask before changing calendar", "Read-only revenue snapshots"],
   },
@@ -23,7 +24,7 @@ const tabs = [
     name: "Execute",
     badge: "Done",
     leftTitle: "Riz completed",
-    video: { src: "/video/telegram_meeting_reminder.mp4", width: 448, height: 848 },
+    video: { src: mediaUrl("/video/telegram_meeting_reminder.mp4"), width: 448, height: 848 },
     rightTitle: "Completed actions",
     rules: ["Email sent", "Calendar updated", "Reminder scheduled"],
   },

@@ -4,6 +4,7 @@ import { Eyebrow } from "../../components/product/Eyebrow";
 import { FaqAccordion } from "../../components/product/FaqAccordion";
 import { HeroGlow } from "../../components/product/HeroGlow";
 import { PhoneVideo } from "../../components/product/PhoneVideo";
+import { mediaUrl } from "../../../lib/media";
 import { ProductCta } from "../../components/product/ProductCta";
 import { ScreenshotPanel } from "../../components/product/ScreenshotPanel";
 import { Testimonial } from "../../components/product/Testimonial";
@@ -74,7 +75,7 @@ export default function AiOperatorPage() {
           </div>
 
           <div className="flex justify-center">
-            <PhoneVideo src="/video/telegram_meeting.mp4" width={448} height={848} className="w-full max-w-[300px]" />
+            <PhoneVideo src={mediaUrl("/video/telegram_meeting.mp4")} width={448} height={848} className="w-full max-w-[300px]" />
           </div>
         </div>
       </section>

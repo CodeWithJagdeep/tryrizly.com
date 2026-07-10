@@ -1,5 +1,7 @@
 import "reflect-metadata";
+import { join } from "node:path";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { env } from "@heyriz/shared/env";
 import { GatewayModule } from "./gateway.module";
 import { logger } from "@heyriz/shared/logger";
@@ -25,11 +27,17 @@ function allowedOrigins(): Set<string> {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(GatewayModule, {
+  const app = await NestFactory.create<NestExpressApplication>(GatewayModule, {
     logger: ["error", "warn", "log"],
     rawBody: true,
   });
   app.useGlobalFilters(new SentryExceptionFilter());
+  // Marketing media (video/images) served directly from the gateway instead of
+  // bundled into the Next.js app — keeps large binaries out of the web build.
+  app.useStaticAssets(join(__dirname, "..", "public"), {
+    maxAge: "30d",
+    immutable: true,
+  });
   const origins = allowedOrigins();
   app.enableCors({
     origin(origin, callback) {

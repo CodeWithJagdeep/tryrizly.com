@@ -1,4 +1,5 @@
 import type { GoogleService } from "../google/google.service";
+import type { EntityRepository } from "../spine/entity.repository";
 import type { HeyRizTool } from "./tool.types";
 
 type LookupContactPayload = {
@@ -7,12 +8,13 @@ type LookupContactPayload = {
 
 export function createLookupContactTool(
   google: GoogleService,
+  entities: EntityRepository,
 ): HeyRizTool<LookupContactPayload> {
   return {
     name: "lookup_contact",
     category: "gmail",
     description:
-      "Find someone's email address by their name. Searches Google Contacts and recent Gmail history. Call this before drafting an email when you don't have the recipient's address.",
+      "Find someone's email address by their name. Checks already-resolved contacts first, then falls back to Google Contacts and recent Gmail history. Call this before drafting an email when you don't have the recipient's address.",
     approvalRequired: false,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -22,6 +24,29 @@ export function createLookupContactTool(
           tool: "lookup_contact",
           status: "not_implemented",
           message: `I need a name to search, ${context.honorific}.`,
+        };
+      }
+
+      // Fast/local path: already-resolved entities from processed emails/
+      // events. No external API call, so it works even when Google isn't
+      // connected yet or a scope hasn't propagated right after OAuth.
+      const local = await entities.findContactsByName(userId, name);
+      if (local.length > 0) {
+        const top = local[0];
+        const others = local.slice(1);
+        const othersNote =
+          others.length > 0
+            ? ` (${others.length} other match${others.length > 1 ? "es" : ""}: ${others.map((c) => c.email).join(", ")})`
+            : "";
+        return {
+          tool: "lookup_contact",
+          status: "ok",
+          message: `Found ${top.name} at ${top.email}${othersNote}, ${context.honorific}.`,
+          data: {
+            found: true,
+            name,
+            contacts: local.map((c) => ({ name: c.name, email: c.email, source: "local" })),
+          },
         };
       }
 

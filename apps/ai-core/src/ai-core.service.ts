@@ -581,7 +581,10 @@ export class AiCoreService {
   async listChatMemories(body: { userId?: string; limit?: number }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const limit = body.limit ?? 50;
-    return this.vectorMemory.listBySource(userId, "telegram", limit);
+    const memories = await this.vectorMemory.listBySource(userId, "telegram", limit);
+    // Only conversation turns have the "User: ... | Assistant: ..." shape —
+    // auto-memory notes and event summaries don't and would break parsing.
+    return memories.filter((m) => m.metadata.kind === "turn");
   }
 
   async scheduleReminder(body: ReminderRequest) {

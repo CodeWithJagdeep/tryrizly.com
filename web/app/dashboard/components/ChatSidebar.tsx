@@ -18,15 +18,8 @@ import {
   UsersIcon,
   VideoIcon,
 } from "./icons";
-import { subscribeToOpenSearch } from "../lib/chat-store";
+import { type ChatSession, subscribeToOpenSearch } from "../lib/chat-store";
 import { isSidebarOpen, setSidebarOpen, subscribeToSidebar } from "../lib/sidebar-store";
-
-type ChatHistoryItem = {
-  id: string;
-  title: string;
-  summary: string;
-  createdAt: string;
-};
 
 export function ChatSidebar({
   name,
@@ -40,8 +33,7 @@ export function ChatSidebar({
   const searchParams = useSearchParams();
   const activeId = pathname === "/dashboard" ? searchParams.get("session") : null;
 
-  const [history, setHistory] = useState<ChatHistoryItem[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [history, setHistory] = useState<ChatSession[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [approvalCount, setApprovalCount] = useState(0);
@@ -68,8 +60,8 @@ export function ChatSidebar({
       try {
         const res = await fetch("/api/chat/history");
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { items?: ChatHistoryItem[] };
-        if (!cancelled) setHistory(data.items ?? []);
+        const data = (await res.json()) as { sessions?: ChatSession[] };
+        if (!cancelled) setHistory(data.sessions ?? []);
       } catch { /* best-effort */ }
     };
     void load();
@@ -291,13 +283,8 @@ export function ChatSidebar({
         <div className="mb-4">
           <SectionLabel>Recent</SectionLabel>
           {recents.length ? (
-            recents.map((item) => (
-              <ChatHistoryRow
-                key={item.id}
-                item={item}
-                expanded={item.id === expandedId}
-                onToggle={() => setExpandedId((current) => (current === item.id ? null : item.id))}
-              />
+            recents.map((s) => (
+              <SessionRow key={s.id} session={s} active={s.id === activeId} />
             ))
           ) : (
             <p className="px-2.5 py-1 text-[13px] text-slate-400">
@@ -329,35 +316,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ChatHistoryRow({
-  item,
-  expanded,
-  onToggle,
-}: {
-  item: { id: string; title: string; summary: string; createdAt: string };
-  expanded: boolean;
-  onToggle: () => void;
-}) {
+function SessionRow({ session, active }: { session: ChatSession; active: boolean }) {
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[15px] transition-colors ${
-          expanded ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-        }`}
-      >
-        <ChatIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-        <span className="truncate">{item.title}</span>
-      </button>
-      {expanded && (
-        <div className="mx-2.5 mb-1 rounded-md bg-slate-50 px-2.5 py-2 text-[12px] leading-snug text-slate-600">
-          <p className="whitespace-pre-wrap">{item.summary}</p>
-          <p className="mt-1 text-[10px] text-slate-400">
-            {new Date(item.createdAt).toLocaleString()}
-          </p>
-        </div>
-      )}
-    </div>
+    <Link
+      href={`/dashboard?session=${session.id}`}
+      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] transition-colors ${
+        active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+      }`}
+    >
+      <ChatIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+      <span className="truncate">{session.title}</span>
+    </Link>
   );
 }

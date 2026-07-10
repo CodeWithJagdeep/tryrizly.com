@@ -45,8 +45,36 @@ export function ChatHome({ name }: { name?: string }) {
   const [connectorProviders, setConnectorProviders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setSession(sessionId ? getSession(sessionId) ?? null : null);
     setError(null);
+    if (!sessionId) {
+      setSession(null);
+      return;
+    }
+
+    const local = getSession(sessionId);
+    if (local) {
+      setSession(local);
+      return;
+    }
+
+    // Not a locally-cached session — it may be one grouped from the
+    // database (e.g. clicked from sidebar history built off Telegram/DB
+    // turns). Fetch and hydrate it, then persist locally so continuing
+    // the conversation works through the normal send flow.
+    let cancelled = false;
+    setSession(null);
+    fetch("/api/chat/history")
+      .then((r) => r.json())
+      .then((d: { sessions?: ChatSession[] }) => {
+        if (cancelled) return;
+        const found = d.sessions?.find((s) => s.id === sessionId);
+        if (found) {
+          setSession(found);
+          saveSession(found);
+        }
+      })
+      .catch(() => null);
+    return () => { cancelled = true; };
   }, [sessionId]);
 
   useEffect(() => {

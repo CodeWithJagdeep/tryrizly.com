@@ -34,6 +34,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# symlink only, points at the untracked .env.production — needed so a bare
+# `docker compose -f docker-compose.prod.yml up` (run from docker/) resolves
+# ${POSTGRES_PASSWORD} etc. instead of silently falling back to defaults.
+!/docker/.env
 
 # infra notes with real IPs/instance details — not for git history
 /server.md

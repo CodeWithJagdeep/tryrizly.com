@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { Trust } from "../components/sections/Trust";
+import { Eyebrow } from "../components/product/Eyebrow";
+import { HeroGlow } from "../components/product/HeroGlow";
+import { TrustSection } from "../components/home/TrustSection";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
 
@@ -17,31 +19,29 @@ export const metadata: Metadata = {
 
 export default function TrustPage() {
   return (
-    <main>
-      <section className="pt-32 pb-16 px-10 text-center relative border-b-2 border-black/10 overflow-hidden bg-white">
-        <div
-          className="absolute inset-0 pointer-events-none -z-10 opacity-[0.05]"
-          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "40px 40px" }}
-        ></div>
-        <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-4 py-1.5 border-2 border-black bg-black text-white text-[11px] font-semibold uppercase tracking-[0.3em] mb-8">
-            Rizly / Trust
-          </span>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Control stays <br /><span className="text-[#FE7F2D]">with you, end to end</span>
+    <main className="bg-white text-black">
+      <section className="relative overflow-hidden border-b border-black/10 bg-white">
+        <HeroGlow />
+        <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
+          <Eyebrow>Rizly / Trust</Eyebrow>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+            Control stays <span className="text-[#ff4f00]">with you, end to end</span>
           </h1>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Approval-first means approval-first, not a setting buried three menus deep. Here's exactly how Rizly protects your inbox, calendar, and revenue data.
+          <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
+            Approval-first means approval-first, not a setting buried three menus deep. Here&apos;s exactly how
+            Rizly protects your inbox, calendar, and revenue data.
           </p>
         </div>
       </section>
 
-      <Trust />
+      <TrustSection hideIntro />
 
-      <section className="px-10 md:px-14 py-24 text-center bg-white">
-        <p className="text-gray-500 mb-4">Want the full technical breakdown of encryption, retention, and compliance?</p>
-        <a href="/security-guide" className="text-[#FE7F2D] font-semibold hover:text-black transition-colors">
-          Read the security guide →
+      <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 text-center md:px-10 lg:px-14">
+        <p className="mb-4 text-sm text-gray-600">
+          Want the full technical breakdown of encryption, retention, and compliance?
+        </p>
+        <a href="/security-guide" className="text-sm text-[#20151c] underline underline-offset-4 transition hover:text-[#ff4f00]">
+          Read the security guide &rarr;
         </a>
       </section>
     </main>

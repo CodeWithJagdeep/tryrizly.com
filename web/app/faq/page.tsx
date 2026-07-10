@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Eyebrow } from "../components/product/Eyebrow";
+import { HeroGlow } from "../components/product/HeroGlow";
 import { FaqClient, type FaqCategory } from "./faq-client";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com";
@@ -134,27 +136,21 @@ const faqSchema = {
 
 export default function FaqPage() {
   return (
-    <main>
+    <main className="bg-white text-black">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
-      <section className="relative overflow-hidden border-b-2 border-black bg-white px-4 pt-24 pb-16 text-center font-neue-haas sm:px-6 md:pt-32 md:pb-20">
-        <div
-          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.04]"
-          style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
-          aria-hidden="true"
-        />
-        <div className="mx-auto max-w-4xl">
-          <span className="inline-block border-2 border-[#FE7F2D] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#FE7F2D]">
-            FAQ
-          </span>
-          <h1 className="mt-8 text-balance font-neue-haas text-4xl font-medium leading-tight tracking-tight text-black md:text-5xl">
-            Answers on setup, <span className="text-[#FE7F2D]">billing, and control</span>
+      <section className="relative overflow-hidden border-b border-black/10 bg-white">
+        <HeroGlow />
+        <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
+          <Eyebrow>FAQ</Eyebrow>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+            Answers on setup, <span className="text-[#ff4f00]">billing, and control</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-500">
-            Everything you&apos;d ask before connecting your inbox, calendar, and revenue to an AI
-            operator — {categories.reduce((n, c) => n + c.items.length, 0)} questions, straight answers.
+          <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
+            Everything you&apos;d ask before connecting your inbox, calendar, and revenue to an AI operator,{" "}
+            {categories.reduce((n, c) => n + c.items.length, 0)} questions, straight answers.
           </p>
         </div>
       </section>

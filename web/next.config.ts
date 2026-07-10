@@ -36,13 +36,15 @@ const nextConfig: NextConfig = {
     LINKEDIN_SCOPES:
       process.env.LINKEDIN_SCOPES ?? "openid profile email",
     NEXT_PUBLIC_GATEWAY_URL:
-      process.env.NEXT_PUBLIC_GATEWAY_URL ?? "https://api.getrizly.com",
+      process.env.NEXT_PUBLIC_GATEWAY_URL ??
+      (process.env.NODE_ENV === "development" ? "http://localhost:4000" : "https://api.getrizly.com"),
     NEXT_PUBLIC_VAPID_PUBLIC_KEY:
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ??
       "BBOVlHAJfin3t1acBGcbqeXh5WKzk3mxsMO7cU0b1dj_MZbwdLLHzz8Yj1rV6G4hIZVt6GYfQan9VYFxNoDbYgQ",
     WEB_APP_URL: process.env.WEB_APP_URL ?? "https://getrizly.com",
   },
   images: {
+    qualities: [75, 100],
     remotePatterns: [
       {
         protocol: 'https',

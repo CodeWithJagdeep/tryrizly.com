@@ -288,6 +288,13 @@ export class AiCoreController {
     return this.aiCoreService.listEmailMemories(payload);
   }
 
+  @MessagePattern("chat.listMemories")
+  listChatMemories(
+    @Payload() payload: { userId?: string; limit?: number },
+  ) {
+    return this.aiCoreService.listChatMemories(payload);
+  }
+
   @MessagePattern("email.process")
   processEmail(@Payload() payload: EmailEventJobData) {
     return this.aiCoreService.processEmail(payload);

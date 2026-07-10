@@ -399,6 +399,19 @@ export class GatewayController {
     });
   }
 
+  @Get("api/chat/history")
+  listChatHistory(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId = "default",
+    @Query("limit") limit = "50",
+  ) {
+    this.requireInternal(secret);
+    return this.gatewayService.sendToAiCore("chat.listMemories", {
+      userId,
+      limit: parseInt(limit, 10) || 50,
+    });
+  }
+
   @Get("api/emails/processed")
   listProcessedEmails(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

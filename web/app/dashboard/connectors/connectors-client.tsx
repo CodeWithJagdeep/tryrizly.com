@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalComIcon,
   CalendarIcon,
@@ -27,7 +27,7 @@ type ConnectorSummary = {
   updatedAt: string;
 };
 
-const MULTI_ACCOUNT_PROVIDERS = ["postgres", "mongodb"] as const;
+const MULTI_ACCOUNT_PROVIDERS = ["postgres", "mongodb", "razorpay", "stripe", "paypal", "mpesa", "calcom"] as const;
 type MultiAccountProvider = (typeof MULTI_ACCOUNT_PROVIDERS)[number];
 function isMultiAccount(provider: string): provider is MultiAccountProvider {
   return MULTI_ACCOUNT_PROVIDERS.includes(provider as MultiAccountProvider);
@@ -210,6 +210,8 @@ const connectorCatalog: ConnectorCatalogItem[] = [
 
 const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
 
+const catalogByProvider = new Map(connectorCatalog.map((c) => [c.provider as string, c]));
+
 export function ConnectorsClient() {
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -217,6 +219,7 @@ export function ConnectorsClient() {
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("All");
   const [connectorQuery, setConnectorQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const [setupConnector, setSetupConnector] = useState<ConnectorCatalogItem | null>(null);
   const [setupEditAccount, setSetupEditAccount] = useState<ConnectorSummary | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -400,106 +403,100 @@ export function ConnectorsClient() {
           </p>
         ) : null}
 
-        <div className="mt-4 flex items-center gap-2">
-          <div className="flex flex-1 flex-wrap gap-2">
-            {categories.map((category) => {
-              const active = activeCategory === category;
-              return (
-                <button
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
-                    active
-                      ? "bg-black text-white"
-                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                  }`}
-                  key={category}
-                  onClick={() => setActiveCategory(category)}
-                  type="button"
-                >
-                  {category}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchOpen((open) => {
-                if (open) setConnectorQuery("");
-                return !open;
-              });
-            }}
-            aria-label={searchOpen ? "Close search" : "Search integrations"}
-            aria-expanded={searchOpen}
-            className={`flex size-9 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
-              searchOpen
-                ? "bg-black text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </button>
-        </div>
-
-        {searchOpen && (
-          <div className="mt-2.5 flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-[#FE7F2D]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              value={connectorQuery}
-              onChange={(e) => setConnectorQuery(e.target.value)}
-              placeholder="Search integrations..."
-              className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
-              aria-label="Search integrations"
-              autoComplete="off"
-              autoFocus
-            />
+        <section className="mt-5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
+              Connected accounts
+            </p>
             <button
               type="button"
-              onClick={() => {
-                setConnectorQuery("");
-                setSearchOpen(false);
-              }}
-              aria-label="Close search"
-              className="text-black/40 transition-colors hover:text-black"
+              onClick={() => setCatalogOpen(true)}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-black px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+              title="Connect an account"
+              aria-label="Connect an account"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" className="shrink-0">
+                <path d="M12 5v14" /><path d="M5 12h14" />
               </svg>
+              Connect account
             </button>
           </div>
-        )}
 
-        <section className="mt-4 border-t border-slate-200 pt-4">
-          {filteredConnectors.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-500">
-              No integrations match "{connectorQuery}".
-            </p>
+          {connectors.length === 0 ? (
+            <div className="mt-3 flex flex-col items-center gap-3 border border-dashed border-slate-200 px-4 py-8 text-center">
+              <p className="text-xs text-slate-500">
+                Nothing connected yet. Browse integrations to add Gmail, Calendar, and more.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCatalogOpen(true)}
+                className="h-9 rounded-md bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]"
+              >
+                Browse integrations
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredConnectors.map((connector) => (
-              <ConnectorRow
-                connector={connector}
-                key={connector.id}
-                linkedConnector={connectedByProvider.get(connector.provider)}
-                linkedAccounts={connectedByProviderAll.get(connector.provider) ?? []}
-                onSetup={() => { setSetupEditAccount(null); setSetupConnector(connector); }}
-                onAddAccount={() => { setSetupEditAccount(null); setSetupConnector(connector); }}
-                onEditAccount={(account) => { setSetupEditAccount(account); setSetupConnector(connector); }}
-                onUnlink={() => void deleteConnector(connector)}
-                onRemoveAccount={(id, label) => void deleteConnectorById(id, label)}
-                onSaveSettings={saveConnectorSettings}
-                telegramLinked={telegramLinked}
-              />
-            ))}
+            <div className="mt-3 divide-y divide-slate-100 border border-slate-200 bg-white">
+              {connectors.map((account) => {
+                const catalogItem = catalogByProvider.get(account.provider);
+                const Icon = catalogItem?.icon;
+                return (
+                  <div key={account.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+                      {Icon ? <Icon className="size-5" /> : (
+                        <span className="text-xs font-bold uppercase text-slate-400">
+                          {account.provider.slice(0, 2)}
+                        </span>
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-slate-900">{account.label}</p>
+                      <p className="truncate text-[11px] text-slate-500">{catalogItem?.title ?? account.provider}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 h-1.5 w-1.5 rounded-full ${
+                        account.status === "connected" ? "bg-emerald-500" : "bg-red-500"
+                      }`}
+                      title={account.status}
+                    />
+                    <button
+                      type="button"
+                      title="Remove account"
+                      onClick={() => void deleteConnectorById(account.id, account.label)}
+                      className="shrink-0 px-1.5 text-[11px] font-semibold text-red-500 underline-offset-2 transition hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
+
       </section>
+
+      {catalogOpen && (
+        <IntegrationsDialog
+          activeCategory={activeCategory}
+          setActiveCategory={setActiveCategory}
+          searchOpen={searchOpen}
+          setSearchOpen={setSearchOpen}
+          connectorQuery={connectorQuery}
+          setConnectorQuery={setConnectorQuery}
+          filteredConnectors={filteredConnectors}
+          connectedByProvider={connectedByProvider}
+          connectedByProviderAll={connectedByProviderAll}
+          telegramLinked={telegramLinked}
+          onClose={() => setCatalogOpen(false)}
+          onSetup={(connector) => { setSetupEditAccount(null); setSetupConnector(connector); }}
+          onAddAccount={(connector) => { setSetupEditAccount(null); setSetupConnector(connector); }}
+          onEditAccount={(connector, account) => { setSetupEditAccount(account); setSetupConnector(connector); }}
+          onUnlink={(connector) => void deleteConnector(connector)}
+          onRemoveAccount={(id, label) => void deleteConnectorById(id, label)}
+          onSaveSettings={saveConnectorSettings}
+        />
+      )}
 
       {setupConnector ? (
         <SetupDialog
@@ -859,6 +856,192 @@ function SettingsPanel({
   );
 }
 
+function IntegrationsDialog({
+  activeCategory,
+  setActiveCategory,
+  searchOpen,
+  setSearchOpen,
+  connectorQuery,
+  setConnectorQuery,
+  filteredConnectors,
+  connectedByProvider,
+  connectedByProviderAll,
+  telegramLinked,
+  onClose,
+  onSetup,
+  onAddAccount,
+  onEditAccount,
+  onUnlink,
+  onRemoveAccount,
+  onSaveSettings,
+}: {
+  activeCategory: (typeof categories)[number];
+  setActiveCategory: (category: (typeof categories)[number]) => void;
+  searchOpen: boolean;
+  setSearchOpen: Dispatch<SetStateAction<boolean>>;
+  connectorQuery: string;
+  setConnectorQuery: (value: string) => void;
+  filteredConnectors: ConnectorCatalogItem[];
+  connectedByProvider: Map<string, ConnectorSummary>;
+  connectedByProviderAll: Map<string, ConnectorSummary[]>;
+  telegramLinked: boolean | null;
+  onClose: () => void;
+  onSetup: (connector: ConnectorCatalogItem) => void;
+  onAddAccount: (connector: ConnectorCatalogItem) => void;
+  onEditAccount: (connector: ConnectorCatalogItem, account: ConnectorSummary) => void;
+  onUnlink: (connector: ConnectorCatalogItem) => void;
+  onRemoveAccount: (id: string, label: string) => void;
+  onSaveSettings: (accountId: string, metadata: Record<string, unknown>) => Promise<void>;
+}) {
+  const [closing, setClosing] = useState(false);
+
+  function handleClose() {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, 140);
+  }
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex overflow-y-auto bg-black/50 px-4 py-10 backdrop-blur-sm ${closing ? "dialog-backdrop-exit" : "dialog-backdrop-enter"}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="integrations-dialog-title"
+      onClick={handleClose}
+    >
+      <div
+        className={`relative m-auto flex max-h-[85vh] w-full max-w-[1000px] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl ${closing ? "dialog-panel-exit" : "dialog-panel-enter"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-black" id="integrations-dialog-title">
+              Browse integrations
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Add OAuth apps or encrypted provider keys.
+            </p>
+          </div>
+          <button
+            className="flex size-8 shrink-0 items-center justify-center border border-slate-200 bg-white text-black transition-colors hover:bg-[#FE7F2D] hover:text-white"
+            onClick={handleClose}
+            type="button"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="shrink-0 border-b border-slate-200 px-6 pt-4">
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 flex-wrap gap-2">
+              {categories.map((category) => {
+                const active = activeCategory === category;
+                return (
+                  <button
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                      active
+                        ? "bg-black text-white"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                    }`}
+                    key={category}
+                    onClick={() => setActiveCategory(category)}
+                    type="button"
+                  >
+                    {category}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchOpen((open) => {
+                  if (open) setConnectorQuery("");
+                  return !open;
+                });
+              }}
+              aria-label={searchOpen ? "Close search" : "Search integrations"}
+              aria-expanded={searchOpen}
+              className={`flex size-9 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                searchOpen
+                  ? "bg-black text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+          </div>
+
+          {searchOpen && (
+            <div className="mt-2.5 mb-4 flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-[#FE7F2D]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                value={connectorQuery}
+                onChange={(e) => setConnectorQuery(e.target.value)}
+                placeholder="Search integrations..."
+                className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
+                aria-label="Search integrations"
+                autoComplete="off"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setConnectorQuery("");
+                  setSearchOpen(false);
+                }}
+                aria-label="Close search"
+                className="text-black/40 transition-colors hover:text-black"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {!searchOpen && <div className="pb-4" />}
+        </div>
+
+        <div className="overflow-y-auto px-6 py-4">
+          {filteredConnectors.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-500">
+              No integrations match "{connectorQuery}".
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredConnectors.map((connector) => (
+                <ConnectorRow
+                  connector={connector}
+                  key={connector.id}
+                  linkedConnector={connectedByProvider.get(connector.provider)}
+                  linkedAccounts={connectedByProviderAll.get(connector.provider) ?? []}
+                  onSetup={() => onSetup(connector)}
+                  onAddAccount={() => onAddAccount(connector)}
+                  onEditAccount={(account) => onEditAccount(connector, account)}
+                  onUnlink={() => onUnlink(connector)}
+                  onRemoveAccount={onRemoveAccount}
+                  onSaveSettings={onSaveSettings}
+                  telegramLinked={telegramLinked}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConnectorRow({
   connector,
   linkedConnector,
@@ -919,6 +1102,12 @@ function ConnectorRow({
           <p className="mt-2.5 text-xs leading-5 text-slate-500 line-clamp-3">
             {connector.description}
           </p>
+
+          {!multi && linkedConnector && (
+            <p className="mt-2 truncate text-xs font-semibold text-slate-900">
+              Connected as {linkedConnector.label}
+            </p>
+          )}
         </div>
 
         {/* Named accounts list for multi-account DB providers */}
@@ -966,7 +1155,11 @@ function ConnectorRow({
               <GearIcon />
             </button>
           )}
-          {connector.authType === "oauth" ? (
+          {multi ? (
+            <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onAddAccount} type="button">
+              Add account
+            </button>
+          ) : connector.authType === "oauth" ? (
             linkedConnector ? (
               <button className="h-9 flex-1 border border-slate-200 bg-white px-4 text-xs font-semibold text-black/40 transition hover:bg-slate-50 hover:text-black" onClick={onUnlink} type="button">Unlink</button>
             ) : (
@@ -974,10 +1167,6 @@ function ConnectorRow({
                 Connect
               </button>
             )
-          ) : multi ? (
-            <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onAddAccount} type="button">
-              Add account
-            </button>
           ) : (
             <>
               <button className="h-9 flex-1 bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]" onClick={onSetup} type="button">

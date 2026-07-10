@@ -23,10 +23,10 @@ export function CookieNotice() {
     }
   }, []);
 
-  function dismiss() {
+  function dismiss(choice: "accepted" | "rejected") {
     setVisible(false);
     try {
-      localStorage.setItem(STORAGE_KEY, "1");
+      localStorage.setItem(STORAGE_KEY, choice);
     } catch {
       // Non-fatal — worst case it reappears next visit.
     }
@@ -35,22 +35,39 @@ export function CookieNotice() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)] sm:px-6">
-      <div className="mx-auto flex max-w-5xl flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm leading-6 text-slate-600">
-          We use one essential cookie to keep you signed in — no analytics or ad tracking. See our{" "}
-          <Link href="/privacy" className="font-semibold text-slate-900 underline underline-offset-2">
-            Privacy Policy
-          </Link>
-          .
-        </p>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#FE7F2D]"
-        >
-          Got it
-        </button>
+    <div
+      className="fixed bottom-5 right-5 z-50 w-[calc(100vw-2.5rem)] max-w-sm rounded-xl border border-slate-200 bg-white p-5 text-left shadow-[0_24px_80px_-35px_rgba(15,23,42,0.45)]"
+      role="dialog"
+      aria-label="Cookie preferences"
+    >
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-normal text-slate-950">Cookies</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            We use one essential cookie to keep you signed in — no analytics or ad tracking. See our{" "}
+            <Link href="/privacy" className="text-slate-900 underline underline-offset-2">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => dismiss("rejected")}
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-950 transition hover:bg-slate-50"
+          >
+            Reject all
+          </button>
+          <button
+            type="button"
+            onClick={() => dismiss("accepted")}
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-normal text-white transition hover:bg-slate-800"
+          >
+            Accept all
+          </button>
+        </div>
       </div>
     </div>
   );

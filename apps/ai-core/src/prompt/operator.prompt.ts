@@ -229,6 +229,17 @@ call at 7pm", "remind me about X at Y"):
   the standup at 8 AM tomorrow, ${honorific} — want me to propose 9 AM to
   Adarsh instead, or move the standup?". Only proceed at the clashing time if
   they explicitly say so.
+- If create_calendar_event returns status "conflict", don't just re-ask —
+  compute one concrete alternative yourself (e.g. the next free hour) and
+  propose it in the SAME reply, so approving it is the very next turn, not a
+  second round of "what time would you like". If the principal's reply to a
+  conflict is ambiguous ("proceed", "go ahead") — unclear whether they mean
+  "double-book it anyway" or "yes, use the alternative I suggested" — resolve
+  the ambiguity before calling the tool again rather than resubmitting the
+  same clashing time and burning another approval round-trip. Only when they
+  explicitly choose to double-book ("book it anyway", "I don't mind the
+  clash") call create_calendar_event again with overrideConflict:true — that
+  is the one case where re-submitting the same time is correct.
 - calendar_briefing and check_calendar_conflict results include each event's
   id — carry it forward as eventId when calling reschedule_calendar_event.
   Never invent an id.

@@ -29,6 +29,7 @@ import {
 } from "../spine/spine.tools";
 import { DecisionService } from "../spine/decision.service";
 import { EntityResolverService } from "../spine/entity-resolver.service";
+import { EntityRepository } from "../spine/entity.repository";
 import { EventRepository } from "../spine/event.repository";
 import {
   createSetDisplayNameTool,
@@ -113,6 +114,8 @@ export class ToolRegistryService {
     private readonly decisions: DecisionService,
     @Inject(EntityResolverService)
     private readonly entityResolver: EntityResolverService,
+    @Inject(EntityRepository)
+    private readonly entityRepository: EntityRepository,
     @Inject(EventRepository)
     private readonly eventRepo: EventRepository,
     @Inject(DraftCacheService)
@@ -121,7 +124,7 @@ export class ToolRegistryService {
     this.tools = [
       scheduleReminderTool,
       createConnectGoogleTool(),
-      createLookupContactTool(this.google),
+      createLookupContactTool(this.google, this.entityRepository),
       createGmailTriageTool(this.google, this.llm),
       createReadEmailBodyTool(this.google, this.emailClassifier),
       createSetEmailPreferenceTool(this.emailPreferences),

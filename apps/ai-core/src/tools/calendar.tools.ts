@@ -84,6 +84,9 @@ type CreateEventPayload = {
   attendees?: string[];
   timeZone?: string;
   approved?: boolean;
+  /** Set when the principal already chose to double-book after seeing a
+   * conflict — skips the conflict re-check instead of blocking again. */
+  overrideConflict?: boolean;
 };
 
 export function createCreateCalendarEventTool(
@@ -93,7 +96,7 @@ export function createCreateCalendarEventTool(
     name: "create_calendar_event",
     category: "calendar",
     description:
-      "Create a calendar event. Requires explicit approval. Needs summary, start (ISO), end (ISO), optional attendees.",
+      'Create a calendar event. Requires explicit approval. Needs summary, start (ISO), end (ISO), optional attendees. If a prior call returned status "conflict" and the principal explicitly said to book it anyway / double-book (not just "proceed", which is ambiguous — confirm first), pass overrideConflict:true so this call actually creates it instead of re-blocking on the same conflict.',
     approvalRequired: true,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -112,20 +115,22 @@ export function createCreateCalendarEventTool(
         };
       }
 
-      const dayEvents = await google.listEvents(userId, {
-        timeMin: startOfDay(new Date(payload.start), context.timezone),
-        timeMax: endOfDay(new Date(payload.start), context.timezone),
-        maxResults: 25,
-      });
-      if (dayEvents.connected) {
-        const conflict = findConflict(dayEvents.events, payload.start, payload.end);
-        if (conflict) {
-          return {
-            tool: "create_calendar_event",
-            status: "conflict",
-            message: `Hold on, ${context.honorific} — that clashes with "${conflict.title}" at ${fmtTime(conflict.start, context.timezone)}. Want a different time, or should I move that one instead?`,
-            data: { conflict },
-          };
+      if (!payload.overrideConflict) {
+        const dayEvents = await google.listEvents(userId, {
+          timeMin: startOfDay(new Date(payload.start), context.timezone),
+          timeMax: endOfDay(new Date(payload.start), context.timezone),
+          maxResults: 25,
+        });
+        if (dayEvents.connected) {
+          const conflict = findConflict(dayEvents.events, payload.start, payload.end);
+          if (conflict) {
+            return {
+              tool: "create_calendar_event",
+              status: "conflict",
+              message: `Hold on, ${context.honorific} — that clashes with "${conflict.title}" at ${fmtTime(conflict.start, context.timezone)}. Want a different time, or should I book it anyway?`,
+              data: { conflict },
+            };
+          }
         }
       }
 
@@ -145,10 +150,13 @@ export function createCreateCalendarEventTool(
         return notConnected("create_calendar_event", context.honorific);
       }
 
+      // State the real booked time deterministically — never let the model
+      // reconstruct/paraphrase it from raw ISO data in "say", which is how a
+      // wrong time (e.g. off by the timezone offset) can slip into the reply.
       return {
         tool: "create_calendar_event",
         status: "ok",
-        message: `Done, ${context.honorific} — "${res.event.title}" is on your calendar.`,
+        message: `Done, ${context.honorific} — "${res.event.title}" is on your calendar for ${fmtDateTime(res.event.start, context.timezone)}.`,
         data: { event: res.event },
       };
     },
@@ -259,7 +267,7 @@ export function createRescheduleCalendarEventTool(
       return {
         tool: "reschedule_calendar_event",
         status: "ok",
-        message: `Done, ${context.honorific} — "${res.event.title}" is now at ${fmtTime(res.event.start, context.timezone)}${notified ? " and they've been notified" : ""}.`,
+        message: `Done, ${context.honorific} — "${res.event.title}" is now at ${fmtDateTime(res.event.start, context.timezone)}${notified ? " and they've been notified" : ""}.`,
         data: { event: res.event },
       };
     },
@@ -336,6 +344,20 @@ function fmtTime(iso: string | undefined, timezone: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Date + time together — used where the model must not be left to infer or
+ * restate the date itself (e.g. the final confirmation of a created event). */
+function fmtDateTime(iso: string | undefined, timezone: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const datePart = date.toLocaleDateString("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return `${datePart} at ${fmtTime(iso, timezone)}`;
 }
 
 function minutesUntil(iso: string): number {

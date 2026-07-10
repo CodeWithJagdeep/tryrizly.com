@@ -162,6 +162,37 @@ export class EntityRepository implements OnModuleDestroy {
     }));
   }
 
+  /**
+   * Fuzzy name -> email lookup against already-resolved entities (built from
+   * processed emails/events) — no external API call, so it works even when
+   * Google isn't connected or a scope hasn't propagated yet. Used as the
+   * fast/local path before lookup_contact falls back to live Google APIs.
+   */
+  async findContactsByName(
+    userId: string,
+    name: string,
+    threshold = 0.3,
+  ): Promise<Array<{ name: string; email: string; similarity: number }>> {
+    if (!this.pool || !this.trgmReady) return [];
+    await this.ensureSchema();
+    const normalized = name.trim().toLowerCase();
+    const res = await this.pool.query<{
+      canonical_name: string;
+      email: string;
+      sim: number;
+    }>(
+      `select e.canonical_name, ea2.alias as email, similarity(ea.normalized, $2) as sim
+         from entity_aliases ea
+         join entities e on e.id = ea.entity_id
+         join entity_aliases ea2 on ea2.entity_id = e.id and ea2.kind = 'email'
+        where ea.user_id = $1 and ea.kind = 'name' and similarity(ea.normalized, $2) > $3
+        order by sim desc
+        limit 5`,
+      [userId, normalized, threshold],
+    );
+    return res.rows.map((r) => ({ name: r.canonical_name, email: r.email, similarity: r.sim }));
+  }
+
   async getEntity(userId: string, entityId: string): Promise<EntityRow | undefined> {
     if (!this.pool) return undefined;
     await this.ensureSchema();

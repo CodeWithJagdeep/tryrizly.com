@@ -139,7 +139,6 @@ export function UsageClient() {
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function buyCredits() {

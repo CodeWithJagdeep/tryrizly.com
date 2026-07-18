@@ -5,16 +5,15 @@ import { EmailClassifierService } from "./email-classifier.service";
 import { EmailPreferencesRepository } from "./email-preferences.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
 import { VectorMemoryService } from "../memory/vector-memory.service";
-import { enqueueReminder } from "@heyriz/shared/queue/queues";
+import { enqueueNotification, enqueueReminder } from "@heyriz/shared/queue/queues";
 import { enqueueSpineIngest } from "@heyriz/shared/queue/spine";
 import { enqueueWatchReply } from "@heyriz/shared/queue/watch-replies";
 import {
   addPendingEmailAction,
-  appendProactiveMessage,
 } from "@heyriz/shared/queue/pending-actions";
-import { approvalKeyboard, sendTelegramMessage } from "@heyriz/shared/telegram";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
+import { appendActionAudit } from "@heyriz/shared/action-audit";
 import { zonedTimeToUtc } from "../lib/timezone";
 import type { EmailCategory, EmailPipelineResult, ExtractedEmailFacts } from "./email.types";
 
@@ -155,9 +154,8 @@ export class EmailPipelineService {
     let message = baseMessage;
     let pendingId: string | undefined;
 
-    if (env.TELEGRAM_CHAT_ID && defaultAction) {
-      const chatId = String(env.TELEGRAM_CHAT_ID);
-      const pending = await addPendingEmailAction(chatId, {
+    if (defaultAction) {
+      const pending = await addPendingEmailAction(input.userId, {
         tool: "email_confirm",
         payload: {
           messageId: input.messageId,
@@ -174,28 +172,26 @@ export class EmailPipelineService {
         return undefined;
       });
       if (pending) {
+        await appendActionAudit({
+          userId: input.userId,
+          event: "proposed",
+          tool: "email_confirm",
+          payload: pending.payload,
+          approvalId: pending.id,
+        }).catch(() => undefined);
         pendingId = pending.id;
         message = `${baseMessage}\n\nReply "yes ${pending.id}" to go ahead, or "no ${pending.id}".`;
       }
     }
 
-    await sendTelegramMessage({
-      chatId: env.TELEGRAM_CHAT_ID,
-      text: message,
-      replyMarkup: pendingId ? approvalKeyboard(pendingId) : undefined,
+    const historyEntry = `${message}\n[messageId:${input.messageId} threadId:${input.threadId}]`;
+    await enqueueNotification({
+      userId: input.userId,
+      message,
+      source: "gmail",
+      approvalId: pendingId,
+      historyMessage: historyEntry,
     });
-
-    if (env.TELEGRAM_CHAT_ID) {
-      // Append messageId/threadId as agent-readable metadata so the agent can
-      // call read_email_body with the correct Gmail ID when the user references
-      // this email — without it the agent guesses using the subject and gets 400.
-      const historyEntry = `${message}\n[messageId:${input.messageId} threadId:${input.threadId}]`;
-      await appendProactiveMessage(String(env.TELEGRAM_CHAT_ID), historyEntry).catch((e) =>
-        logger.warn("email pipeline: history append failed", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    }
 
     actionsScheduled.push("telegram_notification");
 
@@ -241,7 +237,6 @@ export class EmailPipelineService {
     if (input.action === "watch") {
       await enqueueWatchReply({
         userId: input.userId,
-        chatId: env.TELEGRAM_CHAT_ID,
         threadId: input.threadId,
         baselineMessageCount: 1,
         fallbackMessage: `${honorific.charAt(0).toUpperCase() + honorific.slice(1)}, no reply yet from ${input.facts.person ?? "them"}. Should I follow up?`,
@@ -302,9 +297,10 @@ export class EmailPipelineService {
         logger.warn("auto-remind enqueue failed", { error: e instanceof Error ? e.message : String(e) }),
       );
       actionsScheduled.push("reminder_scheduled");
-      await sendTelegramMessage({
-        chatId: env.TELEGRAM_CHAT_ID,
-        text: `${cap(honorific)}, reminder set for ${label}${facts.dueDate ? ` on ${fmt(facts.dueDate, timezone)}` : ""}.`,
+      await enqueueNotification({
+        userId: input.userId,
+        message: `${cap(honorific)}, reminder set for ${label}${facts.dueDate ? ` on ${fmt(facts.dueDate, timezone)}` : ""}.`,
+        source: "gmail",
       });
     }
 

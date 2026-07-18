@@ -6,9 +6,8 @@ import { callGateway } from "./gateway";
  *
  * A short-TTL in-memory cache keeps this from adding a gateway round-trip to
  * every authenticated request — revocation therefore propagates within at most
- * CACHE_TTL_MS. On a gateway error we fail *open* (return null → skip the check):
- * the token's signature and expiry are still enforced locally, so a transient
- * outage briefly relaxes revocation rather than locking every user out.
+ * CACHE_TTL_MS. On a gateway error this returns null and authenticated route
+ * handlers fail closed because revocation state cannot be verified.
  */
 
 const CACHE_TTL_MS = 30_000;

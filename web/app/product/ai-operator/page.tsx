@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Eyebrow } from "../../components/product/Eyebrow";
 import { FaqAccordion } from "../../components/product/FaqAccordion";
 import { HeroGlow } from "../../components/product/HeroGlow";

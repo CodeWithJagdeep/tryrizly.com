@@ -55,6 +55,14 @@ type UsageSummary = {
   breakdown: UsageBreakdownRow[];
 };
 
+type MemoryNote = {
+  id: string;
+  summary: string;
+  source: string;
+  createdAt: string;
+  metadata?: { provenance?: string; confidence?: string; expiresAt?: string };
+};
+
 const SOURCE_OPTIONS = ["Twitter / X", "LinkedIn", "Friend or colleague", "Search", "Other"];
 const LANGUAGE_OPTIONS = ["English", "Hindi", "Hinglish", "Spanish", "French", "German"];
 
@@ -74,6 +82,7 @@ const SECTIONS = [
   { id: "riz", label: "Riz preferences", icon: PreferencesIcon },
   { id: "billing", label: "Billing", icon: BillingIcon },
   { id: "usage", label: "Usage", icon: UsageIcon },
+  { id: "memory", label: "Memory", icon: MemoryIcon },
   { id: "account", label: "Account", icon: AccountIcon },
 ] as const;
 
@@ -104,6 +113,9 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
+  const [memories, setMemories] = useState<MemoryNote[]>([]);
+  const [memoryLoading, setMemoryLoading] = useState(true);
+  const [memoryMessage, setMemoryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setChatCount(getSessions().length);
@@ -153,6 +165,35 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
       .finally(() => setUsageLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/memory")
+      .then((response) => response.json())
+      .then((data: { memories?: MemoryNote[] }) => setMemories(data.memories ?? []))
+      .catch(() => setMemoryMessage("Could not load memory notes."))
+      .finally(() => setMemoryLoading(false));
+  }, []);
+
+  async function forgetMemory(id: string) {
+    const response = await fetch(`/api/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!response.ok) {
+      setMemoryMessage("Could not forget that memory.");
+      return;
+    }
+    setMemories((current) => current.filter((memory) => memory.id !== id));
+    setMemoryMessage("Memory removed.");
+  }
+
+  async function forgetAllMemories() {
+    if (!window.confirm("Forget all long-term memory notes? This cannot be undone.")) return;
+    const response = await fetch("/api/memory", { method: "DELETE" });
+    if (!response.ok) {
+      setMemoryMessage("Could not clear memory.");
+      return;
+    }
+    setMemories([]);
+    setMemoryMessage("All long-term memory removed.");
+  }
+
   const displayName = name || email.split("@")[0];
   const initial = displayName.charAt(0).toUpperCase();
   const accountRows = useMemo(
@@ -162,7 +203,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
       { label: "Local chat sessions", value: String(chatCount) },
       { label: "Onboarding", value: onboarding?.completedAt ? formatDate(onboarding.completedAt) : "In progress" },
     ],
-    [chatCount, email, onboarding?.completedAt],
+    [chatCount, email, onboarding],
   );
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -317,7 +358,6 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[17px] font-semibold text-white disabled:opacity-60"
                 >
                   {avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
                   ) : (
                     initial
@@ -485,6 +525,50 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
               description="AI spend for this billing cycle, including feature-level cost breakdown."
             >
               <UsageSettingsView usage={usage} loading={usageLoading} error={usageError} />
+            </SettingsPanel>
+          )}
+
+          {activeSection === "memory" && (
+            <SettingsPanel
+              title="Memory"
+              description="Review and remove the long-term notes Riz may use in future conversations."
+            >
+              <div className="border-t border-slate-200">
+                {memoryLoading ? (
+                  <p className="py-4 text-[15px] text-slate-400">Loading memory...</p>
+                ) : memories.length === 0 ? (
+                  <p className="py-4 text-[15px] text-slate-400">No long-term memory notes.</p>
+                ) : (
+                  memories.map((memory) => (
+                    <div key={memory.id} className="grid gap-3 border-b border-slate-200 py-4 md:grid-cols-[1fr_auto] md:items-center">
+                      <div className="min-w-0">
+                        <p className="break-words text-[15px] text-slate-900">{memory.summary}</p>
+                        <p className="mt-1 text-[13px] text-slate-400">
+                          {memory.metadata?.provenance ?? memory.source} · {memory.metadata?.confidence ?? "medium"} confidence · {formatDate(memory.createdAt)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void forgetMemory(memory.id)}
+                        className="h-9 border border-slate-200 px-3 text-[14px] font-medium text-slate-600 transition hover:border-red-200 hover:text-red-600"
+                      >
+                        Forget
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={memories.length === 0}
+                  onClick={() => void forgetAllMemories()}
+                  className="h-9 border border-red-200 px-4 text-[14px] font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Forget all memory
+                </button>
+                {memoryMessage && <p className="text-[14px] text-slate-500">{memoryMessage}</p>}
+              </div>
             </SettingsPanel>
           )}
 
@@ -740,6 +824,15 @@ function UsageIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
       <path d="M3 13.5V8M7 13.5V4M11 13.5V9.5M3 13.5h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MemoryIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+      <path d="M5 3.2A2.2 2.2 0 0 1 9 2.7a2.2 2.2 0 0 1 2.7 2.8A2.3 2.3 0 0 1 12 10a2.2 2.2 0 0 1-3 2.8A2.2 2.2 0 0 1 5 12.3a2.2 2.2 0 0 1-1-4.1A2.2 2.2 0 0 1 5 3.2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M8 3v10M5.2 6.2c1 .1 1.7.6 2.1 1.4M10.8 8.7c-1 .1-1.7.6-2.1 1.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   );
 }

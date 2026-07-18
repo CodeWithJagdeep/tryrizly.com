@@ -187,10 +187,12 @@ export async function POST(request: Request) {
     }
   }
 
-  // 2. Create the Google Calendar event (approved: true skips the agent approval gate)
-  const eventResult = await callGateway<ToolResult>("/api/tools/execute", {
+  // Calendar writes enter the same server-owned approval queue as agent actions.
+  const proposal = await callGateway<{ approval: { id: string; preview: string } }>(
+    "/api/approvals/propose",
+    {
     userId: session.userId,
-    name: "create_calendar_event",
+    tool: "create_calendar_event",
     payload: {
       summary: body.title,
       start: body.start,
@@ -198,36 +200,14 @@ export async function POST(request: Request) {
       attendees: body.attendees ?? [],
       description: body.description,
       timeZone: body.timezone ?? "UTC",
-      approved: true,
     },
+    preview: `Create calendar event "${body.title}" from ${body.start} to ${body.end}`,
   });
-
-  if (eventResult?.status === "needs_connection") {
-    return Response.json({ message: "Google Calendar is not connected", code: "needs_connection" }, { status: 422 });
-  }
-  if (eventResult?.error) {
-    return Response.json({ message: eventResult.error }, { status: 400 });
-  }
-
-  // 2. Schedule a Telegram reminder 15 minutes before the meeting
-  const meetingStart = new Date(body.start);
-  const reminderAt = new Date(meetingStart.getTime() - 15 * 60 * 1000);
-  if (reminderAt > new Date()) {
-    const attendeeList = body.attendees?.length
-      ? ` with ${body.attendees.join(", ")}`
-      : "";
-    await callGateway("/api/tasks/reminders", {
-      userId: session.userId,
-      message: `⏰ Your meeting "${body.title}"${attendeeList} starts in 15 minutes.`,
-      runAt: reminderAt.toISOString(),
-      source: "calendar",
-      metadata: { kind: "meeting_t15" },
-    }).catch(() => null); // non-fatal
-  }
 
   return Response.json({
     ok: true,
-    event: eventResult?.data?.event,
-    hangoutLink: eventResult?.data?.event?.hangoutLink,
-  });
+    approvalRequired: true,
+    approval: proposal.approval,
+    message: "Meeting proposal is waiting for approval.",
+  }, { status: 202 });
 }

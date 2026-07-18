@@ -35,6 +35,7 @@ import { TelegramService } from "./telegram.service";
     BillingGatewayService,
     EmailThrottlerGuard,
     GatewayService,
+    RedisThrottlerStorage,
     TelegramService,
     TelegramPollerService,
     { provide: APPROVAL_STORE, useClass: RedisApprovalStore },

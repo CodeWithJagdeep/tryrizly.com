@@ -4,7 +4,7 @@ import { rateLimit } from "../_lib/rate-limit";
 const CONTACT_INBOX = process.env.CONTACT_EMAIL || "hello@getrizly.com";
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "contact", { limit: 5, windowMs: 10 * 60_000 });
+  const limited = await rateLimit(request, "contact", { limit: 5, windowMs: 10 * 60_000 });
   if (limited) return limited;
 
   const body = await request.json().catch(() => null);
@@ -18,7 +18,16 @@ export async function POST(request: Request) {
   const inquiryType = String(body.inquiryType || "").trim();
   const message = String(body.message || "").trim();
 
-  if (!name || !email || !inquiryType || !message) {
+  if (
+    !name ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !inquiryType ||
+    !message ||
+    name.length > 120 ||
+    company.length > 160 ||
+    inquiryType.length > 80 ||
+    message.length > 10_000
+  ) {
     return NextResponse.json({ error: "missing_required_fields" }, { status: 400 });
   }
 
@@ -26,9 +35,8 @@ export async function POST(request: Request) {
   const from = process.env.RESEND_FROM;
 
   if (!resendKey || !from) {
-    console.log(`[Rizly Contact] ${inquiryType} inquiry from ${name} <${email}> (${company || "no company"})`);
-    console.log(`[Rizly Contact] Message: ${message}`);
-    return NextResponse.json({ ok: true });
+    console.error("[Rizly Contact] Email delivery is not configured");
+    return NextResponse.json({ error: "delivery_unavailable" }, { status: 503 });
   }
 
   const response = await fetch("https://api.resend.com/emails", {

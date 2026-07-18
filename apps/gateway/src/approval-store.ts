@@ -8,6 +8,7 @@ import {
   type AddPendingActionInput,
   type PendingActionRecord,
 } from "@heyriz/shared/queue/pending-actions";
+import { appendActionAudit } from "@heyriz/shared/action-audit";
 
 export const APPROVAL_STORE = Symbol("APPROVAL_STORE");
 
@@ -16,15 +17,15 @@ export type { AddPendingActionInput };
 
 /**
  * Holds the approval-gated proposals between the "shall I?" message and the
- * principal's "yes". Multiple may be pending per chat at once, each addressable
+ * principal's "yes". Multiple may be pending per user at once, each addressable
  * by a short id, with a TTL so stale proposals expire.
  */
 export interface ApprovalStore {
-  add(chatId: string, input: AddPendingActionInput): Promise<PendingApprovalRecord>;
-  list(chatId: string): Promise<PendingApprovalRecord[]>;
-  get(chatId: string, id: string): Promise<PendingApprovalRecord | undefined>;
-  remove(chatId: string, id: string): Promise<void>;
-  clear(chatId: string): Promise<void>;
+  add(userId: string, input: AddPendingActionInput): Promise<PendingApprovalRecord>;
+  list(userId: string): Promise<PendingApprovalRecord[]>;
+  get(userId: string, id: string): Promise<PendingApprovalRecord | undefined>;
+  remove(userId: string, id: string): Promise<void>;
+  clear(userId: string): Promise<void>;
 }
 
 /** In-process store: used in tests and as a single-instance fallback. */
@@ -80,8 +81,16 @@ export class MemoryApprovalStore implements ApprovalStore {
 /** Production store: survives restarts and is shared across gateway instances. */
 @Injectable()
 export class RedisApprovalStore implements ApprovalStore {
-  add(chatId: string, input: AddPendingActionInput) {
-    return addPendingAction(chatId, input);
+  async add(userId: string, input: AddPendingActionInput) {
+    const record = await addPendingAction(userId, input);
+    await appendActionAudit({
+      userId,
+      event: "proposed",
+      tool: input.tool,
+      payload: input.payload,
+      approvalId: record.id,
+    }).catch(() => undefined);
+    return record;
   }
   list(chatId: string) {
     return listPendingActions(chatId);

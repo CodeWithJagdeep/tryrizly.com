@@ -46,13 +46,21 @@ export type LiveInboxEntry = { from: string; subject: string };
  * memory — it's what stops the agent answering "no meeting" from stale recall.
  */
 export type LiveContext = {
-  /** Whether Google is connected at all (distinguishes "empty" from "not connected"). */
+  /** Backward-compatible aggregate; true when either live source is available. */
   connected: boolean;
+  calendarConnected: boolean;
+  inboxConnected: boolean;
   schedule: LiveScheduleEntry[];
   unread: LiveInboxEntry[];
 };
 
-export const EMPTY_LIVE: LiveContext = { connected: false, schedule: [], unread: [] };
+export const EMPTY_LIVE: LiveContext = {
+  connected: false,
+  calendarConnected: false,
+  inboxConnected: false,
+  schedule: [],
+  unread: [],
+};
 
 export type HeyRizRuntimeContext = {
   userId: string;

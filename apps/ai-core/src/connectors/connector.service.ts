@@ -11,6 +11,7 @@ import type {
   ConnectedAccount,
   ConnectorOAuthProvider,
   ConnectorProvider,
+  ConnectorSecretPayload,
   ConnectorSummary,
   DataSourceProvider,
   DataSourceSecretResult,
@@ -31,11 +32,10 @@ const oauthScopesByProvider: Record<GoogleOAuthProvider, string[]> = {
   gmail: [
     ...IDENTITY_SCOPES,
     "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/contacts.readonly",
   ],
-  calendar: [...IDENTITY_SCOPES, "https://www.googleapis.com/auth/calendar"],
+  calendar: [...IDENTITY_SCOPES, "https://www.googleapis.com/auth/calendar.events"],
 };
 
 const calComOAuthScopes = [
@@ -117,13 +117,12 @@ export class ConnectorService {
 
     if (isMultiAccount && input.accountId) {
       // Updating an existing named account.
-      await this.repository.updateById(input.accountId, {
-        label: input.label ?? providerLabel(provider),
-        status: "connected",
-        encryptedPayload,
-      });
-      const updated = await this.repository.findById(input.accountId);
-      if (!updated) throw new Error("account_not_found");
+      const updated = await this.repository.updateOwned(input.accountId, userId, provider, {
+          label: input.label ?? providerLabel(provider),
+          status: "connected",
+          encryptedPayload,
+        });
+      if (!updated) throw new Error("account_not_found_or_not_owned");
       account = updated;
     } else if (isMultiAccount) {
       // Adding a new named account.
@@ -269,6 +268,36 @@ export class ConnectorService {
     const token = payload.token;
     if (typeof token !== "string" || !token) return null;
     return { token };
+  }
+
+  /** Decrypts a Notion OAuth/PAT token. Returns null if not connected. */
+  async getNotionSecret(userId: string): Promise<{ apiToken: string } | null> {
+    const account = await this.repository.find(userId, "notion");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const token = payload.access_token ?? payload.accessToken ?? payload.apiToken;
+    if (typeof token !== "string" || !token) return null;
+    return { apiToken: token };
+  }
+
+  /** Decrypts the Slack bot token. Returns null if not connected. */
+  async getSlackSecret(userId: string): Promise<{ botToken: string } | null> {
+    const account = await this.repository.find(userId, "slack");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const botToken = payload.botToken;
+    if (typeof botToken !== "string" || !botToken) return null;
+    return { botToken };
+  }
+
+  /** Decrypts the Discord webhook URL. Returns null if not connected. */
+  async getDiscordSecret(userId: string): Promise<{ webhookUrl: string } | null> {
+    const account = await this.repository.find(userId, "discord");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const webhookUrl = payload.webhookUrl;
+    if (typeof webhookUrl !== "string" || !webhookUrl) return null;
+    return { webhookUrl };
   }
 
   /** Decrypts the M-Pesa Daraja credentials. Returns null if not connected. */
@@ -471,6 +500,15 @@ export class ConnectorService {
       });
     }
 
+    if (provider === "notion") {
+      return this.completeNotionOAuth({
+        code: input.code,
+        userId,
+        returnTo: storedState.returnTo,
+        scopes,
+      });
+    }
+
     if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
       throw new Error("Google OAuth env vars are missing");
     }
@@ -576,6 +614,54 @@ export class ConnectorService {
         tokenExpiresAt: expiresAt,
         ...(profile?.email ? { accountEmail: profile.email } : {}),
         ...(profile?.username ? { accountUsername: profile.username } : {}),
+      },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
+  private async completeNotionOAuth(input: {
+    code: string;
+    userId: string;
+    returnTo?: string;
+    scopes: string[];
+  }): Promise<CompleteOAuthResult> {
+    const tokenJson = await exchangeNotionToken({
+      code: input.code,
+      redirectUri: env.NOTION_REDIRECT_URI,
+    });
+
+    const accessToken = stringSecret(tokenJson.access_token);
+    if (!accessToken) {
+      throw new Error("Notion token exchange did not return an access token");
+    }
+
+    const workspaceName = stringSecret(tokenJson.workspace_name);
+    const workspaceId = stringSecret(tokenJson.workspace_id);
+    const botId = stringSecret(tokenJson.bot_id);
+    const owner = typeof tokenJson.owner === "object" && tokenJson.owner !== null
+      ? (tokenJson.owner as Record<string, unknown>)
+      : undefined;
+    const ownerUser = typeof owner?.user === "object" && owner.user !== null
+      ? (owner.user as Record<string, unknown>)
+      : undefined;
+    const ownerName = stringSecret(ownerUser?.name);
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: "notion",
+      authType: "oauth",
+      label: workspaceName ? `Notion (${workspaceName})` : providerLabel("notion"),
+      status: "connected",
+      encryptedPayload: this.vault.encrypt(tokenJson),
+      scopes: input.scopes,
+      metadata: {
+        setup: "oauth",
+        hasRefreshToken: Boolean(tokenJson.refresh_token),
+        ...(workspaceId ? { workspaceId } : {}),
+        ...(workspaceName ? { workspaceName } : {}),
+        ...(botId ? { botId } : {}),
+        ...(ownerName ? { accountName: ownerName } : {}),
       },
     });
 
@@ -691,10 +777,11 @@ function oauthStateSecret(): string {
 }
 
 function isConnectorOAuthProvider(value: unknown): value is ConnectorOAuthProvider {
-  return value === "gmail" || value === "calendar" || value === "calcom";
+  return value === "gmail" || value === "calendar" || value === "calcom" || value === "notion";
 }
 
 function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
+  if (provider === "notion") return [];
   return provider === "calcom" ? calComOAuthScopes : oauthScopesByProvider[provider];
 }
 
@@ -706,7 +793,14 @@ function missingOAuthConfig(provider: ConnectorOAuthProvider) {
     };
   }
 
-  if (provider !== "calcom" && !env.GOOGLE_CLIENT_ID) {
+  if (provider === "notion" && (!env.NOTION_CLIENT_ID || !env.NOTION_CLIENT_SECRET)) {
+    return {
+      status: "missing_config" as const,
+      message: "NOTION_CLIENT_ID and NOTION_CLIENT_SECRET are missing",
+    };
+  }
+
+  if ((provider === "gmail" || provider === "calendar") && !env.GOOGLE_CLIENT_ID) {
     return {
       status: "missing_config" as const,
       message: "GOOGLE_CLIENT_ID is missing",
@@ -723,6 +817,16 @@ function authorizationUrlForProvider(
   calComOAuthClient?: CalComOAuthClient,
   codeChallenge?: string,
 ): string {
+  if (provider === "notion") {
+    const url = new URL("https://api.notion.com/v1/oauth/authorize");
+    url.searchParams.set("owner", "user");
+    url.searchParams.set("client_id", env.NOTION_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.NOTION_REDIRECT_URI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("state", state);
+    return url.toString();
+  }
+
   if (provider === "calcom") {
     const url = new URL("/auth/oauth2/authorize", calComOAuthClient?.appBaseUrl ?? CALCOM_REGION_URLS.global.appBaseUrl);
     url.searchParams.set("client_id", calComOAuthClient?.clientId ?? env.CALCOM_CLIENT_ID ?? "");
@@ -895,6 +999,39 @@ async function fetchGoogleProfile(accessToken: string): Promise<{ email?: string
   return payload ?? null;
 }
 
+type NotionTokenJson = ConnectorSecretPayload;
+
+async function exchangeNotionToken(input: {
+  code: string;
+  redirectUri: string;
+}): Promise<NotionTokenJson> {
+  if (!env.NOTION_CLIENT_ID || !env.NOTION_CLIENT_SECRET) {
+    throw new Error("Notion OAuth env vars are missing");
+  }
+
+  const credentials = Buffer.from(`${env.NOTION_CLIENT_ID}:${env.NOTION_CLIENT_SECRET}`).toString("base64");
+  const response = await fetch("https://api.notion.com/v1/oauth/token", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      authorization: `Basic ${credentials}`,
+    },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      code: input.code,
+      redirect_uri: input.redirectUri,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Notion token exchange failed: ${errorText}`);
+  }
+
+  return (await response.json()) as NotionTokenJson;
+}
+
 function stringSecret(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
@@ -934,6 +1071,7 @@ function providerLabel(provider: ConnectorProvider) {
     paypal: "PayPal",
     github: "GitHub",
     mpesa: "M-Pesa",
+    discord: "Discord",
   };
 
   return labels[provider];

@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ClientProxy, ClientProxyFactory, Transport } from "@nestjs/microservices";
 import { firstValueFrom, timeout, TimeoutError } from "rxjs";
 import { env } from "@heyriz/shared/env";
+import { BillingGatewayService } from "./billing/billing.service";
 
 type ProxyPayload = Record<string, unknown>;
 
@@ -13,6 +14,7 @@ const AI_CORE_CALL_TIMEOUT_MS = 20_000;
 
 @Injectable()
 export class GatewayService implements OnModuleDestroy {
+  constructor(private readonly billing: BillingGatewayService) {}
   private readonly aiCoreClient: ClientProxy = ClientProxyFactory.create({
     transport: Transport.TCP,
     options: {
@@ -21,9 +23,17 @@ export class GatewayService implements OnModuleDestroy {
     },
   });
 
-  healthCheck() {
+  async healthCheck() {
+    const [aiCore, billing] = await Promise.allSettled([
+      this.sendToAiCore<{ ok: boolean }>("health.check", {}),
+      this.billing.send<{ ok: boolean }>("health.check"),
+    ]);
+    const dependencies = {
+      aiCore: aiCore.status === "fulfilled" && aiCore.value.ok,
+      billing: billing.status === "fulfilled" && billing.value.ok,
+    };
     return {
-      ok: true,
+      ok: dependencies.aiCore && dependencies.billing,
       service: "gateway",
       framework: "nestjs",
       transport: {
@@ -38,6 +48,7 @@ export class GatewayService implements OnModuleDestroy {
           port: env.BILLING_TCP_PORT,
         },
       },
+      dependencies,
     };
   }
 

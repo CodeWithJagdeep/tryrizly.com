@@ -13,7 +13,8 @@ export type ConnectorProvider =
   | "telegram"
   | "paypal"
   | "github"
-  | "mpesa";
+  | "mpesa"
+  | "discord";
 
 export type ConnectorAuthType = "oauth" | "manual";
 
@@ -73,7 +74,7 @@ export type DeleteConnectorInput = {
 };
 
 export type GoogleOAuthProvider = "gmail" | "calendar";
-export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom";
+export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion";
 
 export type StartOAuthInput = {
   userId?: string;
@@ -128,6 +129,9 @@ export type StripeConnectorSecret = { secretKey: string };
 export type CalComConnectorSecret = { apiKey: string };
 export type PayPalConnectorSecret = { clientId: string; clientSecret: string };
 export type GitHubConnectorSecret = { token: string };
+export type SlackConnectorSecret = { botToken: string };
+export type NotionConnectorSecret = { apiToken: string };
+export type DiscordConnectorSecret = { webhookUrl: string };
 export type MpesaConnectorSecret = {
   consumerKey: string;
   consumerSecret: string;

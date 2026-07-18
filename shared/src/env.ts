@@ -144,6 +144,13 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/calcom/callback"),
+  NOTION_CLIENT_ID: z.string().optional(),
+  NOTION_CLIENT_SECRET: z.string().optional(),
+  NOTION_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/notion/callback"),
+  NOTION_VERSION: z.string().default("2026-03-11"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

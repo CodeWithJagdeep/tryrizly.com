@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { COOKIE_CONSENT_KEY, COOKIE_CONSENT_EVENT } from "./Analytics";
 
-const STORAGE_KEY = "rizly-cookie-notice-dismissed";
+const STORAGE_KEY = COOKIE_CONSENT_KEY;
 
 /**
- * Rizly doesn't run analytics or ad-tracking scripts — the only cookie is the
- * essential auth session, which GDPR/ePrivacy exempt from consent. This is
- * an honest notice, not a consent-manager: it doesn't claim to offer opt-out
- * of something that doesn't exist. Revisit if analytics/tracking is ever
- * added — that would need real opt-in consent, not just this notice.
+ * Real opt-in consent gate, not just a notice: the essential auth-session
+ * cookie is GDPR/ePrivacy-exempt and always set, but Google Analytics and
+ * Microsoft Clarity (see Analytics.tsx) load only after "Accept all". The
+ * stored choice is broadcast via COOKIE_CONSENT_EVENT so analytics start or
+ * stay off in the same session without a reload.
  */
 export function CookieNotice() {
   const [visible, setVisible] = useState(false);
@@ -30,6 +31,7 @@ export function CookieNotice() {
     } catch {
       // Non-fatal — worst case it reappears next visit.
     }
+    window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_EVENT, { detail: choice }));
   }
 
   if (!visible) return null;
@@ -44,7 +46,8 @@ export function CookieNotice() {
         <div>
           <h2 className="text-base font-normal text-slate-950">Cookies</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            We use one essential cookie to keep you signed in — no analytics or ad tracking. See our{" "}
+            We use one essential cookie to keep you signed in, plus optional analytics (Google
+            Analytics, Microsoft Clarity) to improve Rizly — those only run if you accept. See our{" "}
             <Link href="/privacy" className="text-slate-900 underline underline-offset-2">
               Privacy Policy
             </Link>

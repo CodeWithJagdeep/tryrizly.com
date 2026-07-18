@@ -60,6 +60,7 @@ type ToolExecutePayload = {
   name: string;
   payload?: unknown;
   source?: HeyRizEventSource;
+  authorization?: "scheduled-approved";
 };
 
 type CheckThreadReplyPayload = {
@@ -558,11 +559,24 @@ export class AiCoreService {
       userId,
       payload: body.payload ?? {},
       context,
+      approvalGranted: body.authorization === "scheduled-approved",
     });
   }
 
   remember(body: MemoryWriteInput) {
     return this.vectorMemory.remember(body);
+  }
+
+  listMemories(body: { userId: string; limit?: number }) {
+    return this.vectorMemory.list(body.userId, body.limit);
+  }
+
+  async forgetMemory(body: { userId: string; id: string }) {
+    return { removed: await this.vectorMemory.forget(body.userId, body.id) };
+  }
+
+  async forgetAllMemories(body: { userId: string }) {
+    return { removed: await this.vectorMemory.forgetAll(body.userId) };
   }
 
   async listEmailMemories(body: { userId?: string; limit?: number; includeLowValue?: boolean }) {

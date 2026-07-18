@@ -794,7 +794,6 @@ export function OnboardingClient() {
   // Step 4: request Telegram link and poll for it.
   useEffect(() => {
     if (step !== 4) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-enter
     void loadTelegramLink();
 
     pollRef.current = setInterval(async () => {

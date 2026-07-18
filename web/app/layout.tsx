@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Instrument_Serif, Geist_Mono, Rethink_Sans, Inter_Tight, Geist, Noto_Serif, JetBrains_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "./components/AppShell";
+import { Analytics } from "./components/Analytics";
 import { requireSession } from "./api/onboarding/_lib/require-user";
 
 export const dynamic = 'force-dynamic';
@@ -138,6 +139,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-white text-text-primary">
         <AppShell session={session}>{children}</AppShell>
+        <Analytics />
       </body>
     </html>
   );

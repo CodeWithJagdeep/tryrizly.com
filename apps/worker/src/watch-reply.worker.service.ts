@@ -13,10 +13,10 @@ import type {
   WatchReplyJobName,
 } from "@heyriz/shared/queue/types";
 import { enqueueWatchReply } from "@heyriz/shared/queue/watch-replies";
+import { enqueueNotification } from "@heyriz/shared/queue/queues";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { captureException } from "@heyriz/shared/sentry";
-import { sendTelegramMessage } from "@heyriz/shared/telegram";
 
 type CheckThreadReplyResult = {
   connected: boolean;
@@ -81,9 +81,10 @@ export class WatchReplyWorkerService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        await sendTelegramMessage({
-          chatId: job.data.chatId,
-          text: job.data.fallbackMessage,
+        await enqueueNotification({
+          userId: job.data.userId,
+          message: job.data.fallbackMessage,
+          source: "gmail",
         });
         logger.info("watch reply fallback sent", {
           jobId: job.id,

@@ -9,7 +9,8 @@ import type {
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { captureException } from "@heyriz/shared/sentry";
-import { sendTelegramMessage } from "@heyriz/shared/telegram";
+import { approvalKeyboard, sendTelegramMessage } from "@heyriz/shared/telegram";
+import { appendProactiveMessage } from "@heyriz/shared/queue/pending-actions";
 import { sendEmail } from "@heyriz/shared/email";
 import webpush from "web-push";
 
@@ -18,7 +19,7 @@ async function resolveChatId(userId: string): Promise<string | undefined> {
   const secret = env.AUTH_INTERNAL_SECRET;
   // Global-chat fallback is single-user dev only. With a gateway configured we
   // never fall back: sending user A's notification to a shared chat is a leak.
-  if (!gatewayUrl) return env.TELEGRAM_CHAT_ID;
+  if (!gatewayUrl) return userId === "default" ? env.TELEGRAM_CHAT_ID : undefined;
 
   try {
     const headers: Record<string, string> = {};
@@ -218,7 +219,20 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
           return;
         }
 
-        await sendTelegramMessage({ chatId, text: job.data.message });
+        await sendTelegramMessage({
+          chatId,
+          text: job.data.message,
+          replyMarkup: job.data.approvalId ? approvalKeyboard(job.data.approvalId) : undefined,
+        });
+
+        if (job.data.historyMessage) {
+          await appendProactiveMessage(chatId, job.data.historyMessage).catch((error) =>
+            logger.warn("notification history append failed", {
+              jobId: job.id,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
 
         void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
 

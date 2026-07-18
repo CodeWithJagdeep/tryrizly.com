@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      updated="July 3, 2026"
+      updated="July 18, 2026"
       intro={
         <p>
           This policy explains what data Rizly collects, why we collect it, how it&apos;s
@@ -36,13 +36,18 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                   <strong>Connected-service data</strong> — when you link Gmail, Google Calendar,
-                  Telegram, Stripe, Razorpay, PostgreSQL, or MongoDB, we access the data those
-                  connections authorize: email messages and metadata, calendar events, chat
-                  messages you send the bot, and business metrics.
+                  Telegram, Stripe, Razorpay, PostgreSQL, MongoDB, or another connector, we access
+                  the data those connections authorize. For Google connections this includes your
+                  Google account identity, Gmail message metadata, Gmail message content and
+                  attachments you ask Rizly to process, Gmail drafts and messages Rizly prepares or
+                  sends after your approval, contact names and email addresses, and Google Calendar
+                  event titles, times, attendees, locations, descriptions, conferencing links, and
+                  availability.
                 </li>
                 <li>
-                  <strong>Usage data</strong> — product events (features used, notifications sent)
-                  and AI-usage metering, so plan limits and billing work.
+                  <strong>Derived and usage data</strong> — product events, notification history,
+                  summaries, classifications, reminders, proposed actions, approval records, and
+                  AI-usage metering, so plan limits, billing, support, and security monitoring work.
                 </li>
                 <li>
                   <strong>Payment data</strong> — handled by Razorpay. We never see or store your
@@ -59,16 +64,20 @@ export default function PrivacyPage() {
             <>
               <p>We use your data solely to operate the Service for you:</p>
               <ul>
-                <li>triaging and summarizing your email;</li>
+                <li>triaging, classifying, searching, and summarizing your Gmail messages;</li>
+                <li>drafting Gmail replies and sending them only after your approval;</li>
+                <li>finding contacts so drafted messages can be addressed correctly;</li>
                 <li>building your morning brief, reminders, and follow-ups;</li>
-                <li>preparing meeting context from your calendar;</li>
+                <li>reading Google Calendar events to prepare meeting context and detect conflicts;</li>
+                <li>creating or updating Google Calendar events only after your approval;</li>
                 <li>delivering notifications on Telegram (or email, if Telegram isn&apos;t linked);</li>
                 <li>metering AI usage against your plan and processing billing;</li>
                 <li>keeping the Service secure and debugging failures.</li>
               </ul>
               <p>
                 <strong>We do not sell your data. We do not use your content to train AI models.</strong>{" "}
-                We don&apos;t show ads.
+                We don&apos;t show ads, run targeted advertising, or use Google user data to
+                determine creditworthiness or for lending.
               </p>
             </>
           ),
@@ -87,6 +96,12 @@ export default function PrivacyPage() {
               <p>
                 We route different tasks to different providers for quality and cost; no provider
                 receives more than the specific content needed for the task at hand.
+              </p>
+              <p>
+                Raw, aggregated, anonymized, and derived Google Workspace API data is not used to
+                develop, improve, or train generalized AI or ML models. Rizly may use your data only
+                to provide or improve the product features visible to you in your own account, such
+                as personalized summaries, drafts, reminders, and recommendations.
               </p>
             </>
           ),
@@ -107,16 +122,40 @@ export default function PrivacyPage() {
                 </a>
                 , including the Limited Use requirements.
               </p>
+              <p>
+                The use of raw or derived user data received from Google Workspace APIs will adhere
+                to the Google API Services User Data Policy, including the Limited Use requirements.
+              </p>
               <ul>
                 <li>
-                  Gmail and Calendar OAuth tokens are stored <strong>encrypted</strong> and used
-                  only server-side to make the API calls you authorized.
+                  <strong>Google identity data:</strong> we access your basic Google profile and
+                  email address to identify which account completed the OAuth flow and to label the
+                  connected account in your dashboard.
+                </li>
+                <li>
+                  <strong>Gmail data:</strong> we access message headers, senders, recipients,
+                  snippets, labels, message bodies, and attachments needed for inbox triage,
+                  summaries, meeting detection, draft replies, approved sending, and contact lookup.
+                </li>
+                <li>
+                  <strong>Google Calendar data:</strong> we access event details and availability
+                  to show your schedule, prepare meeting context, detect conflicts, send reminders,
+                  and create or update events after your approval.
+                </li>
+                <li>
+                  <strong>Google Contacts data:</strong> we access contact names and email
+                  addresses to find the right recipient for user-requested or user-approved drafts.
+                </li>
+                <li>
+                  Gmail and Calendar OAuth tokens are stored <strong>encrypted at rest</strong> and
+                  used only server-side to make the API calls you authorized.
                 </li>
                 <li>
                   Google user data is used only to provide user-facing features (triage, briefs,
-                  scheduling) — never for advertising, and never transferred to third parties
-                  except as necessary to provide those features (e.g., AI processing above), for
-                  security, or to comply with law.
+                  scheduling, drafts, and reminders) — never for advertising, never sold, and never
+                  transferred to third parties except as necessary to provide those features with
+                  your consent, for security, to comply with law, or as part of a merger or
+                  acquisition after required notice or consent.
                 </li>
                 <li>
                   You can revoke access at any time from the Rizly dashboard or from your{" "}
@@ -139,15 +178,20 @@ export default function PrivacyPage() {
           body: (
             <>
               <ul>
-                <li>OAuth tokens and secrets are encrypted at rest.</li>
+                <li>OAuth tokens and connector secrets are encrypted at rest with AES-256-GCM.</li>
                 <li>All data moves over TLS-encrypted connections.</li>
                 <li>
-                  Production access is limited to infrastructure that needs it; sessions can be
-                  revoked globally if a credential is ever compromised.
+                  Production access is limited to infrastructure and authorized personnel who need
+                  it to operate, secure, debug, or support the Service.
                 </li>
                 <li>
                   Processed summaries and task history are stored in our databases to power your
                   dashboard; raw email bodies are fetched live rather than parked in queues.
+                </li>
+                <li>
+                  Humans do not review Google message or calendar content unless you ask us to
+                  support a specific issue, it is necessary for security or abuse investigation, or
+                  we are legally required to do so.
                 </li>
               </ul>
               <p>
@@ -164,9 +208,12 @@ export default function PrivacyPage() {
             <>
               <p>
                 We keep your data while your account is active. When you disconnect a connector,
-                we stop accessing that service immediately and delete its stored credentials. When
-                you delete your account, we delete or anonymize your personal data within 30 days,
-                except records we must keep for legal or accounting reasons (e.g., invoices).
+                we stop accessing that service immediately and delete its stored credentials. We may
+                retain previously created summaries, reminders, task history, and approval logs so
+                your dashboard and audit history continue to work unless you delete them or request
+                deletion. When you delete your account, we delete or anonymize your personal data
+                within 30 days, except records we must keep for legal, security, fraud-prevention,
+                or accounting reasons (e.g., invoices).
               </p>
               <p>
                 You can request deletion or an export of your data anytime at{" "}
@@ -188,6 +235,10 @@ export default function PrivacyPage() {
                   your data only on our instructions;
                 </li>
                 <li>
+                  <strong>Connected services</strong> when you ask Rizly to take an action, such as
+                  creating a Google Calendar event or sending an approved Gmail message;
+                </li>
+                <li>
                   <strong>Authorities</strong>, when required by a valid legal request;
                 </li>
                 <li>
@@ -195,6 +246,26 @@ export default function PrivacyPage() {
                   protected under this policy and you&apos;ll be notified.
                 </li>
               </ul>
+            </>
+          ),
+        },
+        {
+          id: "cookies-analytics",
+          title: "Cookies & Analytics",
+          body: (
+            <>
+              <p>
+                Rizly sets one essential cookie: the session that keeps you signed in. It&apos;s
+                required for the product to work and carries no tracking.
+              </p>
+              <p>
+                If you choose &ldquo;Accept all&rdquo; in the cookie banner, we additionally load
+                Google Analytics (aggregate usage and traffic statistics) and Microsoft Clarity
+                (interaction analytics such as heatmaps and session recordings) to understand how
+                Rizly is used and improve it. Neither loads if you choose &ldquo;Reject
+                all&rdquo;, and you can change your mind at any time by clearing this site&apos;s
+                data in your browser, which brings the banner back.
+              </p>
             </>
           ),
         },

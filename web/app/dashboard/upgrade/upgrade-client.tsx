@@ -65,7 +65,7 @@ export function UpgradeClient() {
       const data = (await res.json()) as { checkoutUrl?: string; error?: string; ok?: boolean };
       if (!res.ok || data.error) throw new Error(data.error ?? "Failed to start checkout");
       if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+        window.location.assign(data.checkoutUrl);
       } else {
         setError("Payment provider not configured. Contact support.");
       }
@@ -79,8 +79,9 @@ export function UpgradeClient() {
   const currentPlanId = status?.plan?.id;
   const trialActive = status?.trial?.active;
   const trialEndsAt = status?.trial?.endsAt;
+  const [renderedAt] = useState(() => Date.now());
   const trialDaysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - renderedAt) / (24 * 60 * 60 * 1000)))
     : 0;
   const trialExpired = status?.access?.state === "free" && !trialActive;
 

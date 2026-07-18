@@ -192,7 +192,6 @@ export function ChatSidebar({
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[13px] font-semibold text-white">
             {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
             ) : initial}
           </span>

@@ -24,7 +24,6 @@ export async function enqueueWatchReply(request: WatchReplyRequest) {
     "watch-reply",
     {
       userId: request.userId,
-      chatId: request.chatId,
       threadId: request.threadId,
       attempt,
       maxAttempts,

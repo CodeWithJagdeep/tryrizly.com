@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ClientProxy, ClientProxyFactory, Transport } from "@nestjs/microservices";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, timeout } from "rxjs";
 import { env } from "@heyriz/shared/env";
 
 type BillingPayload = Record<string, unknown>;
@@ -16,7 +16,7 @@ export class BillingGatewayService implements OnModuleDestroy {
   });
 
   send<TResponse>(pattern: string, payload: BillingPayload = {}) {
-    return firstValueFrom(this.billingClient.send<TResponse>(pattern, payload));
+    return firstValueFrom(this.billingClient.send<TResponse>(pattern, payload).pipe(timeout(20_000)));
   }
 
   async onModuleDestroy() {

@@ -335,7 +335,6 @@ export function EmailsClient() {
         <EmailDetailSheet
           email={openEmail}
           onClose={() => setOpenEmail(null)}
-          onSent={() => void load(true)}
         />
       )}
     </main>
@@ -658,11 +657,9 @@ function EmailBodyFrame({ html }: { html: string }) {
 function EmailDetailSheet({
   email,
   onClose,
-  onSent,
 }: {
   email: ProcessedEmail;
   onClose: () => void;
-  onSent: () => void;
 }) {
   const [message, setMessage] = useState<GmailMessageDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -743,8 +740,7 @@ function EmailDetailSheet({
       if (!res.ok || !data.ok) {
         throw new Error(data.message || data.error || `Error ${res.status}`);
       }
-      setSendSuccess(mode === "schedule" ? "Reply scheduled." : "Reply sent.");
-      onSent();
+      setSendSuccess(mode === "schedule" ? "Scheduled reply added to Approvals." : "Reply added to Approvals.");
       setTimeout(onClose, 900);
     } catch (e) {
       setSendError(e instanceof Error ? e.message : "Couldn't send this reply");
@@ -999,91 +995,6 @@ function SentTable({ emails }: { emails: SentEmail[] }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function EmailItem({
-  email,
-  labels,
-  onRefresh,
-}: {
-  email: ProcessedEmail;
-  labels: Record<string, string>;
-  onRefresh: () => void;
-}) {
-  const { from, subject, body } = parseSummary(email.summary);
-  const catColor = CATEGORY_COLORS[email.category] ?? CATEGORY_COLORS.general_medium;
-  const catLabel = labels[email.category] ?? email.category;
-  const initials = (from || subject).charAt(0).toUpperCase();
-  const [acting, setActing] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-
-  async function act(label: string, msg: string) {
-    if (email.sample) return;
-    setActing(label);
-    try {
-      await chatAction(msg);
-      setDone(label);
-    } finally {
-      setActing(null);
-    }
-  }
-
-  return (
-    <div className="group flex items-start gap-3 bg-white px-4 py-4 transition hover:bg-slate-50">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600">
-        {initials}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-semibold text-slate-900">{from || "Unknown"}</span>
-          <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.createdAt)}</span>
-        </div>
-
-        {subject && <p className="mt-0.5 truncate text-sm text-slate-700">{subject}</p>}
-        {body && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{body}</p>}
-
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${catColor}`}>
-            {catLabel}
-          </span>
-          {email.sample && (
-            <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Sample
-            </span>
-          )}
-          {email.person && <span className="text-[11px] text-slate-400">· {email.person}</span>}
-          {email.dueDate && <span className="text-[11px] text-amber-500/70">· Due {formatDueDate(email.dueDate)}</span>}
-        </div>
-
-        {/* Action row */}
-        {!email.sample && (
-        <div className="mt-2.5 flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <ActionButton
-            label="Remind me"
-            active={acting === "Remind me"}
-            done={done === "Remind me"}
-            onClick={() => act("Remind me", `Remind me to follow up on this email from ${from || "someone"}: ${subject || email.summary}`)}
-          />
-          {email.category === "meeting_request" && (
-            <ActionButton
-              label="Add to calendar"
-              active={acting === "Add to calendar"}
-              done={done === "Add to calendar"}
-              onClick={() => act("Add to calendar", `Schedule a meeting based on this email from ${from}: ${subject}`)}
-            />
-          )}
-          <ActionButton
-            label="Draft reply"
-            active={acting === "Draft reply"}
-            done={done === "Draft reply"}
-            onClick={() => act("Draft reply", `Draft a reply to this email from ${from || "someone"}: ${subject || email.summary}`)}
-          />
-        </div>
-        )}
-      </div>
     </div>
   );
 }

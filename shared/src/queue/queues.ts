@@ -4,7 +4,7 @@ import { queueNames } from "./names";
 import { safeJobId } from "./job-id";
 
 export { safeJobId } from "./job-id";
-import type { ReminderRequest } from "./types";
+import type { NotificationJobData, ReminderRequest } from "./types";
 
 let notificationQueue: Queue | undefined;
 
@@ -14,6 +14,23 @@ export function getNotificationQueue() {
   });
 
   return notificationQueue;
+}
+
+/** Queue an immediate notification. Delivery resolves destinations by userId. */
+export async function enqueueNotification(
+  request: Omit<NotificationJobData, "source"> & { source?: NotificationJobData["source"] },
+) {
+  const job = await getNotificationQueue().add(
+    "telegram-notification",
+    { ...request, source: request.source ?? "ai-core" },
+    {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 },
+      removeOnComplete: { age: 60 * 60 * 24, count: 1_000 },
+      removeOnFail: { age: 60 * 60 * 24 * 7 },
+    },
+  );
+  return { jobId: job.id };
 }
 
 export async function enqueueReminder(request: ReminderRequest) {
@@ -200,8 +217,11 @@ export async function cancelReminder(id: string, userId: string): Promise<boolea
     await job.remove();
     return true;
   }
-  // Try as a job scheduler id — schedulers don't carry userId, so ownership
-  // can't be verified here; only remove if the caller already knows the id.
+  const schedulers = await queue.getJobSchedulers();
+  const scheduler = schedulers.find((candidate) => (candidate.id ?? candidate.key) === id);
+  if (!scheduler) return false;
+  const owner = (scheduler.template?.data as { userId?: string } | undefined)?.userId;
+  if (owner !== userId) return false;
   const removed = await queue.removeJobScheduler(id).catch(() => false);
   return Boolean(removed);
 }

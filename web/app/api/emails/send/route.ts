@@ -2,22 +2,12 @@ import { callGateway } from "@/app/api/auth/_lib/gateway";
 import { requireSession } from "@/app/api/onboarding/_lib/require-user";
 
 type Body = {
-  to: string;
-  subject: string;
-  body: string;
+  to?: string;
+  subject?: string;
+  body?: string;
   threadId?: string;
   inReplyTo?: string;
   sendAt?: string;
-};
-
-type SendReplyResult = {
-  ok: boolean;
-  scheduled?: boolean;
-  sendAt?: string;
-  messageId?: string;
-  threadId?: string;
-  error?: string;
-  placeholder?: string;
 };
 
 export async function POST(request: Request) {
@@ -28,14 +18,21 @@ export async function POST(request: Request) {
   if (!body.to || !body.subject || !body.body) {
     return Response.json({ message: "to, subject and body are required" }, { status: 400 });
   }
-
-  const result = await callGateway<SendReplyResult>("/api/emails/send", {
-    userId: session.userId,
-    ...body,
-  });
-
-  if (!result.ok) {
-    return Response.json(result, { status: 422 });
+  if (body.sendAt) {
+    const sendAt = new Date(body.sendAt);
+    if (Number.isNaN(sendAt.getTime()) || sendAt.getTime() <= Date.now()) {
+      return Response.json({ message: "sendAt must be a valid future date" }, { status: 400 });
+    }
+    body.sendAt = sendAt.toISOString();
   }
-  return Response.json(result);
+  const result = await callGateway<{ approval: { id: string; preview: string } }>(
+    "/api/approvals/propose",
+    {
+      userId: session.userId,
+      tool: "send_email",
+      payload: body,
+      preview: `${body.sendAt ? "Schedule" : "Send"} email to ${body.to} with subject: ${body.subject}`,
+    },
+  );
+  return Response.json({ ok: true, approvalRequired: true, ...result }, { status: 202 });
 }

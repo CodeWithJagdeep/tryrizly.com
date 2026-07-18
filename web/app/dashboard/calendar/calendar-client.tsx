@@ -362,7 +362,7 @@ export function CalendarClient() {
           ignoreConflict: mtgConflict,
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; hangoutLink?: string; message?: string; code?: string };
+      const data = (await res.json()) as { ok?: boolean; hangoutLink?: string; message?: string; code?: string; approvalRequired?: boolean };
       if (res.status === 409 && data.code === "conflict") {
         setMtgConflict(true);
         setSubmitError(`${data.message ?? "This slot clashes with another meeting."} Press "Create Anyway" to book it regardless.`);
@@ -371,7 +371,9 @@ export function CalendarClient() {
       if (!res.ok) throw new Error(data.message ?? "Failed to create meeting");
       setMtgConflict(false);
       setSubmitSuccess({
-        message: data.hangoutLink
+        message: data.approvalRequired
+          ? "Meeting proposal added to Approvals. It will be created only after you approve it."
+          : data.hangoutLink
           ? "Meeting created. Google Meet link was added and sent to attendees."
           : "Meeting created on your calendar.",
         href: data.hangoutLink,
@@ -411,7 +413,7 @@ export function CalendarClient() {
         const data = (await res.json()) as { message?: string };
         throw new Error(data.message ?? "Failed to schedule mail");
       }
-      setSubmitSuccess({ message: "Email scheduled — Riz will send it then." });
+      setSubmitSuccess({ message: "Email added to Approvals. It will be scheduled only after you approve it." });
       setMailTo(""); setMailSubject(""); setMailBody(""); setMailDate(""); setMailTime("");
       clearCalendarCache();
       loadData(year, month, { force: true });

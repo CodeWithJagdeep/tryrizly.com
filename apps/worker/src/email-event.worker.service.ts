@@ -31,7 +31,6 @@ export class EmailEventWorkerService implements OnModuleInit, OnModuleDestroy {
         logger.info("email event job started", {
           jobId: job.id,
           messageId: job.data.messageId,
-          subject: job.data.subject,
           source: job.data.source,
         });
 

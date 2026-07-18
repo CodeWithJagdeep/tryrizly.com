@@ -1,9 +1,11 @@
 import { callGateway } from "../_lib/gateway";
 import { sanitizeReturnPath } from "../_lib/auth-store";
-import { getAuthRedirectBaseUrl } from "../_lib/redirect-url";
+import {
+  getAuthRedirectBaseUrl,
+  resolveOAuthCallbackUrl,
+} from "../_lib/redirect-url";
 
 const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 export async function GET(request: Request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -52,12 +54,9 @@ export async function GET(request: Request) {
 // Google OAuth client config regardless of which host (apex, www, preview) the
 // visitor is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveGoogleRedirectUri(requestUrl: URL) {
-  if (LOCAL_HOSTS.has(requestUrl.hostname)) {
-    // Force http: browsers with HSTS/https-first show localhost as https, but
-    // the registered local-dev callback (and the gateway whitelist) is http.
-    const local = new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin);
-    local.protocol = "http:";
-    return local.toString();
-  }
-  return process.env.GOOGLE_LOGIN_REDIRECT_URI || "https://getrizly.com" + GOOGLE_CALLBACK_PATH;
+  return resolveOAuthCallbackUrl(
+    requestUrl,
+    GOOGLE_CALLBACK_PATH,
+    process.env.GOOGLE_LOGIN_REDIRECT_URI,
+  );
 }

@@ -1,9 +1,11 @@
 import { callGateway } from "../../_lib/gateway";
 import { sanitizeReturnPath } from "../../_lib/auth-store";
-import { getAuthRedirectBaseUrl } from "../../_lib/redirect-url";
+import {
+  getAuthRedirectBaseUrl,
+  resolveOAuthCallbackUrl,
+} from "../../_lib/redirect-url";
 
 const LINKEDIN_CALLBACK_PATH = "/api/auth/oauth/linkedin/callback";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 export async function GET(request: Request) {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
@@ -52,15 +54,9 @@ export async function GET(request: Request) {
 // LinkedIn app config regardless of which host (apex, www, preview) the visitor
 // is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveLinkedInRedirectUri(requestUrl: URL) {
-  if (LOCAL_HOSTS.has(requestUrl.hostname)) {
-    // Force http: browsers with HSTS/https-first show localhost as https, but
-    // the registered local-dev callback (and the gateway whitelist) is http.
-    const local = new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin);
-    local.protocol = "http:";
-    return local.toString();
-  }
-  return (
-    process.env.LINKEDIN_REDIRECT_URI ||
-    "https://getrizly.com" + LINKEDIN_CALLBACK_PATH
+  return resolveOAuthCallbackUrl(
+    requestUrl,
+    LINKEDIN_CALLBACK_PATH,
+    process.env.LINKEDIN_REDIRECT_URI,
   );
 }

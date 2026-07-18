@@ -18,11 +18,17 @@ export async function GET(request: Request) {
     return Response.redirect(`${baseUrl}/login?error=linkedin_missing_code`);
   }
 
-  const result = await callGateway<CompleteResult>("/api/auth/oauth/complete", {
-    provider: "linkedin",
-    code,
-    state,
-  });
+  let result: CompleteResult;
+  try {
+    result = await callGateway<CompleteResult>("/api/auth/oauth/complete", {
+      provider: "linkedin",
+      code,
+      state,
+    });
+  } catch (error) {
+    console.error("linkedin oauth complete: gateway unreachable", error);
+    return Response.redirect(`${baseUrl}/login?error=linkedin_exchange_failed`);
+  }
 
   if (!result.identity) {
     return Response.redirect(`${baseUrl}/login?error=linkedin_${result.error ?? "failed"}`);

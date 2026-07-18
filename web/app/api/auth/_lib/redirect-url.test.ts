@@ -25,6 +25,28 @@ describe("OAuth redirect URLs", () => {
     );
   });
 
+  it("uses the external host when production runs behind a localhost proxy", () => {
+    const request = new Request("http://localhost:3000/api/auth/google", {
+      headers: {
+        host: "localhost:3000",
+        "x-forwarded-host": "getrizly.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+
+    expect(
+      getAuthRedirectBaseUrl(request, { WEB_APP_URL: "http://localhost:3000" }),
+    ).toBe("https://getrizly.com");
+    expect(
+      resolveOAuthCallbackUrl(
+        request,
+        callbackPath,
+        "http://localhost:3000/api/auth/google/callback",
+        { WEB_APP_URL: "http://localhost:3000" },
+      ),
+    ).toBe("https://getrizly.com/api/auth/google/callback");
+  });
+
   it("ignores a localhost callback on a production request", () => {
     expect(
       resolveOAuthCallbackUrl(

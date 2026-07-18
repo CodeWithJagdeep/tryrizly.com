@@ -120,7 +120,7 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     provider: "postgres",
     title: "Postgres",
     description:
-      "Read-only SQL queries against your production database for signups, errors, and business metrics — no raw SQL needed.",
+      "Read-only SQL queries for signups, errors, and business metrics. Permissions are verified before saving.",
     category: "Databases",
     authType: "manual",
     icon: PostgresIcon,
@@ -145,7 +145,7 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     provider: "mongodb",
     title: "MongoDB",
     description:
-      "Read-only aggregate and find queries over your product database to surface metrics without writing a single query.",
+      "Restricted aggregate and find queries over your product database. Read-only access is verified before saving.",
     category: "Databases",
     authType: "manual",
     icon: MongoDbIcon,
@@ -390,7 +390,11 @@ function ConnectorDialog({
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
               <span className="size-1.5 bg-emerald-500" />
-              {isOAuth ? "OAuth app" : "API key"}
+              {isOAuth
+                ? "OAuth app"
+                : connector.category === "Databases"
+                  ? "Read-only verified"
+                  : "API key"}
             </span>
             <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
               By rizly
@@ -759,6 +763,8 @@ export function OnboardingClient() {
       form.reset();
       setActiveConnector(null);
       setConnectedProviders((prev) => new Set([...prev, connector.provider]));
+    } catch {
+      setSetupError(`Could not reach the connector service. ${connector.title} was not saved.`);
     } finally {
       setSetupSubmitting(false);
     }

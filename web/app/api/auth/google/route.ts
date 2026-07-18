@@ -3,7 +3,6 @@ import { sanitizeReturnPath } from "../_lib/auth-store";
 import { getAuthRedirectBaseUrl } from "../_lib/redirect-url";
 
 const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
-const PRODUCTION_HOSTS = new Set(["getrizly.com", "www.getrizly.com"]);
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 export async function GET(request: Request) {
@@ -49,12 +48,12 @@ export async function GET(request: Request) {
   return Response.redirect(authUrl);
 }
 
+// Always send the single registered production callback so the URI matches the
+// Google OAuth client config regardless of which host (apex, www, preview) the
+// visitor is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveGoogleRedirectUri(requestUrl: URL) {
-  if (PRODUCTION_HOSTS.has(requestUrl.hostname)) {
-    return new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
-  }
   if (LOCAL_HOSTS.has(requestUrl.hostname)) {
     return new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
   }
-  return process.env.GOOGLE_LOGIN_REDIRECT_URI || new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
+  return process.env.GOOGLE_LOGIN_REDIRECT_URI || "https://getrizly.com" + GOOGLE_CALLBACK_PATH;
 }

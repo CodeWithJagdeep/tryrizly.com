@@ -154,7 +154,7 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "postgres",
     provider: "postgres",
     title: "Postgres",
-    description: "Read-only SQL queries for signups, errors, and business metrics.",
+    description: "Read-only SQL for business metrics. Permissions are verified before saving.",
     category: "Databases",
     authType: "manual",
     icon: PostgresIcon,
@@ -171,7 +171,7 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "mongodb",
     provider: "mongodb",
     title: "MongoDB",
-    description: "Read-only aggregate/find queries over your product database.",
+    description: "Restricted aggregate/find queries. Read-only access is verified before saving.",
     category: "Databases",
     authType: "manual",
     icon: MongoDbIcon,
@@ -384,6 +384,8 @@ export function ConnectorsClient() {
       setSetupConnector(null);
       setSetupEditAccount(null);
       await loadConnectors();
+    } catch {
+      setSetupError(`Could not reach the connector service. ${connector.title} was not saved.`);
     } finally {
       setSetupSubmitting(false);
     }
@@ -756,7 +758,11 @@ function SettingsPanel({
               <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="text-xs font-semibold text-slate-500">Auth type</span>
                 <span className="text-xs font-bold capitalize text-slate-700">
-                  {account.authType === "oauth" ? "OAuth 2.0" : "API key"}
+                  {account.authType === "oauth"
+                    ? "OAuth 2.0"
+                    : connector.category === "Databases"
+                      ? "Read-only connection"
+                      : "API key"}
                 </span>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
@@ -1438,7 +1444,11 @@ function SetupDialog({
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
                 <span className="size-1.5 bg-emerald-500" />
-                {isOAuth ? "OAuth app" : "API key"}
+                  {isOAuth
+                    ? "OAuth app"
+                    : connector.category === "Databases"
+                      ? "Read-only verified"
+                      : "API key"}
               </span>
               <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
                 {isOAuth ? "By rizly" : "Encrypted vault"}

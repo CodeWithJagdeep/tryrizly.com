@@ -211,12 +211,15 @@ export default function PrivacyPage() {
                 we stop accessing that service immediately and delete its stored credentials. We may
                 retain previously created summaries, reminders, task history, and approval logs so
                 your dashboard and audit history continue to work unless you delete them or request
-                deletion. When you delete your account, we delete or anonymize your personal data
-                within 30 days, except records we must keep for legal, security, fraud-prevention,
-                or accounting reasons (e.g., invoices).
+                deletion. You can permanently delete your account from Dashboard Settings. The
+                deletion flow cancels active billing, disconnects integrations, removes queued
+                work and active product data, and invalidates all sessions. We delete or anonymize
+                personal data within 30 days, except records we must keep for legal, security,
+                fraud-prevention, or accounting reasons (e.g., invoices); retained accounting
+                records are detached from your account and pseudonymized.
               </p>
               <p>
-                You can request deletion or an export of your data anytime at{" "}
+                You can also request deletion or an export of your data anytime at{" "}
                 <a href="mailto:hello@getrizly.com">hello@getrizly.com</a>.
               </p>
             </>

@@ -187,12 +187,12 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "slack",
     provider: "slack",
     title: "Slack",
-    description: "Search messages, summarize channel activity, and get briefed on team discussions.",
+    description: "Read joined channels with message authors, timestamps, source links, and concise Telegram briefs.",
     category: "Team",
     authType: "manual",
     icon: SlackIcon,
     fields: [
-      { name: "botToken", label: "Bot Token", type: "password", placeholder: "xoxb-..." },
+      { name: "botToken", label: "Bot token with channel history and users:read scopes", type: "password", placeholder: "xoxb-..." },
     ],
   },
   {
@@ -302,6 +302,19 @@ export function ConnectorsClient() {
 
   useEffect(() => {
     void loadConnectors();
+  }, []);
+
+  useEffect(() => {
+    const provider = new URLSearchParams(window.location.search).get("setup");
+    if (!provider) return;
+    const connector = catalogByProvider.get(provider);
+    if (!connector) return;
+    setActiveCategory("All");
+    setConnectorQuery(connector.title);
+    if (connector.authType === "manual") {
+      setSetupConnector(connector);
+      setSetupEditAccount(null);
+    }
   }, []);
 
   async function saveManualConnector(
@@ -1249,6 +1262,7 @@ function SetupDialog({
   const Icon = connector.icon;
   const multi = isMultiAccount(connector.provider);
   const isOAuth = connector.authType === "oauth";
+  const isGoogleOAuth = connector.provider === "gmail" || connector.provider === "calendar";
   // Cal.com's OAuth only covers cal.eu accounts today - it carries a manual
   // API-key fallback for everyone else, shown alongside the Connect button.
   const showManualFallback = Boolean(connector.fields?.length);
@@ -1313,15 +1327,36 @@ function SetupDialog({
           </div>
 
           {isOAuth && (
-            <a
-              href={oauthHref}
-              className="inline-flex h-10 items-center gap-2 bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-              </svg>
-              Connect {connector.title}
-            </a>
+            <>
+              {isGoogleOAuth ? (
+                <div className="max-w-md border border-slate-200 bg-slate-50 px-4 py-3 text-left text-[12px] leading-5 text-slate-600">
+                  {connector.provider === "gmail"
+                    ? "Rizly will read Gmail messages and contacts to triage and draft replies, and send email only after your approval. Relevant content is processed by contracted AI providers solely to deliver these features."
+                    : "Rizly will read calendar events for schedules and conflict checks, and create or update events only after your approval."}{" "}
+                  Tokens are encrypted, access can be revoked at any time, and Google data is never sold or used to train generalized AI models.{" "}
+                  <a href="/privacy#google-user-data" className="font-medium text-slate-900 underline underline-offset-2">
+                    Google data privacy details
+                  </a>
+                </div>
+              ) : null}
+              <a
+                href={oauthHref}
+                className={`inline-flex h-10 items-center gap-2 px-6 text-sm font-semibold transition-all active:scale-[0.99] ${
+                  isGoogleOAuth
+                    ? "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 hover:shadow-sm"
+                    : "bg-black text-white hover:bg-[#FE7F2D] hover:shadow-md"
+                }`}
+              >
+                {isGoogleOAuth ? (
+                  <Icon className="size-4" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                  </svg>
+                )}
+                Connect {connector.title}
+              </a>
+            </>
           )}
 
           {isOAuth && connector.provider === "calcom" && (

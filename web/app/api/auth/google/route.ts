@@ -53,7 +53,11 @@ export async function GET(request: Request) {
 // visitor is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveGoogleRedirectUri(requestUrl: URL) {
   if (LOCAL_HOSTS.has(requestUrl.hostname)) {
-    return new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin).toString();
+    // Force http: browsers with HSTS/https-first show localhost as https, but
+    // the registered local-dev callback (and the gateway whitelist) is http.
+    const local = new URL(GOOGLE_CALLBACK_PATH, requestUrl.origin);
+    local.protocol = "http:";
+    return local.toString();
   }
   return process.env.GOOGLE_LOGIN_REDIRECT_URI || "https://getrizly.com" + GOOGLE_CALLBACK_PATH;
 }

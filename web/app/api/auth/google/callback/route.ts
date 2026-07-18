@@ -18,11 +18,17 @@ export async function GET(request: Request) {
     return Response.redirect(`${baseUrl}/login?error=google_missing_code`);
   }
 
-  const result = await callGateway<CompleteResult>("/api/auth/oauth/complete", {
-    provider: "google",
-    code,
-    state,
-  });
+  let result: CompleteResult;
+  try {
+    result = await callGateway<CompleteResult>("/api/auth/oauth/complete", {
+      provider: "google",
+      code,
+      state,
+    });
+  } catch (error) {
+    console.error("google oauth complete: gateway unreachable", error);
+    return Response.redirect(`${baseUrl}/login?error=google_exchange_failed`);
+  }
 
   if (!result.identity) {
     return Response.redirect(`${baseUrl}/login?error=google_${result.error ?? "failed"}`);

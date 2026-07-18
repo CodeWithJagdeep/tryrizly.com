@@ -16,6 +16,15 @@ describe("OAuth redirect URLs", () => {
     );
   });
 
+  it("never redirects a browser to a server bind address", () => {
+    const requestUrl = new URL("http://0.0.0.0:3000/api/auth/google");
+
+    expect(getAuthRedirectBaseUrl(requestUrl, {})).toBe("http://localhost:3000");
+    expect(resolveOAuthCallbackUrl(requestUrl, callbackPath, undefined, {})).toBe(
+      "http://localhost:3000/api/auth/google/callback",
+    );
+  });
+
   it("ignores a localhost callback on a production request", () => {
     expect(
       resolveOAuthCallbackUrl(

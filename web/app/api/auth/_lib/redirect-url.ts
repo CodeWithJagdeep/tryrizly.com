@@ -7,8 +7,11 @@ type RedirectEnvironment = {
 };
 
 function localOrigin(requestUrl: URL): string {
-  const local = new URL(requestUrl.origin);
-  local.protocol = "http:";
+  // 0.0.0.0 and :: are bind addresses, not browser destinations. Keep the
+  // active development port but always return through the canonical loopback
+  // hostname registered with the OAuth providers.
+  const local = new URL("http://localhost");
+  local.port = requestUrl.port;
   return local.origin;
 }
 

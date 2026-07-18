@@ -1,6 +1,5 @@
 import type { GoogleService } from "../google/google.service";
 import type { HeyRizTool } from "./tool.types";
-import { env } from "@heyriz/shared/env";
 import { enqueueWatchReply } from "@heyriz/shared/queue/watch-replies";
 
 const HOUR = 3_600_000;
@@ -56,7 +55,6 @@ export function createWatchForReplyTool(
 
       const scheduled = await enqueueWatchReply({
         userId,
-        chatId: env.TELEGRAM_CHAT_ID,
         threadId: payload.threadId,
         baselineMessageCount: thread.messages.length,
         fallbackMessage,

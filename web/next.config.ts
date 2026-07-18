@@ -1,28 +1,19 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const webDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // Fallbacks for deploys where env vars aren't configured (Cloud Run).
-  // Real env vars always take precedence. WARNING: this includes secrets
-  // baked into a private repo at the owner's request. If the repo ever
-  // goes public, rotate AUTH_*, RESEND_API_KEY, and TELEGRAM_BOT_TOKEN.
-  // AUTH_* values must match the gateway env on the production VM.
+  outputFileTracingRoot: path.join(webDir, ".."),
+  // Fallbacks for non-secret deploy values. Secrets must be provided by the
+  // runtime environment; do not bake them into the standalone web bundle.
   env: {
     NEXT_PUBLIC_SITE_URL:
       process.env.NEXT_PUBLIC_SITE_URL ?? "https://getrizly.com",
-    AUTH_INTERNAL_SECRET:
-      process.env.AUTH_INTERNAL_SECRET ??
-      "Y78vEBQB8cNNqM6bSnv7w0GfSp6qomcAoNdJdY6o2/6fddxea1ZM8Q1cjcsb4eao",
-    AUTH_JWT_SECRET:
-      process.env.AUTH_JWT_SECRET ??
-      "2CAK52uRNuzrSxFrdRNRZexpB5Qqc/go44RNbF7CrvjKFoXAkmk24QueAv1p9G35",
-    RESEND_API_KEY:
-      process.env.RESEND_API_KEY ?? "re_4KAytbCy_JqR3Nt5tBDfTg9cHikDRz6Uj",
     RESEND_FROM: process.env.RESEND_FROM ?? "Rizly <noreply@getrizly.com>",
     TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME ?? "tryrizlybot",
-    TELEGRAM_BOT_TOKEN:
-      process.env.TELEGRAM_BOT_TOKEN ??
-      "8094927949:AAHaYrvy7bpMNUAFHhTvhPd0Jj8i-HUiq_4",
     GOOGLE_CLIENT_ID:
       process.env.GOOGLE_CLIENT_ID ??
       "927489744703-ipmeciigf234kkceflkatb0o6pg55tlu.apps.googleusercontent.com",
@@ -42,6 +33,9 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ??
       "BBOVlHAJfin3t1acBGcbqeXh5WKzk3mxsMO7cU0b1dj_MZbwdLLHzz8Yj1rV6G4hIZVt6GYfQan9VYFxNoDbYgQ",
     WEB_APP_URL: process.env.WEB_APP_URL ?? "https://getrizly.com",
+    // Analytics IDs (public, non-secret). Empty string = that script never loads.
+    NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "",
+    NEXT_PUBLIC_CLARITY_PROJECT_ID: process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID ?? "",
   },
   images: {
     qualities: [75, 100],

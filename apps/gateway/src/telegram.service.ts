@@ -21,6 +21,7 @@ import {
   sendTyping,
   transcribeTelegramVoice,
 } from "@heyriz/shared/telegram";
+import { appendActionAudit } from "@heyriz/shared/action-audit";
 
 const START_TOKEN = /^\/start\s+(\S+)/;
 
@@ -157,7 +158,7 @@ export class TelegramService {
       return;
     }
 
-    const key = String(chatId);
+    const key = await this.userIdForChat(chatId);
     const pending = await this.approvals.list(key);
 
     if (pending.length > 0 && LIST.test(text)) {
@@ -174,7 +175,7 @@ export class TelegramService {
     // A fresh instruction. We deliberately do NOT clear the pending proposals —
     // each is addressable by id and waits for its own yes/no, so a new request
     // never silently drops an un-approved action (the old single-slot bug).
-    await this.runChat(chatId, text);
+    await this.runChat(chatId, text, key);
   }
 
   private async handleStart(chatId: number, token: string): Promise<void> {
@@ -243,7 +244,7 @@ export class TelegramService {
     const chatId = cb.message?.chat?.id;
     if (!chatId || !(await this.isOwner(chatId))) return;
 
-    const key = String(chatId);
+    const key = await this.userIdForChat(chatId);
     const [verb, id] = (cb.data ?? "").split(":");
 
     // Resolve the action this button belongs to. Newer buttons embed the id;
@@ -272,10 +273,9 @@ export class TelegramService {
     }
   }
 
-  private async runChat(chatId: number, message: string): Promise<void> {
-    const key = String(chatId);
-    const history = await this.conversations.get(key);
-    const userId = await this.userIdForChat(chatId);
+  private async runChat(chatId: number, message: string, userId: string): Promise<void> {
+    const conversationKey = String(chatId);
+    const history = await this.conversations.get(conversationKey);
 
     await sendTyping(chatId);
     const typingInterval = setInterval(() => void sendTyping(chatId), 4000);
@@ -291,9 +291,9 @@ export class TelegramService {
       clearInterval(typingInterval);
     }
 
-    await this.conversations.append(key, turn("user", message));
+    await this.conversations.append(conversationKey, turn("user", message));
     await this.conversations.append(
-      key,
+      conversationKey,
       turn(
         "assistant",
         res.pendingApproval ? `${res.reply}\n\n${res.pendingApproval.preview}` : res.reply,
@@ -301,8 +301,8 @@ export class TelegramService {
     );
 
     if (res.pendingApproval) {
-      const rec = await this.approvals.add(key, res.pendingApproval);
-      const others = (await this.approvals.list(key)).filter((p) => p.id !== rec.id);
+      const rec = await this.approvals.add(userId, res.pendingApproval);
+      const others = (await this.approvals.list(userId)).filter((p) => p.id !== rec.id);
       const note =
         others.length > 0
           ? `\n\nYou've also got ${others.length} waiting (${others
@@ -320,10 +320,17 @@ export class TelegramService {
   }
 
   private async runApproved(chatId: number, pending: PendingApprovalRecord): Promise<void> {
-    const key = String(chatId);
-    await this.approvals.remove(key, pending.id);
-    const history = await this.conversations.get(key);
     const userId = await this.userIdForChat(chatId);
+    const conversationKey = String(chatId);
+    await this.approvals.remove(userId, pending.id);
+    await appendActionAudit({
+      userId,
+      event: "approved",
+      tool: pending.tool,
+      payload: pending.payload,
+      approvalId: pending.id,
+    }).catch(() => undefined);
+    const history = await this.conversations.get(conversationKey);
 
     await sendTyping(chatId);
     const typingInterval = setInterval(() => void sendTyping(chatId), 4000);
@@ -341,7 +348,7 @@ export class TelegramService {
       clearInterval(typingInterval);
     }
 
-    const remaining = await this.approvals.list(key);
+    const remaining = await this.approvals.list(userId);
     const note =
       remaining.length > 0
         ? `\n\n(${remaining.length} still waiting: ${remaining
@@ -349,8 +356,8 @@ export class TelegramService {
             .join("; ")}.)`
         : "";
 
-    await this.conversations.append(key, turn("user", "approved"));
-    await this.conversations.append(key, turn("assistant", res.reply));
+    await this.conversations.append(conversationKey, turn("user", "approved"));
+    await this.conversations.append(conversationKey, turn("assistant", res.reply));
     await sendTelegramMessage({ chatId, text: `${res.reply}${note}` });
   }
 
@@ -412,7 +419,14 @@ export class TelegramService {
     record: PendingApprovalRecord,
   ): Promise<void> {
     await this.approvals.remove(key, record.id);
-    await this.recordRejection(key, record);
+    await appendActionAudit({
+      userId: key,
+      event: "rejected",
+      tool: record.tool,
+      payload: record.payload,
+      approvalId: record.id,
+    }).catch(() => undefined);
+    await this.recordRejection(String(chatId), record);
     await sendTelegramMessage({
       chatId,
       text: `Cancelled #${record.id} (${record.label}), ${env.PRINCIPAL_HONORIFIC}.`,

@@ -84,6 +84,7 @@ export class AuthController {
   }
 
   @Post("password/reset")
+  @UseGuards(EmailThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 900_000 } })
   async resetPassword(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

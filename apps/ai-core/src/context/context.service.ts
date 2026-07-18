@@ -56,7 +56,7 @@ export class ContextService {
       userId: input.userId,
       source: input.source,
       currentMessage: input.message,
-      structured: await this.getStructuredContext(),
+      structured: await this.getStructuredContext(input.userId),
       semantic,
       live,
       honorific: await this.preferences.getHonorific(input.userId),
@@ -93,10 +93,17 @@ export class ContextService {
       ),
     ]);
 
-    const live: LiveContext = { connected: false, schedule: [], unread: [] };
+    const live: LiveContext = {
+      connected: false,
+      calendarConnected: false,
+      inboxConnected: false,
+      schedule: [],
+      unread: [],
+    };
 
     if (cal.status === "fulfilled" && cal.value.connected) {
       live.connected = true;
+      live.calendarConnected = true;
       for (const e of cal.value.events) {
         live.schedule.push({ title: e.title, start: e.start, end: e.end, allDay: e.allDay });
       }
@@ -106,6 +113,7 @@ export class ContextService {
 
     if (inbox.status === "fulfilled" && inbox.value.connected) {
       live.connected = true;
+      live.inboxConnected = true;
       for (const m of inbox.value.messages) {
         live.unread.push({ from: m.from, subject: m.subject });
       }
@@ -116,10 +124,21 @@ export class ContextService {
     return live;
   }
 
-  private async getStructuredContext(): Promise<StructuredContext> {
+  private async getStructuredContext(userId: string): Promise<StructuredContext> {
+    const [honorific, displayName, timezone, language] = await Promise.all([
+      this.preferences.getHonorific(userId),
+      this.preferences.getDisplayName(userId),
+      this.preferences.getTimezone(userId),
+      this.preferences.getLanguage(userId),
+    ]);
     return {
       activeDeals: [],
-      preferences: [],
+      preferences: [
+        `honorific:${honorific}`,
+        `timezone:${timezone}`,
+        ...(displayName ? [`displayName:${displayName}`] : []),
+        ...(language ? [`language:${language}`] : []),
+      ],
       pendingStates: [],
     };
   }

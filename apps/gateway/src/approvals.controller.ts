@@ -1,15 +1,23 @@
-import { Body, Controller, Get, Headers, Inject, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Headers, Inject, Post, Query } from "@nestjs/common";
 import {
   APPROVAL_STORE,
   type ApprovalStore,
-  type PendingApprovalRecord,
 } from "./approval-store";
 import { AuthRepository } from "./auth/auth.repository";
 import { CONVERSATION_STORE, type ConversationStore, type ConversationTurn } from "./conversation-store";
 import { GatewayService } from "./gateway.service";
 import { requireInternalSecret } from "./internal-auth";
+import { appendActionAudit, listActionAudit } from "@heyriz/shared/action-audit";
 
 type ChatResponse = { reply: string };
+
+const PROPOSABLE_TOOLS = new Set([
+  "send_email",
+  "create_calendar_event",
+  "reschedule_calendar_event",
+  "create_calcom_booking",
+  "post_discord_message",
+]);
 
 function turn(role: ConversationTurn["role"], content: string): ConversationTurn {
   return { role, content, timestamp: new Date().toISOString() };
@@ -20,8 +28,8 @@ function turn(role: ConversationTurn["role"], content: string): ConversationTurn
  * the web dashboard, so a principal without Telegram linked can still review
  * and approve/reject proposed actions. Pending actions are keyed by Telegram
  * chatId in Redis (see pending-actions.ts) regardless of which channel created
- * them, so this resolves userId -> chatId first; a user who's never linked
- * Telegram simply has no chat and an empty list.
+ * them. They are keyed by userId so Telegram and web operate on the same
+ * tenant-scoped queue even when the user has never linked Telegram.
  */
 @Controller("api/approvals")
 export class ApprovalsController {
@@ -36,6 +44,35 @@ export class ApprovalsController {
     private readonly gateway: GatewayService,
   ) {}
 
+  @Post("propose")
+  async propose(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { userId?: string; tool?: string; payload?: Record<string, unknown>; preview?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.userId || !body.tool || !PROPOSABLE_TOOLS.has(body.tool)) {
+      throw new BadRequestException("userId and a supported approval-gated tool are required");
+    }
+    const payload = { ...(body.payload ?? {}) };
+    delete payload.approved;
+    const record = await this.approvals.add(body.userId, {
+      tool: body.tool,
+      payload,
+      preview: body.preview?.trim() || `Approve ${body.tool.replaceAll("_", " ")}`,
+    });
+    return { approval: { id: record.id, preview: record.preview } };
+  }
+
+  @Get("audit")
+  async audit(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) return { audit: [] };
+    return { audit: await listActionAudit(userId) };
+  }
+
   @Get()
   async list(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
@@ -44,10 +81,7 @@ export class ApprovalsController {
     this.requireInternal(secret);
     if (!userId) return { error: "userId is required" };
 
-    const chatId = await this.authRepo.findTelegramChatIdByUserId(userId);
-    if (!chatId) return { approvals: [] as PendingApprovalRecord[] };
-
-    const approvals = await this.approvals.list(chatId);
+    const approvals = await this.approvals.list(userId);
     return { approvals };
   }
 
@@ -63,20 +97,34 @@ export class ApprovalsController {
     }
 
     const chatId = await this.authRepo.findTelegramChatIdByUserId(body.userId);
-    if (!chatId) return { error: "no_linked_chat" };
+    const conversationKey = chatId ?? body.userId;
 
-    const record = await this.approvals.get(chatId, body.id);
+    const record = await this.approvals.get(body.userId, body.id);
     if (!record) return { error: "not_found" };
 
     if (body.decision === "reject") {
-      await this.approvals.remove(chatId, record.id);
-      await this.conversations.append(chatId, turn("assistant", `Proposed: ${record.preview}`));
-      await this.conversations.append(chatId, turn("user", "No, cancel that."));
+      await appendActionAudit({
+        userId: body.userId,
+        event: "rejected",
+        tool: record.tool,
+        payload: record.payload,
+        approvalId: record.id,
+      });
+      await this.approvals.remove(body.userId, record.id);
+      await this.conversations.append(conversationKey, turn("assistant", `Proposed: ${record.preview}`));
+      await this.conversations.append(conversationKey, turn("user", "No, cancel that."));
       return { ok: true, reply: `Cancelled #${record.id} (${record.label}).` };
     }
 
-    await this.approvals.remove(chatId, record.id);
-    const history = await this.conversations.get(chatId);
+    await this.approvals.remove(body.userId, record.id);
+    await appendActionAudit({
+      userId: body.userId,
+      event: "approved",
+      tool: record.tool,
+      payload: record.payload,
+      approvalId: record.id,
+    });
+    const history = await this.conversations.get(conversationKey);
     const res = await this.gateway.sendToAiCore<ChatResponse>("chat.message", {
       userId: body.userId,
       message: "approved",
@@ -85,8 +133,8 @@ export class ApprovalsController {
       history,
     });
 
-    await this.conversations.append(chatId, turn("user", "approved"));
-    await this.conversations.append(chatId, turn("assistant", res.reply));
+    await this.conversations.append(conversationKey, turn("user", "approved"));
+    await this.conversations.append(conversationKey, turn("assistant", res.reply));
     return { ok: true, reply: res.reply };
   }
 

@@ -1,27 +1,7 @@
 import { NextResponse } from "next/server";
+import { callGateway } from "../auth/_lib/gateway";
 
-/**
- * Best-effort fixed-window rate limiter for unauthenticated public endpoints
- * (contact, careers, newsletter) to blunt email-sending abuse and cost/DoS.
- *
- * Caveat: this is an in-memory, per-instance counter. On serverless (Vercel)
- * each lambda has its own map, so the effective global limit scales with the
- * number of warm instances. It is a speed-bump, not a hard guarantee — for a
- * strict limit, back this with a shared store (the gateway already runs Redis).
- */
-
-type Bucket = { count: number; resetAt: number };
-
-const buckets = new Map<string, Bucket>();
-
-// Occasionally evict stale buckets so the map can't grow unbounded under a
-// spray of unique IPs.
-function sweep(now: number) {
-  if (buckets.size < 5000) return;
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
-}
+/** Redis-backed fixed-window limiter shared by every web instance. */
 
 export function clientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -33,30 +13,26 @@ export function clientIp(request: Request): string {
  * Returns a 429 response if the caller has exceeded `limit` requests within
  * `windowMs` for the given `name`, otherwise null (request may proceed).
  */
-export function rateLimit(
+export async function rateLimit(
   request: Request,
   name: string,
   { limit, windowMs }: { limit: number; windowMs: number },
-): NextResponse | null {
-  const now = Date.now();
-  sweep(now);
-
+): Promise<NextResponse | null> {
   const key = `${name}:${clientIp(request)}`;
-  const existing = buckets.get(key);
-
-  if (!existing || existing.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return null;
-  }
-
-  if (existing.count >= limit) {
-    const retryAfter = Math.ceil((existing.resetAt - now) / 1000);
-    return NextResponse.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "retry-after": String(retryAfter) } },
+  try {
+    const shared = await callGateway<{ allowed?: boolean; retryAfter?: number }>(
+      "/api/public/rate-limit",
+      { name, key, limit, windowMs },
     );
+    if (shared.allowed === true) return null;
+    if (shared.allowed === false) {
+      return NextResponse.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "retry-after": String(shared.retryAfter ?? 60) } },
+      );
+    }
+    return NextResponse.json({ error: "rate_limit_unavailable" }, { status: 503 });
+  } catch {
+    return NextResponse.json({ error: "rate_limit_unavailable" }, { status: 503 });
   }
-
-  existing.count += 1;
-  return null;
 }

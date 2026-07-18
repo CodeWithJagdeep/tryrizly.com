@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 interface FooterColumn {
   title: string;
@@ -111,9 +112,9 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-14 text-sm md:grid-cols-[280px_1fr_1fr_1fr_1.2fr]">
           {/* Brand column */}
           <div className="flex flex-col gap-6">
-            <a href="/" className="inline-flex items-center gap-2.5">
+            <Link href="/" className="inline-flex items-center gap-2.5">
               <Image src="/rizly_white.png" alt="rizly" width={140} height={34} className="h-7 w-auto object-contain" />
-            </a>
+            </Link>
             <p className="max-w-xs text-sm leading-6 text-gray-500">
               A proactive AI operator that watches your inbox, calendar, and revenue, then waits for your approval in
               Telegram.

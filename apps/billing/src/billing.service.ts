@@ -39,9 +39,10 @@ export class BillingService {
     private readonly razorpay: RazorpayClient,
   ) {}
 
-  healthCheck() {
+  async healthCheck() {
+    const databaseHealthy = await this.repository.databaseHealthy();
     return {
-      ok: true,
+      ok: databaseHealthy,
       service: "billing",
       framework: "nestjs",
       transport: {
@@ -50,6 +51,7 @@ export class BillingService {
         port: env.BILLING_TCP_PORT,
       },
       databaseConfigured: this.repository.databaseConfigured(),
+      databaseHealthy,
       razorpayConfigured: this.razorpay.configured(),
       webhookConfigured: this.razorpay.webhookConfigured(),
     };

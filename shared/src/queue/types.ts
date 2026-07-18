@@ -13,6 +13,10 @@ export type NotificationJobData = {
    * separately, so they don't hear the same thing twice.
    */
   emailFallback?: boolean;
+  /** Approval button to attach after the worker resolves this user's chat. */
+  approvalId?: string;
+  /** Assistant turn to append to Telegram history after delivery. */
+  historyMessage?: string;
 };
 
 export type ReminderRequest = {
@@ -32,7 +36,6 @@ export type WatchReplyJobName = "watch-reply";
 
 export type WatchReplyJobData = {
   userId: string;
-  chatId: string | number | undefined;
   threadId: string;
   attempt: number;
   maxAttempts: number;

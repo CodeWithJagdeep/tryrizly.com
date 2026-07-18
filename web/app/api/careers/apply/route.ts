@@ -5,9 +5,13 @@ const HIRING_INBOX = process.env.HIRING_EMAIL || "careers@getrizly.com";
 const MAX_RESUME_BYTES = 5 * 1024 * 1024; // 5MB, matches the form's own "max 5MB" label
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "careers", { limit: 5, windowMs: 10 * 60_000 });
+  const limited = await rateLimit(request, "careers", { limit: 5, windowMs: 10 * 60_000 });
   if (limited) return limited;
 
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_RESUME_BYTES + 512 * 1024) {
+    return NextResponse.json({ error: "request_too_large" }, { status: 413 });
+  }
   const formData = await request.formData();
 
   const name = String(formData.get("name") || "").trim();
@@ -17,7 +21,15 @@ export async function POST(request: Request) {
   const coverNote = String(formData.get("coverNote") || "").trim();
   const resume = formData.get("resume");
 
-  if (!name || !email || !role) {
+  if (
+    !name ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !role ||
+    name.length > 120 ||
+    phone.length > 40 ||
+    role.length > 160 ||
+    coverNote.length > 10_000
+  ) {
     return NextResponse.json({ error: "missing_required_fields" }, { status: 400 });
   }
 
@@ -39,9 +51,8 @@ export async function POST(request: Request) {
   const from = process.env.RESEND_FROM;
 
   if (!resendKey || !from) {
-    console.log(`[Rizly Careers] Application for ${role} from ${name} <${email}> (${phone || "no phone"})`);
-    if (coverNote) console.log(`[Rizly Careers] Cover note: ${coverNote}`);
-    return NextResponse.json({ ok: true });
+    console.error("[Rizly Careers] Email delivery is not configured");
+    return NextResponse.json({ error: "delivery_unavailable" }, { status: 503 });
   }
 
   const attachments: { filename: string; content: string }[] = [];

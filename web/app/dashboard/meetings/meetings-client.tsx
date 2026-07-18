@@ -176,7 +176,6 @@ export function MeetingsClient() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => setPage(1), [activeTab, query]);

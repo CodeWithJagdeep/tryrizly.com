@@ -18,7 +18,7 @@ export async function GET(
   context: RouteContext<"/api/connectors/[provider]/start">,
 ) {
   const { provider } = await context.params;
-  if (provider !== "gmail" && provider !== "calendar" && provider !== "calcom") {
+  if (provider !== "gmail" && provider !== "calendar" && provider !== "calcom" && provider !== "notion") {
     return Response.json({ message: `Unsupported OAuth provider: ${provider}` }, { status: 400 });
   }
 

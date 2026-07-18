@@ -4,6 +4,7 @@ import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, u
 import {
   CalComIcon,
   CalendarIcon,
+  DiscordIcon,
   GitHubIcon,
   GmailIcon,
   MongoDbIcon,
@@ -43,7 +44,7 @@ type ConnectorField = {
 type ConnectorCatalogItem = {
   id: string;
   /** Backend connector key used for status lookup + connect/disconnect. */
-  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa";
+  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa" | "discord";
   title: string;
   description: string;
   category: "Google" | "Scheduling" | "Payments" | "Databases" | "Team" | "APIs";
@@ -200,10 +201,24 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     title: "Notion",
     description: "Search pages, retrieve knowledge base content, and get context from your docs.",
     category: "Team",
-    authType: "manual",
+    authType: "oauth",
     icon: NotionIcon,
+  },
+  {
+    id: "discord",
+    provider: "discord",
+    title: "Discord",
+    description: "Post approved messages to a channel via webhook.",
+    category: "Team",
+    authType: "manual",
+    icon: DiscordIcon,
     fields: [
-      { name: "apiToken", label: "Integration Token", type: "password", placeholder: "secret_..." },
+      {
+        name: "webhookUrl",
+        label: "Channel Webhook URL",
+        type: "password",
+        placeholder: "https://discord.com/api/webhooks/...",
+      },
     ],
   },
 ];
@@ -211,6 +226,7 @@ const connectorCatalog: ConnectorCatalogItem[] = [
 const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
 
 const catalogByProvider = new Map(connectorCatalog.map((c) => [c.provider as string, c]));
+const visibleConnectorProviders = new Set(connectorCatalog.map((c) => c.provider as string));
 
 export function ConnectorsClient() {
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
@@ -236,20 +252,25 @@ export function ConnectorsClient() {
   }, []);
 
   // For multi-account providers, store arrays. For others, store single.
-  const connectedByProvider = useMemo(
-    () => new Map(connectors.map((connector) => [connector.provider, connector])),
+  const visibleConnectors = useMemo(
+    () => connectors.filter((connector) => visibleConnectorProviders.has(connector.provider)),
     [connectors],
+  );
+
+  const connectedByProvider = useMemo(
+    () => new Map(visibleConnectors.map((connector) => [connector.provider, connector])),
+    [visibleConnectors],
   );
   const connectedByProviderAll = useMemo(() => {
     const map = new Map<string, ConnectorSummary[]>();
-    for (const c of connectors) {
+    for (const c of visibleConnectors) {
       const existing = map.get(c.provider) ?? [];
       map.set(c.provider, [...existing, c]);
     }
     return map;
-  }, [connectors]);
+  }, [visibleConnectors]);
 
-  const connectedCount = connectors.length;
+  const connectedCount = visibleConnectors.length;
 
   const filteredConnectors = useMemo(() => {
     const query = connectorQuery.trim().toLowerCase();
@@ -388,7 +409,7 @@ export function ConnectorsClient() {
             </span>
           </div>
           <p className="mt-2 max-w-2xl text-[14px] leading-6 text-slate-500">
-            The more rizly can see, the more it can handle. Add OAuth apps or encrypted provider keys.
+            The more rizly can see, the more it can handle. Connect approved apps or encrypted business credentials.
           </p>
         </header>
 
@@ -422,7 +443,7 @@ export function ConnectorsClient() {
             </button>
           </div>
 
-          {connectors.length === 0 ? (
+          {visibleConnectors.length === 0 ? (
             <div className="mt-3 flex flex-col items-center gap-3 border border-dashed border-slate-200 px-4 py-8 text-center">
               <p className="text-xs text-slate-500">
                 Nothing connected yet. Browse integrations to add Gmail, Calendar, and more.
@@ -437,7 +458,7 @@ export function ConnectorsClient() {
             </div>
           ) : (
             <div className="mt-3 divide-y divide-slate-100 border border-slate-200 bg-white">
-              {connectors.map((account) => {
+              {visibleConnectors.map((account) => {
                 const catalogItem = catalogByProvider.get(account.provider);
                 const Icon = catalogItem?.icon;
                 return (
@@ -919,7 +940,7 @@ function IntegrationsDialog({
               Browse integrations
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Add OAuth apps or encrypted provider keys.
+              Connect approved apps or encrypted business credentials.
             </p>
           </div>
           <button

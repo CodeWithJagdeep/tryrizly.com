@@ -77,6 +77,10 @@
     "./sentry": {
       "types": "./dist/sentry.d.ts",
       "default": "./dist/sentry.js"
+    },
+    "./action-audit": {
+      "types": "./dist/action-audit.d.ts",
+      "default": "./dist/action-audit.js"
     }
   },
   "files": [

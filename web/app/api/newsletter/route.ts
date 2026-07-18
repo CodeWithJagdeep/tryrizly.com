@@ -4,7 +4,7 @@ import { rateLimit } from "../_lib/rate-limit";
 const NOTIFY_INBOX = process.env.HIRING_EMAIL || "hello@getrizly.com";
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "newsletter", { limit: 5, windowMs: 60_000 });
+  const limited = await rateLimit(request, "newsletter", { limit: 5, windowMs: 60_000 });
   if (limited) return limited;
 
   const body = await request.json().catch(() => null);
@@ -18,8 +18,8 @@ export async function POST(request: Request) {
   const from = process.env.RESEND_FROM;
 
   if (!resendKey || !from) {
-    console.log(`[Rizly Newsletter] New subscriber: ${email}`);
-    return NextResponse.json({ ok: true });
+    console.error("[Rizly Newsletter] Email delivery is not configured");
+    return NextResponse.json({ error: "delivery_unavailable" }, { status: 503 });
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -38,8 +38,7 @@ export async function POST(request: Request) {
 
   if (!response.ok) {
     console.error("Failed to notify newsletter subscription", await response.text().catch(() => ""));
-    // Don't fail the user-facing request over an internal notification hiccup —
-    // the subscriber's intent is still worth acknowledging.
+    return NextResponse.json({ error: "send_failed" }, { status: 502 });
   }
 
   return NextResponse.json({ ok: true });

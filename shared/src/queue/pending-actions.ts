@@ -133,16 +133,22 @@ export async function appendProactiveMessage(
   content: string,
 ): Promise<void> {
   const redis = getRedis();
-  const raw = await redis.get(historyKey(chatId));
-  let turns: ConversationTurn[] = [];
-  try {
-    turns = raw ? (JSON.parse(raw) as ConversationTurn[]) : [];
-  } catch {
-    turns = [];
+  const key = historyKey(chatId);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await redis.watch(key);
+    const raw = await redis.get(key);
+    let turns: ConversationTurn[] = [];
+    try {
+      turns = raw ? (JSON.parse(raw) as ConversationTurn[]) : [];
+    } catch {
+      turns = [];
+    }
+    const next = [
+      ...turns,
+      { role: "assistant" as const, content, timestamp: new Date().toISOString() },
+    ].slice(-MAX_TURNS);
+    const result = await redis.multi().set(key, JSON.stringify(next), "EX", TTL_HISTORY).exec();
+    if (result) return;
   }
-  turns = [
-    ...turns,
-    { role: "assistant" as const, content, timestamp: new Date().toISOString() },
-  ].slice(-MAX_TURNS);
-  await redis.set(historyKey(chatId), JSON.stringify(turns), "EX", TTL_HISTORY);
+  throw new Error("conversation_history_conflict");
 }

@@ -1,7 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { logger } from "@heyriz/shared/logger";
-import { env } from "@heyriz/shared/env";
-import { sendTelegramMessage } from "@heyriz/shared/telegram";
+import { enqueueNotification } from "@heyriz/shared/queue/queues";
 import { PlanBudgetService } from "./plan-budget.service";
 import { UsageLedgerService } from "../llm/usage-ledger.service";
 import { creditsForUsd, usdForCredits } from "@heyriz/shared/billing/plan-budgets";
@@ -114,13 +113,14 @@ export class BudgetGateService {
     const budgetCredits = creditsForUsd(check.budgetUsd);
     const usedCredits = creditsForUsd(check.spendUsd);
     const remainingCredits = Math.max(0, budgetCredits - usedCredits);
-    const sent = await sendTelegramMessage({
-      chatId: env.TELEGRAM_CHAT_ID,
-      text:
+    const sent = await enqueueNotification({
+      userId,
+      source: "ai-core",
+      message:
         `You've used 80% of your monthly AI budget. ` +
         `${remainingCredits.toLocaleString("en-US")} credits left. ` +
         `Upgrade to Pro for 3,400 credits, or add a top-up.`,
-    });
+    }).catch(() => undefined);
     if (!sent) {
       // Let an in-chat fallback still appear if Telegram is unavailable.
       this.warnedThisCycle.delete(`${userId}:${cycleKey()}`);

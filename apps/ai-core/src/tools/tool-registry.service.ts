@@ -53,9 +53,15 @@ import { StripeService } from "../connectors/stripe.service";
 import { PayPalService } from "../connectors/paypal.service";
 import { GitHubService } from "../connectors/github.service";
 import { MpesaService } from "../connectors/mpesa.service";
+import { NotionService } from "../connectors/notion.service";
+import { SlackService } from "../connectors/slack.service";
+import { DiscordService } from "../connectors/discord.service";
 import { createPayPalSnapshotTool } from "./paypal.tools";
 import { createGitHubBriefingTool } from "./github.tools";
 import { createMpesaStatusTool } from "./mpesa.tools";
+import { createNotionSearchTool } from "./notion.tools";
+import { createSlackBriefingTool } from "./slack.tools";
+import { createDiscordSendTool } from "./discord.tools";
 import { TextToQueryService } from "../connectors/text-to-query.service";
 import { TaskRepository } from "../tasks/task.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
@@ -68,6 +74,7 @@ import { GoogleService } from "../google/google.service";
 import { LlmRouterService } from "../llm/llm-router.service";
 import { VectorMemoryService } from "../memory/vector-memory.service";
 import type { HeyRizRuntimeContext } from "../context/context.types";
+import { appendActionAudit } from "@heyriz/shared/action-audit";
 
 @Injectable()
 export class ToolRegistryService {
@@ -100,6 +107,12 @@ export class ToolRegistryService {
     private readonly github: GitHubService,
     @Inject(MpesaService)
     private readonly mpesa: MpesaService,
+    @Inject(NotionService)
+    private readonly notion: NotionService,
+    @Inject(SlackService)
+    private readonly slack: SlackService,
+    @Inject(DiscordService)
+    private readonly discord: DiscordService,
     @Inject(TextToQueryService)
     private readonly textToQuery: TextToQueryService,
     @Inject(TaskRepository)
@@ -128,7 +141,7 @@ export class ToolRegistryService {
       createGmailTriageTool(this.google, this.llm),
       createReadEmailBodyTool(this.google, this.emailClassifier),
       createSetEmailPreferenceTool(this.emailPreferences),
-      createEmailConfirmTool(this.emailPipeline, this.emailPreferences),
+      createEmailConfirmTool(this.emailPipeline),
       createDraftEmailReplyTool(this.google, this.llm, this.draftCache),
       createSendEmailTool(this.google, this.draftCache),
       createWatchForReplyTool(this.google),
@@ -141,6 +154,9 @@ export class ToolRegistryService {
       createPayPalSnapshotTool(this.connectorService, this.paypal),
       createGitHubBriefingTool(this.connectorService, this.github),
       createMpesaStatusTool(this.connectorService, this.mpesa),
+      createNotionSearchTool(this.connectorService, this.notion),
+      createSlackBriefingTool(this.connectorService, this.slack),
+      createDiscordSendTool(this.connectorService, this.discord),
       createBusinessSnapshotTool(
         this.connectorService,
         this.postgresIntrospection,
@@ -188,6 +204,7 @@ export class ToolRegistryService {
     userId: string;
     payload: unknown;
     context: HeyRizRuntimeContext;
+    approvalGranted?: boolean;
   }): Promise<ToolExecutionResult> {
     const tool = this.get(input.name);
 
@@ -195,10 +212,45 @@ export class ToolRegistryService {
       throw new Error(`tool_not_found:${input.name}`);
     }
 
-    return tool.execute({
-      userId: input.userId,
-      payload: input.payload,
-      context: input.context,
-    });
+    if (tool.approvalRequired && !input.approvalGranted) {
+      await appendActionAudit({
+        userId: input.userId,
+        event: "blocked",
+        tool: tool.name,
+        payload: input.payload,
+      }).catch(() => undefined);
+      return {
+        tool: tool.name,
+        status: "pending_approval",
+        message: "This external action requires a server-verified approval.",
+      };
+    }
+
+    try {
+      const result = await tool.execute({
+        userId: input.userId,
+        payload: input.payload,
+        context: input.context,
+      });
+      if (tool.approvalRequired) {
+        await appendActionAudit({
+          userId: input.userId,
+          event: result.status === "ok" ? "executed" : "failed",
+          tool: tool.name,
+          payload: input.payload,
+        }).catch(() => undefined);
+      }
+      return result;
+    } catch (error) {
+      if (tool.approvalRequired) {
+        await appendActionAudit({
+          userId: input.userId,
+          event: "failed",
+          tool: tool.name,
+          payload: input.payload,
+        }).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 }

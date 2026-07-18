@@ -149,6 +149,47 @@ export class ConnectorRepository implements OnModuleDestroy {
     );
   }
 
+  /** Atomically update an account only when it belongs to this tenant and provider. */
+  async updateOwned(
+    id: string,
+    userId: string,
+    provider: ConnectorProvider,
+    patch: Partial<Pick<ConnectedAccount, "label" | "status" | "encryptedPayload" | "metadata">>,
+  ): Promise<ConnectedAccount | undefined> {
+    const now = new Date().toISOString();
+    if (!this.pool) {
+      const existing = [...inMemoryAccounts.values()].find((account) => account.id === id);
+      if (!existing || existing.userId !== userId || existing.provider !== provider) return undefined;
+      const updated = { ...existing, ...patch, updatedAt: now };
+      inMemoryAccounts.set(id, updated);
+      return updated;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query<ConnectedAccount>(
+      `update connected_accounts set
+        label = coalesce($4, label),
+        status = coalesce($5, status),
+        encrypted_payload = coalesce($6, encrypted_payload),
+        metadata = coalesce($7::jsonb, metadata),
+        updated_at = $8
+       where id = $1 and user_id = $2 and provider = $3
+       returning id, user_id as "userId", provider, auth_type as "authType", label,
+         status, encrypted_payload as "encryptedPayload", scopes, metadata,
+         created_at as "createdAt", updated_at as "updatedAt"`,
+      [
+        id,
+        userId,
+        provider,
+        patch.label ?? null,
+        patch.status ?? null,
+        patch.encryptedPayload ?? null,
+        patch.metadata ? JSON.stringify(patch.metadata) : null,
+        now,
+      ],
+    );
+    return result.rows[0];
+  }
+
   async list(userId: string) {
     if (!this.pool) {
       return [...inMemoryAccounts.values()].filter(

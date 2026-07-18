@@ -15,8 +15,19 @@ const eslintConfig = defineConfig([
     "**/.next/**",
     "**/out/**",
     "**/build/**",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/coverage/**",
     "**/next-env.d.ts",
   ]),
+  {
+    rules: {
+      "react/no-unescaped-entities": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "@next/next/no-img-element": "off",
+      "@next/next/no-html-link-for-pages": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

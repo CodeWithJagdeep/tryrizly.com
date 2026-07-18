@@ -103,6 +103,16 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
     return Boolean(this.pool);
   }
 
+  async databaseHealthy(): Promise<boolean> {
+    if (!this.pool) return false;
+    try {
+      await this.pool.query("select 1");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async upsertCustomer(input: { userId: string; email?: string; name?: string }) {
     await this.query(
       `

@@ -10,7 +10,7 @@ type CoverProps = {
   aspectRatio?: "hero" | "card";
 };
 
-export function BlogCover({ category, title, slug, className = "", aspectRatio = "card" }: CoverProps) {
+export function BlogCover({ category, className = "", aspectRatio = "card" }: CoverProps) {
   // Height setting based on layout
   const heightClass = aspectRatio === "hero" ? "h-64 md:h-full min-h-[300px]" : "h-40";
 

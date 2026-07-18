@@ -134,7 +134,6 @@ type EmailConfirmPayload = {
  */
 export function createEmailConfirmTool(
   pipeline: EmailPipelineService,
-  prefs: EmailPreferencesRepository,
 ): HeyRizTool<EmailConfirmPayload> {
   return {
     name: "email_confirm",

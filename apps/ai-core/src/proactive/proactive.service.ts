@@ -272,7 +272,7 @@ export class ProactiveService {
         {
           kind: "late",
           at: startMs + 2 * MIN,
-          text: `${honorific}, "${event.title}" has started and I don't see you in it yet - want me to open the link?${join}`,
+          text: `${honorific}, "${event.title}" has started. Want me to open the link?${join}`,
         },
       ];
 
@@ -363,7 +363,7 @@ export class ProactiveService {
         {
           kind: "late",
           at: startMs + 2 * MIN,
-          text: `${honorific}, "${booking.title}" has started and I don't see you in it yet - want me to open the link?${join}`,
+          text: `${honorific}, "${booking.title}" has started. Want me to open the link?${join}`,
         },
       ];
 
@@ -596,7 +596,13 @@ function minimalContext(
     source: "calendar",
     structured: { activeDeals: [], preferences: [], pendingStates: [] },
     semantic: [],
-    live: { connected: false, schedule: [], unread: [] },
+    live: {
+      connected: false,
+      calendarConnected: false,
+      inboxConnected: false,
+      schedule: [],
+      unread: [],
+    },
     timezoneConfirmed: true,
     honorific,
     timezone,

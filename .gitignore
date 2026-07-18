@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -14,12 +15,12 @@
 /coverage
 
 # next.js (app lives in web/, so its build output does too)
-.next/
-out/
+**/.next/
+**/out/
 
 # production
-build/
-dist/
+**/build/
+**/dist/
 
 # misc
 .DS_Store

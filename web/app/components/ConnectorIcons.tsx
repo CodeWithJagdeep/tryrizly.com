@@ -4,7 +4,6 @@ const base = "size-full";
 
 /** Official brand mark, served from /public/logos (sourced from Wikimedia Commons). */
 function BrandLogoImg({ src, alt, className }: { src: string; alt: string; className: string }) {
-  // eslint-disable-next-line @next/next/no-img-element -- arbitrary-aspect-ratio SVG, not a fixed-size asset next/image expects
   return <img src={src} alt={alt} className={`${className} object-contain`} />;
 }
 
@@ -90,6 +89,18 @@ export function MpesaIcon({ className = base }: IconProps) {
     <svg viewBox="0 0 48 48" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
       <rect width="48" height="48" rx="10" fill="#43B02A"/>
       <path d="M12 34V14h4.6L24 25.2 31.4 14H36v20h-4.4V21.4L24 32.6l-7.6-11.2V34H12Z" fill="white"/>
+    </svg>
+  );
+}
+
+export function DiscordIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <rect width="24" height="24" rx="5" fill="#5865F2" />
+      <path
+        d="M17.2 7.2a13 13 0 0 0-3-.9l-.15.3c1 .24 1.94.6 2.8 1.1a10.6 10.6 0 0 0-9.7 0 8.8 8.8 0 0 1 2.83-1.1l-.15-.3a13 13 0 0 0-3.03.9C5.1 9.5 4.4 12.9 4.7 16.2a13.1 13.1 0 0 0 3.98 2.02c.32-.44.6-.9.84-1.4a8.5 8.5 0 0 1-1.34-.65c.11-.08.22-.17.33-.25a9.3 9.3 0 0 0 7.98 0c.11.08.22.17.33.25-.42.25-.87.47-1.34.65.24.5.52.96.84 1.4A13.1 13.1 0 0 0 20.3 16.2c.34-3.8-.6-7.17-3.1-9Zm-7.15 7.2c-.72 0-1.3-.66-1.3-1.47 0-.81.57-1.47 1.3-1.47.72 0 1.31.67 1.3 1.47 0 .81-.58 1.47-1.3 1.47Zm4.9 0c-.72 0-1.3-.66-1.3-1.47 0-.81.57-1.47 1.3-1.47.72 0 1.3.67 1.3 1.47 0 .81-.58 1.47-1.3 1.47Z"
+        fill="white"
+      />
     </svg>
   );
 }

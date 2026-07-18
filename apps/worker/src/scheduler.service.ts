@@ -333,8 +333,19 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         logger.info("scheduler: no active users", { provider });
         return;
       }
-      for (const userId of users) {
-        await fn(userId);
+      const concurrency = 5;
+      for (let index = 0; index < users.length; index += concurrency) {
+        const batch = users.slice(index, index + concurrency);
+        const results = await Promise.allSettled(batch.map((userId) => fn(userId)));
+        results.forEach((result, resultIndex) => {
+          if (result.status === "rejected") {
+            logger.warn("scheduler: user task failed", {
+              provider,
+              userId: batch[resultIndex],
+              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            });
+          }
+        });
       }
     } catch (error) {
       logger.warn("scheduler: active user fanout failed", {

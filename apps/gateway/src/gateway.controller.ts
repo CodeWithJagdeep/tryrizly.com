@@ -24,6 +24,8 @@ import {
 import { env } from "@heyriz/shared/env";
 import { sendTelegramMessage, setTelegramWebhook } from "@heyriz/shared/telegram";
 import { requireInternalSecret, safeEqual, sanitizeReturnPath } from "./internal-auth";
+import { RedisThrottlerStorage } from "./throttler-redis.storage";
+import { appendActionAudit } from "@heyriz/shared/action-audit";
 
 type ProxyPayload = Record<string, unknown>;
 type ChatHttpBody = {
@@ -60,7 +62,33 @@ export class GatewayController {
     private readonly conversations: ConversationStore,
     @Inject(APPROVAL_STORE)
     private readonly approvals: ApprovalStore,
+    @Inject(RedisThrottlerStorage)
+    private readonly throttlerStorage: RedisThrottlerStorage,
   ) {}
+
+  @Post("api/public/rate-limit")
+  async publicRateLimit(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { name?: string; key?: string; limit?: number; windowMs?: number },
+  ) {
+    this.requireInternal(secret);
+    if (!body.name?.match(/^[a-z0-9_-]{1,40}$/) || !body.key) {
+      throw new BadRequestException("valid name and key are required");
+    }
+    const limit = Math.min(100, Math.max(1, Math.trunc(body.limit ?? 5)));
+    const windowMs = Math.min(24 * 60 * 60_000, Math.max(1_000, Math.trunc(body.windowMs ?? 60_000)));
+    const record = await this.throttlerStorage.increment(
+      body.key.slice(0, 200),
+      windowMs,
+      limit,
+      windowMs,
+      `public:${body.name}`,
+    );
+    return {
+      allowed: !record.isBlocked,
+      retryAfter: record.isBlocked ? record.timeToBlockExpire || record.timeToExpire : 0,
+    };
+  }
 
   @Post("api/telegram/webhook")
   @HttpCode(200)
@@ -115,6 +143,13 @@ export class GatewayController {
       if (pending) {
         approval = { tool: pending.tool, payload: pending.payload };
         await this.approvals.remove(userId, body.pendingApprovalId);
+        await appendActionAudit({
+          userId,
+          event: "approved",
+          tool: pending.tool,
+          payload: pending.payload,
+          approvalId: pending.id,
+        }).catch(() => undefined);
       }
       // Missing/expired/forged id: fall through with no approval rather than error,
       // so the agent just treats the message as a normal turn.
@@ -174,16 +209,6 @@ export class GatewayController {
     return { reminder };
   }
 
-  @Post("api/emails/schedule")
-  @HttpCode(202)
-  scheduleOutboundEmail(
-    @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: ProxyPayload,
-  ) {
-    this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("email.scheduleOutbound", body);
-  }
-
   @Post("api/emails/:messageId/draft-reply")
   draftEmailReply(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
@@ -192,15 +217,6 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     return this.gatewayService.sendToAiCore("email.draftReply", { ...body, messageId });
-  }
-
-  @Post("api/emails/send")
-  sendEmailReply(
-    @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: ProxyPayload,
-  ) {
-    this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("email.sendReply", body);
   }
 
   @Post("api/events")
@@ -255,7 +271,12 @@ export class GatewayController {
     @Body() body: ProxyPayload,
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("tool.execute", body);
+    return this.gatewayService.sendToAiCore("tool.execute", {
+      userId: body.userId,
+      name: body.name,
+      payload: body.payload,
+      source: body.source,
+    });
   }
 
   @Post("api/memory")
@@ -265,6 +286,41 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     return this.gatewayService.sendToAiCore("memory.remember", body);
+  }
+
+  @Get("api/memory")
+  listMemories(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+    @Query("limit") limit?: string,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("memory.list", {
+      userId,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Delete("api/memory/:id")
+  forgetMemory(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Param("id") id: string,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("memory.forget", { userId, id });
+  }
+
+  @Delete("api/memory")
+  forgetAllMemories(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("memory.forgetAll", { userId });
   }
 
   @Post("api/push/subscribe")
@@ -669,10 +725,41 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/notion/callback")
+  async completeNotionConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
+      );
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Notion OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "notion"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   private requireConnectorOAuthProvider(
     provider: string,
-  ): "gmail" | "calendar" | "calcom" {
-    if (provider === "gmail" || provider === "calendar" || provider === "calcom") {
+  ): "gmail" | "calendar" | "calcom" | "notion" {
+    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion") {
       return provider;
     }
     throw new BadRequestException(`Unsupported OAuth provider: ${provider}`);

@@ -7,6 +7,7 @@ import type { HeyRizTool } from "./tool.types";
 import { env } from "@heyriz/shared/env";
 import { primaryUpdatesInboxQuery } from "../google/gmail-search";
 import type { DraftCacheService } from "./draft-cache.service";
+import { enqueueOutboundEmail } from "@heyriz/shared/queue/outbound-email";
 
 const TRIAGE_LIMIT = 8;
 // Wider metadata pool to rank within — cheap Gmail metadata fetches, so old
@@ -148,7 +149,7 @@ export function createDraftEmailReplyTool(
     name: "draft_email_reply",
     category: "gmail",
     description:
-      "Draft a reply (optionally to a specific messageId) and save it as a Gmail draft. Returns a ready-to-send payload. Sending still needs approval.",
+      "Draft a reply (optionally to a specific messageId). Returns a ready-to-send payload. Sending still needs approval.",
     approvalRequired: false,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -172,11 +173,17 @@ export function createDraftEmailReplyTool(
         inReplyTo: original?.messageIdHeader,
       };
 
-      // Best-effort: persist as a real Gmail draft so it shows in the user's drafts.
+      // Best-effort: persist as a real Gmail draft when the connected account
+      // has a compose/modify-capable grant. The verified scope set only needs
+      // gmail.readonly + gmail.send, so this must never block the send payload.
       let draftId: string | undefined;
-      const draft = await google.createDraft(userId, sendPayload);
-      if (draft.connected) {
-        draftId = draft.draftId;
+      try {
+        const draft = await google.createDraft(userId, sendPayload);
+        if (draft.connected) {
+          draftId = draft.draftId;
+        }
+      } catch {
+        draftId = undefined;
       }
 
       // Recovery net for send_email: if the model forgets to carry threadId/
@@ -200,6 +207,7 @@ type SendPayload = {
   threadId?: string;
   inReplyTo?: string;
   approved?: boolean;
+  sendAt?: string;
 };
 
 export function createSendEmailTool(
@@ -251,6 +259,34 @@ export function createSendEmailTool(
         const cached = draftCache.matchFor(userId, payload.to);
         threadId = threadId ?? cached?.threadId;
         inReplyTo = inReplyTo ?? cached?.inReplyTo;
+      }
+
+      if (payload.sendAt) {
+        const sendAt = new Date(payload.sendAt);
+        if (Number.isNaN(sendAt.getTime()) || sendAt.getTime() <= Date.now()) {
+          return {
+            tool: "send_email",
+            status: "not_implemented",
+            message: `Choose a valid future send time, ${context.honorific}.`,
+          };
+        }
+        await enqueueOutboundEmail(
+          {
+            userId,
+            to: payload.to,
+            subject: payload.subject ?? "",
+            body,
+            threadId,
+            inReplyTo,
+          },
+          sendAt,
+        );
+        return {
+          tool: "send_email",
+          status: "ok",
+          message: `Email scheduled for ${sendAt.toISOString()}, ${context.honorific}.`,
+          data: { scheduled: true, sendAt: sendAt.toISOString() },
+        };
       }
 
       const res = await google.sendMessage(userId, {

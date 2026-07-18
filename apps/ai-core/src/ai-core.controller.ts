@@ -22,6 +22,7 @@ type ToolExecutePayload = {
   name: string;
   payload?: unknown;
   source?: HeyRizContextRequest["source"];
+  authorization?: "scheduled-approved";
 };
 
 @Controller()
@@ -59,6 +60,21 @@ export class AiCoreController {
   @MessagePattern("memory.remember")
   remember(@Payload() payload: MemoryWriteInput) {
     return this.aiCoreService.remember(payload);
+  }
+
+  @MessagePattern("memory.list")
+  listMemories(@Payload() payload: { userId: string; limit?: number }) {
+    return this.aiCoreService.listMemories(payload);
+  }
+
+  @MessagePattern("memory.forget")
+  forgetMemory(@Payload() payload: { userId: string; id: string }) {
+    return this.aiCoreService.forgetMemory(payload);
+  }
+
+  @MessagePattern("memory.forgetAll")
+  forgetAllMemories(@Payload() payload: { userId: string }) {
+    return this.aiCoreService.forgetAllMemories(payload);
   }
 
   @MessagePattern("user.preferences.get")
@@ -153,22 +169,6 @@ export class AiCoreController {
     return this.aiCoreService.ingestEmailSpine(payload);
   }
 
-  @MessagePattern("email.scheduleOutbound")
-  scheduleOutboundEmail(
-    @Payload()
-    payload: {
-      userId?: string;
-      to: string;
-      subject: string;
-      body: string;
-      sendAt: string;
-      threadId?: string;
-      inReplyTo?: string;
-    },
-  ) {
-    return this.aiCoreService.scheduleOutboundEmail(payload);
-  }
-
   @MessagePattern("gmail.getMessage")
   getGmailMessage(@Payload() payload: { userId?: string; messageId: string }) {
     return this.aiCoreService.getGmailMessage(payload);
@@ -179,22 +179,6 @@ export class AiCoreController {
     @Payload() payload: { userId?: string; messageId: string; instructions?: string },
   ) {
     return this.aiCoreService.draftEmailReply(payload);
-  }
-
-  @MessagePattern("email.sendReply")
-  sendEmailReply(
-    @Payload()
-    payload: {
-      userId?: string;
-      to: string;
-      subject: string;
-      body: string;
-      threadId?: string;
-      inReplyTo?: string;
-      sendAt?: string;
-    },
-  ) {
-    return this.aiCoreService.sendEmailReply(payload);
   }
 
   @MessagePattern("proactive.weeklyDigest")

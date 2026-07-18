@@ -7,7 +7,6 @@ import {
   describeNow,
   formatEventRange,
   localDateTimeToUtc,
-  zonedTimeToUtc,
 } from "../lib/timezone";
 import { LlmRouterService, extractJson } from "../llm/llm-router.service";
 import type { AgentMessage } from "../llm/llm.types";
@@ -272,16 +271,9 @@ export class AgentService {
       // Approval gate: propose, then stop and wait for an explicit "yes".
       // An approval covers exactly the action that was approved — a resume turn
       // must NOT hold the gate open for every later tool (approving a calendar
-      // event must never silently send an email). One deliberate carve-out:
-      // after an approved send_email commits a meeting, the matching calendar
-      // write runs without a second round-trip — the send approval covered the
-      // meeting itself, and an event on the principal's own calendar is local
-      // and reversible.
-      const companionOfApprovedSend =
-        input.approval?.tool === "send_email" &&
-        (step.tool_name === "create_calendar_event" ||
-          step.tool_name === "reschedule_calendar_event");
-      if (tool.approvalRequired && !companionOfApprovedSend) {
+      // event must never silently send an email). Every later external write,
+      // including a related calendar update, gets its own approval record.
+      if (tool.approvalRequired) {
         const preview = previewFor(
           step.tool_name,
           payload,
@@ -397,6 +389,7 @@ export class AgentService {
         userId: input.userId,
         payload: extra ? { ...(payload as object), ...extra } : payload,
         context: input.context,
+        approvalGranted: extra?.approved === true,
       });
     } catch (error) {
       return {
@@ -520,13 +513,17 @@ export class AgentService {
 
 /** Renders the live calendar + unread inbox as an authoritative in-prompt block. */
 function renderLive(live: LiveContext, timezone: string): string {
-  if (!live.connected) {
+  if (!live.calendarConnected && !live.inboxConnected) {
     return "LIVE calendar & inbox: Google is not connected — for any schedule or mail question, say so (or call connect_google). Do not guess or claim something isn't there.";
   }
-  const cal = live.schedule.length
+  const cal = !live.calendarConnected
+    ? "- unavailable (calendar is not connected or could not be fetched)"
+    : live.schedule.length
     ? live.schedule.map((e) => `- ${liveScheduleLine(e, timezone)}`).join("\n")
     : "- clear today";
-  const inbox = live.unread.length
+  const inbox = !live.inboxConnected
+    ? "- unavailable (Gmail is not connected or could not be fetched)"
+    : live.unread.length
     ? live.unread.map((m) => `- ${liveFrom(m.from)}: ${m.subject}`).join("\n")
     : "- nothing unread";
   return [

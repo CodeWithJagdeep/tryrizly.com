@@ -17,6 +17,7 @@ import { NotionService } from "./connectors/notion.service";
 import { PayPalService } from "./connectors/paypal.service";
 import { GitHubService } from "./connectors/github.service";
 import { MpesaService } from "./connectors/mpesa.service";
+import { DiscordService } from "./connectors/discord.service";
 import { TextToQueryService } from "./connectors/text-to-query.service";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
 import { ContextService } from "./context/context.service";
@@ -85,6 +86,7 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     PayPalService,
     GitHubService,
     MpesaService,
+    DiscordService,
     TextToQueryService,
     TaskRepository,
     ToolRegistryService,

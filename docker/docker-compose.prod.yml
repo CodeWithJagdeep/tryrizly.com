@@ -25,16 +25,24 @@ services:
       BILLING_TCP_HOST: billing
       BILLING_TCP_PORT: 4200
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
-      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:-change-me}@mongodb:27017/heyriz?authSource=admin
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/heyriz
+      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:?MONGO_PASSWORD is required}@mongodb:27017/heyriz?authSource=admin
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:4000/api/connectors/google/callback}
     ports:
       - "${GATEWAY_PORT:-4000}:4000"
     restart: unless-stopped
     depends_on:
-      - ai-core
-      - billing
-      - mongodb
+      ai-core:
+        condition: service_healthy
+      billing:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>r.json()).then(v=>process.exit(v.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   billing:
     build:
@@ -48,12 +56,18 @@ services:
       NODE_ENV: production
       BILLING_TCP_HOST: 0.0.0.0
       BILLING_TCP_PORT: 4200
-      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/heyriz
     expose:
       - "4200"
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('net').connect(4200,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   ai-core:
     build:
@@ -68,14 +82,21 @@ services:
       AI_CORE_TCP_HOST: 0.0.0.0
       AI_CORE_TCP_PORT: 4100
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
-      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:-change-me}@mongodb:27017/heyriz?authSource=admin
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/heyriz
+      MONGODB_URL: mongodb://heyriz:${MONGO_PASSWORD:?MONGO_PASSWORD is required}@mongodb:27017/heyriz?authSource=admin
     expose:
       - "4100"
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('net').connect(4100,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   worker:
     build:
@@ -90,11 +111,13 @@ services:
       AI_CORE_TCP_HOST: ai-core
       AI_CORE_TCP_PORT: 4100
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:-change-me}@postgres:5432/heyriz
+      DATABASE_URL: postgres://heyriz:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/heyriz
     restart: unless-stopped
     depends_on:
-      - redis
-      - ai-core
+      redis:
+        condition: service_healthy
+      ai-core:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
@@ -106,6 +129,11 @@ services:
       --save 60 1
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -115,7 +143,7 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: heyriz
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: heyriz
     command: >
       postgres
@@ -127,6 +155,11 @@ services:
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heyriz -d heyriz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -136,7 +169,7 @@ services:
     image: mongo:7
     environment:
       MONGO_INITDB_ROOT_USERNAME: heyriz
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-change-me}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
       MONGO_INITDB_DATABASE: heyriz
     # Caps WiredTiger cache to 300MB — default is 50% of RAM (2GB on 4GB VM)
     command: mongod --wiredTigerCacheSizeGB 0.3
@@ -146,6 +179,11 @@ services:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username heyriz --password '$$MONGO_INITDB_ROOT_PASSWORD' --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:

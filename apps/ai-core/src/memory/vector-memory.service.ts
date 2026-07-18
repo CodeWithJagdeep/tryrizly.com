@@ -17,6 +17,7 @@ import type {
 import { env } from "@heyriz/shared/env";
 
 const DAY_MS = 86_400_000;
+const DEFAULT_RETENTION_DAYS = 365;
 
 /**
  * Time-aware vector memory. Text is stored with its embedding and a timestamp;
@@ -46,6 +47,14 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     const createdAt = new Date().toISOString();
     const embedding = await this.embeddings.embed(input.summary);
 
+    const metadata = {
+      provenance: input.metadata?.provenance ?? input.source,
+      confidence: input.metadata?.confidence ?? "medium",
+      expiresAt:
+        input.metadata?.expiresAt ??
+        new Date(Date.now() + DEFAULT_RETENTION_DAYS * DAY_MS).toISOString(),
+      ...input.metadata,
+    };
     const memory: StoredMemory = {
       id,
       userId: input.userId,
@@ -54,7 +63,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
       score: 1,
       createdAt,
       embedding: embedding ?? undefined,
-      metadata: input.metadata,
+      metadata,
     };
 
     if (!this.pool) {
@@ -72,7 +81,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
         input.summary,
         input.source,
         embedding ? `[${embedding.join(",")}]` : null,
-        input.metadata ?? {},
+        metadata,
         createdAt,
       ],
     );
@@ -85,6 +94,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     const candidates = await this.loadCandidates(input.userId, input.source);
 
     const scored = candidates
+      .filter((memory) => !isExpired(memory.metadata?.expiresAt))
       .map((memory) => {
         const similarity = queryEmbedding
           ? memory.embedding
@@ -116,6 +126,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     source: HeyRizEventSource,
     limit = 50,
   ): Promise<Array<{ id: string; summary: string; createdAt: string; metadata: Record<string, unknown> }>> {
+    await this.pruneExpired(userId);
     if (!this.pool) {
       return this.inMemory
         .filter((m) => m.userId === userId && m.source === source)
@@ -147,6 +158,53 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     }));
   }
 
+  /** List a tenant's reviewable memories, newest first. */
+  async list(userId: string, limit = 100) {
+    const safeLimit = Math.min(500, Math.max(1, Math.trunc(limit)));
+    const memories = await this.loadCandidates(userId);
+    return memories
+      .filter((memory) => !isExpired(memory.metadata?.expiresAt))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .slice(0, safeLimit)
+      .map((memory) => ({
+        id: memory.id,
+        userId: memory.userId,
+        summary: memory.summary,
+        source: memory.source,
+        score: memory.score,
+        createdAt: memory.createdAt,
+        metadata: memory.metadata,
+      }));
+  }
+
+  async forget(userId: string, id: string): Promise<boolean> {
+    if (!this.pool) {
+      const index = this.inMemory.findIndex((memory) => memory.id === id && memory.userId === userId);
+      if (index < 0) return false;
+      this.inMemory.splice(index, 1);
+      return true;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query("delete from memories where id = $1 and user_id = $2", [id, userId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async forgetAll(userId: string): Promise<number> {
+    if (!this.pool) {
+      let removed = 0;
+      for (let index = this.inMemory.length - 1; index >= 0; index -= 1) {
+        if (this.inMemory[index]?.userId === userId) {
+          this.inMemory.splice(index, 1);
+          removed += 1;
+        }
+      }
+      return removed;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query("delete from memories where user_id = $1", [userId]);
+    return result.rowCount ?? 0;
+  }
+
   async onModuleDestroy() {
     await this.pool?.end();
   }
@@ -155,6 +213,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     userId: string,
     source?: HeyRizEventSource,
   ): Promise<StoredMemory[]> {
+    await this.pruneExpired(userId);
     if (!this.pool) {
       return this.inMemory.filter(
         (m) => m.userId === userId && (!source || m.source === source),
@@ -210,6 +269,33 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
       .then(() => undefined);
     return this.tableReady;
   }
+
+  private async pruneExpired(userId: string): Promise<void> {
+    if (!this.pool) {
+      for (let index = this.inMemory.length - 1; index >= 0; index -= 1) {
+        const memory = this.inMemory[index];
+        if (memory?.userId === userId && isExpired(memory.metadata?.expiresAt)) {
+          this.inMemory.splice(index, 1);
+        }
+      }
+      return;
+    }
+    await this.ensureTable();
+    await this.pool.query(
+      `delete from memories
+        where user_id = $1
+          and metadata ? 'expiresAt'
+          and pg_input_is_valid(metadata->>'expiresAt', 'timestamptz')
+          and (metadata->>'expiresAt')::timestamptz <= now()`,
+      [userId],
+    );
+  }
+}
+
+function isExpired(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const expiresAt = Date.parse(value);
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 export function keywordOverlap(summary: string, query: string): number {

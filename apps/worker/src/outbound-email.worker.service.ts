@@ -30,6 +30,7 @@ export class OutboundEmailWorkerService implements OnModuleInit, OnModuleDestroy
             name: "send_email",
             payload: { to, subject, body, threadId, inReplyTo, approved: true },
             source: "scheduled",
+            authorization: "scheduled-approved",
           }),
         );
 

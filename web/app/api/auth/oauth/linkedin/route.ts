@@ -53,7 +53,11 @@ export async function GET(request: Request) {
 // is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveLinkedInRedirectUri(requestUrl: URL) {
   if (LOCAL_HOSTS.has(requestUrl.hostname)) {
-    return new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin).toString();
+    // Force http: browsers with HSTS/https-first show localhost as https, but
+    // the registered local-dev callback (and the gateway whitelist) is http.
+    const local = new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin);
+    local.protocol = "http:";
+    return local.toString();
   }
   return (
     process.env.LINKEDIN_REDIRECT_URI ||

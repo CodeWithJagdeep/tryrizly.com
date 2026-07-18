@@ -39,6 +39,7 @@ type ConnectorField = {
   label: string;
   type?: string;
   placeholder?: string;
+  required?: boolean;
 };
 
 type ConnectorCatalogItem = {
@@ -208,16 +209,34 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "discord",
     provider: "discord",
     title: "Discord",
-    description: "Post approved messages to a channel via webhook.",
+    description: "Read a bot-accessible channel for updates and post approved messages through an optional webhook.",
     category: "Team",
     authType: "manual",
     icon: DiscordIcon,
     fields: [
       {
+        name: "botToken",
+        label: "Bot token",
+        type: "password",
+        placeholder: "Discord bot token",
+      },
+      {
+        name: "channelId",
+        label: "Channel ID",
+        placeholder: "123456789012345678",
+      },
+      {
+        name: "guildId",
+        label: "Server ID (optional, enables message links)",
+        placeholder: "123456789012345678",
+        required: false,
+      },
+      {
         name: "webhookUrl",
-        label: "Channel Webhook URL",
+        label: "Channel webhook URL (optional, enables posting)",
         type: "password",
         placeholder: "https://discord.com/api/webhooks/...",
+        required: false,
       },
     ],
   },
@@ -1403,7 +1422,7 @@ function SetupDialog({
                     className="h-11 border border-slate-200 bg-white px-4 text-sm text-black outline-none placeholder:text-slate-400 transition focus:border-[#FE7F2D]"
                     name={field.name}
                     placeholder={isEdit ? "Leave blank to keep existing credentials" : field.placeholder}
-                    required={!isEdit}
+                    required={!isEdit && field.required !== false}
                     type={field.type ?? "text"}
                   />
                 </label>

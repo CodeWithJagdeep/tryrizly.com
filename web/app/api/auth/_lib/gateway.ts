@@ -1,4 +1,6 @@
-const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:4000";
+const gatewayUrl =
+  process.env.NEXT_PUBLIC_GATEWAY_URL ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:4000" : "https://api.getrizly.com");
 
 export function gatewayHeaders(hasBody: boolean) {
   const headers: Record<string, string> = {};

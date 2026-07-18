@@ -3,7 +3,7 @@ import { sanitizeReturnPath } from "../../_lib/auth-store";
 import { getAuthRedirectBaseUrl } from "../../_lib/redirect-url";
 
 const LINKEDIN_CALLBACK_PATH = "/api/auth/oauth/linkedin/callback";
-const PRODUCTION_HOSTS = new Set(["getrizly.com", "www.getrizly.com"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
 export async function GET(request: Request) {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
@@ -48,12 +48,15 @@ export async function GET(request: Request) {
   return Response.redirect(authUrl);
 }
 
+// Always send the single registered production callback so the URI matches the
+// LinkedIn app config regardless of which host (apex, www, preview) the visitor
+// is on. Localhost keeps its own origin so local dev can complete the flow.
 function resolveLinkedInRedirectUri(requestUrl: URL) {
-  if (PRODUCTION_HOSTS.has(requestUrl.hostname)) {
+  if (LOCAL_HOSTS.has(requestUrl.hostname)) {
     return new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin).toString();
   }
   return (
     process.env.LINKEDIN_REDIRECT_URI ||
-    new URL(LINKEDIN_CALLBACK_PATH, requestUrl.origin).toString()
+    "https://getrizly.com" + LINKEDIN_CALLBACK_PATH
   );
 }

@@ -5,7 +5,11 @@ import { defineConfig } from "vitest/config";
 // scripts (npm run smoke:*), not here.
 export default defineConfig({
   test: {
-    include: ["shared/src/**/*.test.ts", "apps/*/src/**/*.test.ts"],
+    include: [
+      "shared/src/**/*.test.ts",
+      "apps/*/src/**/*.test.ts",
+      "web/**/*.test.ts",
+    ],
     environment: "node",
   },
 });

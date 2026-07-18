@@ -6,8 +6,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 FROM base AS deps
 COPY package.json package-lock.json ./
+COPY web/package.json ./web/
 COPY shared/package.json ./shared/
 COPY apps/gateway/package.json ./apps/gateway/
+COPY apps/billing/package.json ./apps/billing/
 COPY apps/ai-core/package.json ./apps/ai-core/
 COPY apps/worker/package.json ./apps/worker/
 RUN npm ci

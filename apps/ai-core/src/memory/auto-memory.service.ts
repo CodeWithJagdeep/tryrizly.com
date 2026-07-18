@@ -44,7 +44,11 @@ export class AutoMemoryService {
       userId: input.userId,
       source: input.source ?? "telegram",
       summary,
-      metadata: { kind: "auto" },
+      metadata: {
+        kind: "semantic-fact",
+        provenance: userFact ? "principal" : "verified-tool-result",
+        confidence: userFact ? "high" : "medium",
+      },
     });
     return { saved: true, summary };
   }
@@ -74,7 +78,12 @@ export class AutoMemoryService {
               userId: input.userId,
               source: input.source,
               summary: `Email from ${item.from}: "${item.subject}" — ${item.reason} (priority: ${item.priority})`,
-              metadata: { kind: "email", priority: item.priority },
+              metadata: {
+                kind: "email-summary",
+                priority: item.priority,
+                provenance: "gmail-metadata",
+                confidence: "high",
+              },
             }),
           ),
         );
@@ -92,7 +101,11 @@ export class AutoMemoryService {
       userId: input.userId,
       source: input.source,
       summary,
-      metadata: { kind: "auto-event" },
+      metadata: {
+        kind: "auto-event",
+        provenance: "verified-tool-result",
+        confidence: "high",
+      },
     });
     return { saved: true, summary };
   }

@@ -1,6 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { GoogleService } from "../google/google.service";
-import type { CalendarEvent } from "../google/google.types";
+import {
+  AvailabilityService,
+  canonicalMeetingKey,
+  type AvailabilityCheckResult,
+} from "../availability/availability.service";
 import { EmailClassifierService } from "./email-classifier.service";
 import { EmailPreferencesRepository } from "./email-preferences.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
@@ -45,6 +49,7 @@ type ProcessEmailInput = {
 export class EmailPipelineService {
   constructor(
     private readonly google: GoogleService,
+    private readonly availability: AvailabilityService,
     private readonly classifier: EmailClassifierService,
     private readonly emailPrefs: EmailPreferencesRepository,
     private readonly userPrefs: UserPreferencesRepository,
@@ -255,7 +260,7 @@ export class EmailPipelineService {
         input.facts.meetingTitle ?? "Meeting",
         honorific,
         timezone,
-        input.messageId,
+        input.facts.meetingEndTime,
       );
       done.push("meeting_reminders_scheduled");
     }
@@ -311,7 +316,7 @@ export class EmailPipelineService {
         facts.meetingTitle ?? "Meeting",
         honorific,
         timezone,
-        input.messageId,
+        facts.meetingEndTime,
       );
       actionsScheduled.push("meeting_reminders_scheduled");
     }
@@ -323,7 +328,7 @@ export class EmailPipelineService {
     title: string,
     honorific: string,
     timezone: string,
-    messageId: string,
+    meetingEndIso?: string,
   ) {
     const meetingMs = Date.parse(meetingTimeIso);
     if (Number.isNaN(meetingMs)) return;
@@ -331,7 +336,11 @@ export class EmailPipelineService {
     const morning = zonedTimeToUtc(new Date(meetingMs), timezone, 8, 0);
     const t30 = new Date(meetingMs - 30 * MIN);
 
-    const base = `email-meeting:${userId}:${messageId}`;
+    const inferredEnd = meetingEndIso && !Number.isNaN(Date.parse(meetingEndIso))
+      ? meetingEndIso
+      : new Date(meetingMs + 60 * MIN).toISOString();
+    const meetingKey = canonicalMeetingKey({ title, start: meetingTimeIso, end: inferredEnd });
+    const base = `meet:${userId}:${meetingKey}`;
 
     if (morning.getTime() > Date.now()) {
       await enqueueReminder({
@@ -354,33 +363,23 @@ export class EmailPipelineService {
     }
   }
 
-  /** Finds a calendar event that overlaps the proposed meeting window, if any. */
+  /** Checks every connected calendar source for the proposed email meeting. */
   private async findMeetingConflict(
     userId: string,
     facts: ExtractedEmailFacts,
-  ): Promise<CalendarEvent | undefined> {
+    timezone: string,
+  ): Promise<AvailabilityCheckResult | undefined> {
     if (!facts.meetingTime) return undefined;
     const startMs = Date.parse(facts.meetingTime);
     if (Number.isNaN(startMs)) return undefined;
     const endMs = facts.meetingEndTime ? Date.parse(facts.meetingEndTime) : startMs + 60 * MIN;
+    if (Number.isNaN(endMs)) return undefined;
 
-    const dayStart = new Date(startMs);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(startMs);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-
-    const res = await this.google.listEvents(userId, {
-      timeMin: dayStart,
-      timeMax: dayEnd,
-      maxResults: 25,
-    });
-    if (!res.connected) return undefined;
-
-    return res.events.find((e) => {
-      if (e.allDay || !e.start || !e.end) return false;
-      const eStart = Date.parse(e.start);
-      const eEnd = Date.parse(e.end);
-      return startMs < eEnd && endMs > eStart;
+    return this.availability.check({
+      userId,
+      start: facts.meetingTime,
+      end: new Date(endMs).toISOString(),
+      timezone,
     });
   }
 
@@ -405,9 +404,18 @@ export class EmailPipelineService {
       case "meeting_request": {
         const when = facts.meetingTime ? ` at ${fmt(facts.meetingTime, timezone)}` : "";
 
-        const conflict = await this.findMeetingConflict(input.userId, facts);
+        const availability = await this.findMeetingConflict(input.userId, facts, timezone);
+        if (availability && !availability.complete) {
+          return `${prefix} ${gist}${when}, but I couldn't verify every connected calendar. I have not treated the time as free; should I retry the availability check?`;
+        }
+        const conflict = availability?.conflicts[0];
         if (conflict) {
-          return `${prefix} ${gist}${when} — but you already have "${conflict.title}" at ${fmt(conflict.start ?? "", timezone)}. Want me to reschedule one of them, or decline this one?`;
+          const alternatives = availability?.alternatives.length
+            ? ` Free alternatives: ${availability.alternatives
+                .map((slot) => fmt(slot.start, timezone))
+                .join(", ")}.`
+            : "";
+          return `${prefix} ${gist}${when} — but you already have "${conflict.title}" at ${fmt(conflict.start, timezone)}.${alternatives} Want me to propose one of these times, reschedule the existing meeting, or decline?`;
         }
         return `${prefix} ${gist}${when}. Should I check your calendar and confirm?`;
       }
@@ -437,11 +445,27 @@ export class EmailPipelineService {
         source: "gmail",
         summary: `Email from ${input.from} (${input.subject}): ${facts.summary}`,
         metadata: {
+          kind: "email-summary",
+          dedupeKey: `gmail:${input.messageId}`,
           messageId: input.messageId,
           threadId: input.threadId,
           category: facts.category,
+          from: input.from,
+          subject: input.subject,
           person: facts.person ?? "",
+          serviceName: facts.serviceName ?? "",
           dueDate: facts.dueDate ?? "",
+          action: facts.action ?? "",
+          requiresReply: facts.requiresReply ?? false,
+          urgency: facts.urgency ?? "normal",
+          riskLevel: facts.riskLevel ?? "low",
+          senderType: facts.senderType ?? "unknown",
+          suggestedAction: facts.suggestedAction ?? "notify",
+          isAutomated: facts.isAutomated ?? false,
+          isMarketing: facts.isMarketing ?? false,
+          replyIntent: facts.replyIntent ?? "unknown",
+          provenance: "gmail-classifier",
+          confidence: facts.confidence,
         },
       })
       .catch((e) =>

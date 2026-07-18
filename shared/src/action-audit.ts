@@ -81,3 +81,7 @@ export async function listActionAudit(userId: string, limit = 100): Promise<Acti
     };
   });
 }
+
+export async function deleteActionAudit(userId: string): Promise<void> {
+  await client().del(keyFor(userId));
+}

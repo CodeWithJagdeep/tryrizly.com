@@ -4,6 +4,10 @@ import { env } from "@heyriz/shared/env";
 import { sendEmail } from "@heyriz/shared/email";
 import { AuthRepository, type StoredUser } from "./auth.repository";
 import { GatewayService } from "../gateway.service";
+import { APPROVAL_STORE, type ApprovalStore } from "../approval-store";
+import { CONVERSATION_STORE, type ConversationStore } from "../conversation-store";
+import { deleteActionAudit } from "@heyriz/shared/action-audit";
+import { deleteActionExecutions } from "@heyriz/shared/action-execution";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -23,6 +27,10 @@ export class AuthService {
     private readonly repo: AuthRepository,
     @Inject(GatewayService)
     private readonly gateway: GatewayService,
+    @Inject(APPROVAL_STORE)
+    private readonly approvals: ApprovalStore,
+    @Inject(CONVERSATION_STORE)
+    private readonly conversations: ConversationStore,
   ) {}
 
   private userIdForEmail(email: string) {
@@ -91,8 +99,29 @@ export class AuthService {
     };
   }
 
-  async getTokenVersion(email: string): Promise<number> {
+  async getTokenVersion(email: string): Promise<number | null> {
     return this.repo.getTokenVersion(normalizeEmail(email));
+  }
+
+  async deleteAccount(email: string, confirmation: string): Promise<{ ok: true }> {
+    const normalized = normalizeEmail(email);
+    if (normalizeEmail(confirmation) !== normalized) {
+      throw new Error("account_deletion_confirmation_mismatch");
+    }
+    const user = await this.repo.getUser(normalized);
+    if (!user) throw new Error("account_not_found");
+
+    const userId = this.userIdForEmail(normalized);
+    const telegramChatId = await this.repo.findTelegramChatIdByUserId(userId);
+    await this.gateway.deleteUserData({ userId, email: normalized, name: user.name });
+
+    const transientKeys = [...new Set([userId, telegramChatId].filter((value): value is string => Boolean(value)))];
+    for (const key of transientKeys) {
+      await Promise.all([this.approvals.clear(key), this.conversations.clear(key)]);
+    }
+    await Promise.all([deleteActionAudit(userId), deleteActionExecutions(userId)]);
+    await this.repo.deleteAccountData(normalized, userId);
+    return { ok: true };
   }
 
   /** Invalidates every outstanding session for the user (logout everywhere). */

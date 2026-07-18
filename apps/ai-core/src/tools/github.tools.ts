@@ -1,6 +1,7 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { GitHubService } from "../connectors/github.service";
 import type { HeyRizTool } from "./tool.types";
+import { connectorSetupUrl } from "./connector-links";
 
 type GitHubBriefingPayload = {
   /** Max items to list (default 10, max 20). */
@@ -24,7 +25,7 @@ export function createGitHubBriefingTool(
         return {
           tool: "github_briefing",
           status: "needs_connection",
-          message: `GitHub isn't connected yet, ${context.honorific} — add a personal access token in Connectors.`,
+          message: `GitHub isn't connected yet, ${context.honorific}. Add a personal access token here: ${connectorSetupUrl("github")}`,
         };
       }
 
@@ -45,13 +46,13 @@ export function createGitHubBriefingTool(
         const lines = items.map((item) => {
           const repo = item.repository_url.split("/repos/")[1] ?? "";
           const kind = item.pull_request ? "PR" : "issue";
-          return `• [${kind}] ${repo}#${item.number}: ${item.title} (${item.html_url})`;
+          return `• [${kind}] ${repo}#${item.number}: ${item.title}\n  updated ${formatUpdatedAt(item.updated_at, context.timezone)} · ${item.html_url}`;
         });
 
         return {
           tool: "github_briefing",
           status: "ok",
-          message: `${items.length} open item${items.length === 1 ? "" : "s"} involving @${login}, ${context.honorific}:\n\n${lines.join("\n")}`,
+          message: `GitHub · open work for @${login} · checked ${formatCheckedAt(context.timezone)}\n\n${lines.join("\n\n")}`,
           data: { login, count: items.length },
         };
       } catch (error) {
@@ -60,11 +61,34 @@ export function createGitHubBriefingTool(
           return {
             tool: "github_briefing",
             status: "needs_connection",
-            message: `GitHub rejected the saved token, ${context.honorific} — it may have expired; re-enter it in Connectors.`,
+            message: `GitHub rejected the saved token, ${context.honorific}. Reconnect it here: ${connectorSetupUrl("github")}`,
           };
         }
         throw error;
       }
     },
   };
+}
+
+function formatUpdatedAt(value: string, timezone: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "unknown"
+    : date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: timezone,
+      });
+}
+
+function formatCheckedAt(timezone: string): string {
+  return new Date().toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
 }

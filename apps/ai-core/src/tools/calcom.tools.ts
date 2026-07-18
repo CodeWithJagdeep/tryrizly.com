@@ -1,5 +1,6 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { CalComService } from "../connectors/calcom.service";
+import type { AvailabilityService } from "../availability/availability.service";
 import type { HeyRizTool } from "./tool.types";
 
 type CalComBriefingPayload = {
@@ -15,6 +16,8 @@ type CalComBookPayload = {
   timeZone?: string;
   notes?: string;
   approved?: boolean;
+  /** Only set after the principal explicitly chooses to double-book. */
+  overrideConflict?: boolean;
 };
 
 export function createCalComBriefingTool(
@@ -76,12 +79,13 @@ export function createCalComBriefingTool(
 export function createCalComBookTool(
   connectors: ConnectorService,
   calcom: CalComService,
+  availability: AvailabilityService,
 ): HeyRizTool<CalComBookPayload> {
   return {
     name: "calcom_book",
     category: "calendar",
     description:
-      "Create a new booking on Cal.com. Requires eventTypeId, a start time (ISO), attendee name and email. Always ask for approval first.",
+      "Create a new booking on Cal.com. Requires eventTypeId, a start time (ISO), attendee name and email. Always ask for approval first. The tool resolves the event duration and enforces a fresh Google Calendar + Cal.com conflict check immediately before booking. Only pass overrideConflict:true after the principal explicitly chooses to double-book.",
     approvalRequired: true,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -117,6 +121,74 @@ export function createCalComBookTool(
       }
 
       try {
+        const eventTypes = await calcom.listEventTypes(secret);
+        const eventType = eventTypes.find((candidate) => candidate.id === eventTypeId);
+        if (!eventType || !Number.isFinite(eventType.length) || eventType.length <= 0) {
+          return {
+            tool: "calcom_book",
+            status: "invalid_input",
+            message: `I couldn't find a valid Cal.com event type with id ${eventTypeId}, ${context.honorific}. Refresh the event types and try again.`,
+          };
+        }
+
+        const startMs = Date.parse(start);
+        if (Number.isNaN(startMs)) {
+          return {
+            tool: "calcom_book",
+            status: "invalid_input",
+            message: `That Cal.com start time is invalid, ${context.honorific}.`,
+          };
+        }
+        const end = new Date(startMs + eventType.length * 60_000).toISOString();
+
+        if (!payload.overrideConflict) {
+          const check = await availability.check({
+            userId,
+            start,
+            end,
+            timezone: timeZone ?? context.timezone,
+          });
+          if (!check.valid) {
+            return {
+              tool: "calcom_book",
+              status: "invalid_input",
+              message: check.reason ?? "That booking window is invalid.",
+            };
+          }
+          if (!check.complete) {
+            const failed = Object.entries(check.coverage)
+              .filter(([, status]) => status === "error")
+              .map(([source]) => source === "calcom" ? "Cal.com" : "Google Calendar")
+              .join(" and ");
+            return {
+              tool: "calcom_book",
+              status: "transient_error",
+              message: `I couldn't verify ${failed} availability, ${context.honorific}, so I stopped before booking. Try again in a moment.`,
+              data: { coverage: check.coverage },
+            };
+          }
+          if (check.conflicts.length > 0) {
+            const conflict = check.conflicts[0];
+            const alternatives = check.alternatives.length > 0
+              ? ` Free alternatives: ${check.alternatives
+                  .map((slot) => formatDateTime(slot.start, timeZone ?? context.timezone))
+                  .join(", ")}.`
+              : "";
+            return {
+              tool: "calcom_book",
+              status: "conflict",
+              message: `That Cal.com booking clashes with "${conflict.title}" at ${formatDateTime(conflict.start, timeZone ?? context.timezone)}, ${context.honorific}.${alternatives} Choose an alternative, or explicitly tell me to double-book.`,
+              data: {
+                conflict,
+                conflicts: check.conflicts,
+                alternatives: check.alternatives,
+                coverage: check.coverage,
+                eventType: { id: eventType.id, title: eventType.title, length: eventType.length },
+              },
+            };
+          }
+        }
+
         const result = await calcom.createBooking(secret, {
           eventTypeId,
           start,
@@ -135,7 +207,7 @@ export function createCalComBookTool(
       } catch (error) {
         return {
           tool: "calcom_book",
-          status: "not_implemented",
+          status: "transient_error",
           message: `Couldn't book that on Cal.com right now, ${context.honorific} — ${
             error instanceof Error ? error.message : "something went wrong"
           }. Try again in a moment.`,
@@ -143,4 +215,15 @@ export function createCalComBookTool(
       }
     },
   };
+}
+
+function formatDateTime(iso: string, timezone: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

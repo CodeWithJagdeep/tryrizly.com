@@ -144,8 +144,10 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     title: "GitHub",
     description: "Open PRs, issues, and review requests involving you — briefed on demand.",
     category: "Team",
-    authType: "manual",
+    authType: "oauth",
     icon: GitHubIcon,
+    // Manual fallback: a fine-grained PAT still works for users who prefer
+    // narrower read-only access than the OAuth app's "repo" scope.
     fields: [
       { name: "token", label: "Personal Access Token", type: "password", placeholder: "ghp_... or github_pat_..." },
     ],
@@ -244,8 +246,12 @@ const connectorCatalog: ConnectorCatalogItem[] = [
 
 const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
 
-const catalogByProvider = new Map(connectorCatalog.map((c) => [c.provider as string, c]));
-const visibleConnectorProviders = new Set(connectorCatalog.map((c) => c.provider as string));
+// Temporarily hidden from the connectors page — remove from this set to bring one back.
+const hiddenConnectorProviders = new Set<string>(["discord", "slack", "notion", "paypal"]);
+const shownCatalog = connectorCatalog.filter((c) => !hiddenConnectorProviders.has(c.provider));
+
+const catalogByProvider = new Map(shownCatalog.map((c) => [c.provider as string, c]));
+const visibleConnectorProviders = new Set(shownCatalog.map((c) => c.provider as string));
 
 export function ConnectorsClient() {
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
@@ -293,7 +299,7 @@ export function ConnectorsClient() {
 
   const filteredConnectors = useMemo(() => {
     const query = connectorQuery.trim().toLowerCase();
-    return connectorCatalog.filter((connector) => {
+    return shownCatalog.filter((connector) => {
       const categoryOk = activeCategory === "All" || connector.category === activeCategory;
       const queryOk =
         !query ||

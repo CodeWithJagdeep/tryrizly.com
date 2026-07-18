@@ -14,14 +14,14 @@ export function billingPlans(): BillingPlan[] {
       // for an account with no active trial/subscription/purchase (post-trial
       // floor, or pre-trial before signup completes). requirePlan("free") in
       // billing.service.ts depends on this entry existing; don't remove it.
-      description: "Limited background access after your trial ends, until you choose a plan.",
+      description: "Upgrade required after the trial ends.",
       currency,
       amount: 0,
       trialDays: 0,
       aiBudgetUsd: PLAN_AI_BUDGETS.free,
       credits: PLAN_CREDITS.free,
       seats: 1,
-      features: ["Limited chat", "Basic memory", "Manual connector setup"],
+      features: ["Upgrade required"],
     },
     {
       id: "starter",

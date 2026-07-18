@@ -2,15 +2,27 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { config } from "dotenv";
 import { z } from "zod";
+import { resolveWebAppUrl } from "./web-app-url";
 
-for (const envFile of [
-  join(process.cwd(), ".env.local"),
-  join(process.cwd(), ".env"),
-  join(process.cwd(), "..", "..", ".env.local"),
-  join(process.cwd(), "..", "..", ".env"),
-  join(__dirname, "..", "..", ".env.local"),
-  join(__dirname, "..", "..", ".env"),
-]) {
+function environmentFileNames(nodeEnv: string | undefined): string[] {
+  if (nodeEnv === "production") {
+    return [".env.production.local", ".env.production", ".env"];
+  }
+  if (nodeEnv === "test") {
+    return [".env.test.local", ".env.test", ".env"];
+  }
+  return [".env.local", ".env.development.local", ".env.development", ".env"];
+}
+
+const envRoots = [
+  process.cwd(),
+  join(process.cwd(), "..", ".."),
+  join(__dirname, "..", ".."),
+];
+
+for (const envFile of envRoots.flatMap((root) =>
+  environmentFileNames(process.env.NODE_ENV).map((name) => join(root, name)),
+)) {
   if (existsSync(envFile)) {
     config({ path: envFile });
   }
@@ -80,6 +92,10 @@ const schema = z.object({
   LLM_ROUTE_DECIDE: z.string().optional(),
   // Vector memory: embeddings + time-aware, thresholded recall.
   EMBEDDINGS_MODEL: z.string().default("text-embedding-3-small"),
+  // Must match the pgvector column. Changing it requires a deliberate memory
+  // re-embedding migration; mismatched vectors are rejected instead of
+  // corrupting recall.
+  EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(1536),
   MEMORY_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.25),
   MEMORY_RECENCY_WEIGHT: z.coerce.number().min(0).max(1).default(0.2),
   MEMORY_RECENCY_HALFLIFE_DAYS: z.coerce.number().positive().default(30),
@@ -151,6 +167,12 @@ const schema = z.object({
     .url()
     .default("http://localhost:4000/api/connectors/notion/callback"),
   NOTION_VERSION: z.string().default("2026-03-11"),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/github/callback"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),
@@ -164,6 +186,10 @@ const schema = z.object({
 });
 
 const parsed = schema.parse(process.env);
+const normalized = {
+  ...parsed,
+  WEB_APP_URL: resolveWebAppUrl(parsed.WEB_APP_URL, parsed.NODE_ENV),
+};
 
 // Fail fast at boot rather than silently running open: in production the
 // gateway's entire tenant isolation rests on these secrets, so a missing one
@@ -179,4 +205,4 @@ if (parsed.NODE_ENV === "production") {
   }
 }
 
-export const env = parsed;
+export const env = normalized;

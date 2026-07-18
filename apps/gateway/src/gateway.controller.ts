@@ -16,7 +16,7 @@ import {
 import { APPROVAL_STORE, type ApprovalStore } from "./approval-store";
 import { AuthRepository } from "./auth/auth.repository";
 import { CONVERSATION_STORE, type ConversationStore } from "./conversation-store";
-import { GatewayService } from "./gateway.service";
+import { GatewayService, upgradeRequiredResult } from "./gateway.service";
 import {
   TelegramService,
   type TelegramUpdate,
@@ -38,6 +38,8 @@ type ChatHttpBody = {
 };
 type ChatResult = {
   reply: string;
+  error?: string;
+  upgradeRequired?: boolean;
   pendingApproval?: { tool: string; payload: Record<string, unknown>; preview: string };
   [key: string]: unknown;
 };
@@ -134,14 +136,17 @@ export class GatewayController {
     this.requireInternal(secret);
     const userId = body.userId;
     if (!userId) throw new BadRequestException("userId is required");
+    if (body.approve && !(await this.gatewayService.hasProductAccess(userId))) {
+      return upgradeRequiredResult();
+    }
 
     // Approval is resolved server-side by opaque id — a client can never smuggle
     // its own tool/payload in as an "approved" action (see approval-store.ts).
-    let approval: { tool: string; payload: unknown } | undefined;
+    let approval: { id: string; tool: string; payload: unknown } | undefined;
     if (body.approve && body.pendingApprovalId) {
       const pending = await this.approvals.get(userId, body.pendingApprovalId);
       if (pending) {
-        approval = { tool: pending.tool, payload: pending.payload };
+        approval = { id: pending.id, tool: pending.tool, payload: pending.payload };
         await this.approvals.remove(userId, body.pendingApprovalId);
         await appendActionAudit({
           userId,
@@ -155,7 +160,7 @@ export class GatewayController {
       // so the agent just treats the message as a normal turn.
     }
 
-    const result = await this.gatewayService.sendToAiCore<ChatResult>("chat.message", {
+    const result = await this.gatewayService.sendChatToAiCore<ChatResult>({
       userId,
       message: body.message,
       history: body.history,
@@ -163,7 +168,7 @@ export class GatewayController {
       ...(approval ? { approve: true, pendingApproval: approval } : {}),
     });
 
-    if (result.pendingApproval) {
+    if ("pendingApproval" in result && result.pendingApproval) {
       const record = await this.approvals.add(userId, result.pendingApproval);
       return { ...result, pendingApproval: { id: record.id, preview: record.preview } };
     }
@@ -756,10 +761,41 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/github/callback")
+  async completeGitHubConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
+      );
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing GitHub OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "github"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   private requireConnectorOAuthProvider(
     provider: string,
-  ): "gmail" | "calendar" | "calcom" | "notion" {
-    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion") {
+  ): "gmail" | "calendar" | "calcom" | "notion" | "github" {
+    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion" || provider === "github") {
       return provider;
     }
     throw new BadRequestException(`Unsupported OAuth provider: ${provider}`);

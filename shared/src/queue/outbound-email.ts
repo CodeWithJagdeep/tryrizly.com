@@ -6,7 +6,7 @@ import type { OutboundEmailJobData } from "./types";
 
 let queue: Queue<OutboundEmailJobData> | undefined;
 
-function getQueue() {
+export function getOutboundEmailQueue() {
   queue ??= new Queue<OutboundEmailJobData>(queueNames.outboundEmail, {
     connection: createRedisConnection(),
   });
@@ -19,7 +19,7 @@ export async function enqueueOutboundEmail(
 ) {
   const delay = Math.max(0, sendAt.getTime() - Date.now());
   const jobId = safeJobId(`outbound-email:${data.userId}:${data.to}:${sendAt.getTime()}`);
-  return getQueue().add("outbound-email", data, {
+  return getOutboundEmailQueue().add("outbound-email", data, {
     delay,
     jobId,
     attempts: 3,

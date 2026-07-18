@@ -1,6 +1,7 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { DiscordService } from "../connectors/discord.service";
 import type { HeyRizTool } from "./tool.types";
+import { connectorSetupUrl } from "./connector-links";
 
 const DISCORD_CONTENT_LIMIT = 2000;
 
@@ -22,11 +23,11 @@ export function createDiscordSendTool(
     sensitiveDataPolicy: "none",
     async execute({ userId, payload, context }) {
       const secret = await connectors.getDiscordSecret(userId);
-      if (!secret) {
+      if (!secret?.webhookUrl) {
         return {
           tool: "discord_send",
           status: "needs_connection",
-          message: `Discord isn't connected yet, ${context.honorific} — add a channel webhook URL in Connectors.`,
+          message: `Discord posting needs a channel webhook, ${context.honorific}. Add one here: ${connectorSetupUrl("discord")}`,
         };
       }
 
@@ -52,11 +53,11 @@ export function createDiscordSendTool(
         await discord.postMessage(secret, content);
       } catch (error) {
         const code = error instanceof Error ? error.message : String(error);
-        if (code === "discord_invalid_webhook") {
+        if (code === "discord_invalid_webhook" || code === "discord_missing_webhook") {
           return {
             tool: "discord_send",
             status: "needs_connection",
-            message: `Discord rejected the saved webhook, ${context.honorific} — it may have been deleted; re-enter it in Connectors.`,
+            message: `Discord rejected the saved webhook, ${context.honorific}. Reconnect it here: ${connectorSetupUrl("discord")}`,
           };
         }
         throw error;

@@ -6,6 +6,27 @@ import { BillingGatewayService } from "./billing/billing.service";
 
 type ProxyPayload = Record<string, unknown>;
 
+export type UpgradeRequiredResult = {
+  error: "upgrade_required";
+  upgradeRequired: true;
+  reply: string;
+};
+
+type BillingStatus = {
+  access?: { active?: boolean; state?: string };
+};
+
+const UPGRADE_REQUIRED_REPLY =
+  "Your Rizly trial has ended. Choose a paid plan to continue using your AI operator: https://getrizly.com/dashboard/upgrade";
+
+export function upgradeRequiredResult(): UpgradeRequiredResult {
+  return {
+    error: "upgrade_required",
+    upgradeRequired: true,
+    reply: UPGRADE_REQUIRED_REPLY,
+  };
+}
+
 // A handler that throws before returning a proper RPC response (e.g. a
 // synchronous error in a microservice message handler) can leave this call
 // waiting forever with no reply ever coming back — bound it so a backend bug
@@ -63,6 +84,27 @@ export class GatewayService implements OnModuleDestroy {
       }
       throw error;
     }
+  }
+
+  async hasProductAccess(userId: string): Promise<boolean> {
+    const status = await this.billing.send<BillingStatus>("billing.status", { userId });
+    return status.access?.active === true;
+  }
+
+  async sendChatToAiCore<TResponse>(
+    payload: ProxyPayload & { userId: string },
+  ): Promise<TResponse | UpgradeRequiredResult> {
+    if (!(await this.hasProductAccess(payload.userId))) {
+      return upgradeRequiredResult();
+    }
+    return this.sendToAiCore<TResponse>("chat.message", payload);
+  }
+
+  async deleteUserData(payload: { userId: string; email?: string; name?: string }) {
+    // Stop billing first so an account can never disappear while a recurring
+    // charge remains active. Both downstream operations are idempotent.
+    await this.billing.send<{ ok: boolean }>("billing.user.deleteData", payload);
+    return this.sendToAiCore<{ ok: boolean }>("user.deleteData", payload);
   }
 
   async onModuleDestroy() {

@@ -1,10 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID } from "crypto";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { sendEmail } from "@heyriz/shared/email";
 import { BillingRepository } from "./billing.repository";
 import { billingPlans, findPlan } from "./plans";
+import { isCreditPackId } from "@heyriz/shared/billing/plan-budgets";
 import { RazorpayClient } from "./razorpay.client";
 import type {
   BillingCancelInput,
@@ -270,6 +271,20 @@ export class BillingService {
     };
   }
 
+  async deleteUserData(input: { userId?: string; email?: string; name?: string }) {
+    const userId = this.requireUserId(input.userId);
+    const current = await this.repository.findCurrentSubscription(userId);
+    if (current && !TERMINAL_SUBSCRIPTION_STATUSES.has(current.status)) {
+      const cancellation = await this.cancelSubscription({ ...input, userId });
+      if (!cancellation.ok) throw new Error("subscription_cancellation_failed");
+    }
+
+    const pseudonymKey = env.AUTH_INTERNAL_SECRET ?? "rizly-local-billing-pseudonym-key";
+    const anonymousUserId = `deleted:${createHmac("sha256", pseudonymKey).update(userId).digest("hex").slice(0, 24)}`;
+    await this.repository.anonymizeUserData(userId, anonymousUserId);
+    return { ok: true };
+  }
+
   async handleRazorpayWebhook(input: BillingWebhookInput) {
     if (!this.razorpay.verifyWebhook(input.rawBody, input.signature)) {
       return { ok: false, error: "invalid_signature" };
@@ -278,11 +293,21 @@ export class BillingService {
     const eventType = String(input.payload.event ?? "unknown");
     const entityId = this.extractRazorpayEntityId(input.payload);
     const eventId = input.eventId || (entityId ? `${eventType}:${entityId}` : randomUUID());
+    const subscription = this.extractEntity(input.payload, "subscription");
+    const payment = this.extractEntity(input.payload, "payment");
+    const order = this.extractEntity(input.payload, "order");
+    const deletedReference = await this.repository.hasDeletedProviderReference([
+      stringValue(subscription.id) ?? "",
+      stringValue(payment.order_id) ?? "",
+      stringValue(order.id) ?? "",
+    ]);
     const inserted = await this.repository.insertEvent({
       provider: "razorpay",
       eventId,
       eventType,
-      payload: input.payload,
+      payload: deletedReference
+        ? { redacted: true, retainedFor: "fraud-and-accounting" }
+        : input.payload,
     });
     if (!inserted) return { ok: true, duplicate: true };
 
@@ -318,7 +343,7 @@ export class BillingService {
 
     await this.repository.updateSubscriptionByProvider({
       providerSubscriptionId,
-      userId,
+      userId: previous?.user_id.startsWith("deleted:") ? undefined : userId,
       planId,
       provider: "razorpay",
       status,
@@ -333,7 +358,7 @@ export class BillingService {
     // Only notify on the transition into cancelled/completed — avoids a double
     // send when this webhook follows our own cancelSubscription() call, which
     // already emailed the customer directly.
-    if (userId && isTerminal && !wasAlreadyTerminal) {
+    if (userId && !previous?.user_id.startsWith("deleted:") && isTerminal && !wasAlreadyTerminal) {
       this.notifyCustomer(userId, undefined, undefined, (email, name) =>
         sendSubscriptionCancelledEmail(email, name, this.secondsToDate(numberValue(entity.current_end)) ?? undefined),
       );
@@ -360,7 +385,7 @@ export class BillingService {
     const amount = numberValue(payment.amount) ?? numberValue(order.amount);
     const currency = stringValue(payment.currency) || stringValue(order.currency);
 
-    await this.repository.updatePurchaseByProviderOrder({
+    const purchase = await this.repository.updatePurchaseByProviderOrder({
       providerOrderId,
       userId,
       planId: stringValue(notes.planId),
@@ -374,9 +399,10 @@ export class BillingService {
       },
     });
 
-    if (userId && eventType === "payment.failed") {
+    const deleted = purchase.user_id.startsWith("deleted:");
+    if (userId && !deleted && eventType === "payment.failed") {
       this.notifyCustomer(userId, undefined, undefined, sendPaymentFailedEmail);
-    } else if (userId && eventType === "payment.captured") {
+    } else if (userId && !deleted && eventType === "payment.captured") {
       // Razorpay fires both payment.captured and order.paid for a single purchase;
       // only capture the receipt on one of them to avoid sending it twice.
       this.notifyCustomer(userId, undefined, undefined, (email, name) =>
@@ -575,7 +601,9 @@ export class BillingService {
     ]);
     return Boolean(
       (subscription && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) ||
-        (purchase && ACCESS_PURCHASE_STATUSES.has(purchase.status)),
+        (purchase &&
+          !isCreditPackId(purchase.plan_id) &&
+          ACCESS_PURCHASE_STATUSES.has(purchase.status)),
     );
   }
 
@@ -592,7 +620,10 @@ export class BillingService {
         (subscription.status === "trialing" &&
           subscription.trial_ends_at &&
           subscription.trial_ends_at.getTime() > now));
-    const purchaseActive = purchase && ACCESS_PURCHASE_STATUSES.has(purchase.status);
+    const purchaseActive =
+      purchase &&
+      !isCreditPackId(purchase.plan_id) &&
+      ACCESS_PURCHASE_STATUSES.has(purchase.status);
 
     if (subscriptionActive && subscription) {
       const plan = findPlan(subscription.plan_id) ?? this.freePlan();
@@ -633,7 +664,7 @@ export class BillingService {
     return {
       plan: this.freePlan(),
       access: {
-        active: true,
+        active: false,
         state: "free",
         expiresAt: null,
       },

@@ -16,6 +16,7 @@ import type {
 } from "@heyriz/shared/queue/types";
 import type { EmailCategory } from "./email/email.types";
 import type { ExtractedEmailFacts } from "./email/email.types";
+import { AccountDeletionService } from "./account/account-deletion.service";
 
 type ToolExecutePayload = {
   userId?: string;
@@ -23,6 +24,7 @@ type ToolExecutePayload = {
   payload?: unknown;
   source?: HeyRizContextRequest["source"];
   authorization?: "scheduled-approved";
+  executionId?: string;
 };
 
 @Controller()
@@ -30,7 +32,13 @@ export class AiCoreController {
   constructor(
     @Inject(AiCoreService)
     private readonly aiCoreService: AiCoreService,
+    private readonly accountDeletion: AccountDeletionService,
   ) {}
+
+  @MessagePattern("user.deleteData")
+  deleteUserData(@Payload() payload: { userId: string }) {
+    return this.accountDeletion.deleteUserData(payload.userId);
+  }
 
   @MessagePattern("health.check")
   healthCheck() {

@@ -110,6 +110,9 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
   const [chatCount, setChatCount] = useState(0);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [billingError, setBillingError] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [cancelResult, setCancelResult] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
@@ -200,6 +203,35 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
       .catch(() => setMemoryMessage("Could not load memory notes."))
       .finally(() => setMemoryLoading(false));
   }, []);
+
+  async function cancelSubscription() {
+    setCancellingSubscription(true);
+    setCancelResult(null);
+    try {
+      const response = await fetch("/api/billing/subscription/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        setCancelResult(
+          data.error === "subscription_not_found"
+            ? "No active subscription found to cancel."
+            : "Could not cancel the subscription. Try again or contact support.",
+        );
+        return;
+      }
+      setCancelResult("Subscription cancelled. You keep access until the end of the paid period.");
+      const status = await fetch("/api/billing/status");
+      if (status.ok) setBilling((await status.json()) as BillingStatus);
+    } catch {
+      setCancelResult("Could not reach the billing service. Try again.");
+    } finally {
+      setCancellingSubscription(false);
+      setConfirmingCancel(false);
+    }
+  }
 
   async function forgetMemory(id: string) {
     const response = await fetch(`/api/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -542,6 +574,48 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                       View AI usage
                     </a>
                   </div>
+                  {billing?.access?.active && billing.access.state !== "cancelled" ? (
+                    <div className="mt-10 border-t border-red-200 pt-7">
+                      <h3 className="text-[16px] font-semibold text-red-700">Cancel subscription</h3>
+                      <p className="mt-2 max-w-2xl text-[14px] leading-6 text-slate-500">
+                        Stops future renewals. You keep access until the end of the current billing
+                        period, and no further charges are made.
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        {confirmingCancel ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={cancellingSubscription}
+                              onClick={() => void cancelSubscription()}
+                              className="inline-flex h-9 items-center justify-center bg-red-700 px-4 text-[14px] font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {cancellingSubscription ? "Cancelling..." : "Yes, cancel my subscription"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cancellingSubscription}
+                              onClick={() => setConfirmingCancel(false)}
+                              className="inline-flex h-9 items-center justify-center border border-slate-200 bg-slate-50 px-4 text-[14px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              Keep subscription
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingCancel(true)}
+                            className="inline-flex h-9 items-center justify-center border border-red-200 bg-white px-4 text-[14px] font-semibold text-red-700 transition hover:bg-red-50"
+                          >
+                            Cancel subscription
+                          </button>
+                        )}
+                      </div>
+                      {cancelResult ? <p className="mt-3 text-[14px] text-slate-600">{cancelResult}</p> : null}
+                    </div>
+                  ) : cancelResult ? (
+                    <p className="mt-6 text-[14px] text-slate-600">{cancelResult}</p>
+                  ) : null}
                 </>
               )}
             </SettingsPanel>

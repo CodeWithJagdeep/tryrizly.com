@@ -133,9 +133,9 @@ export class AuthRepository {
    * party had pre-seeded with a password (unverified), neutralising that
    * pre-account-takeover vector.
    */
-  async getTokenVersion(email: string): Promise<number> {
+  async getTokenVersion(email: string): Promise<number | null> {
     const user = await this.getUser(email);
-    return user?.tokenVersion ?? 0;
+    return user ? (user.tokenVersion ?? 0) : null;
   }
 
   /** Bumps the session epoch so all previously-issued tokens stop validating. */
@@ -376,6 +376,21 @@ export class AuthRepository {
       .limit(10)
       .map(({ endpoint, keys }) => ({ endpoint, keys }))
       .toArray();
+  }
+
+  async deleteAccountData(email: string, userId: string): Promise<void> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    await Promise.all([
+      db.collection("otp_codes").deleteMany({ email }),
+      db.collection("password_reset_tokens").deleteMany({ email }),
+      db.collection("telegram_link_tokens").deleteMany({ email }),
+      db.collection("telegram_links").deleteMany({ $or: [{ userId }, { email }] }),
+      db.collection("push_subscriptions").deleteMany({ userId }),
+    ]);
+    // Delete the identity last. Session-version checks fail closed as soon as
+    // this record is absent, invalidating every browser session.
+    await db.collection("users").deleteOne({ email });
   }
 }
 

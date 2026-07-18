@@ -116,7 +116,9 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Host port 6381: 6379 on this machine is taken by another project's
+      # redis. Services reach redis at redis:6379 inside the compose network.
+      - "6381:6379"
     volumes:
       - redis_data:/data
 
@@ -127,7 +129,9 @@ services:
       POSTGRES_PASSWORD: heyriz
       POSTGRES_DB: heyriz
     ports:
-      - "5434:5432"
+      # Host port 5435: 5434 on this machine is taken by another project's
+      # postgres. Services reach postgres at postgres:5432 inside the network.
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

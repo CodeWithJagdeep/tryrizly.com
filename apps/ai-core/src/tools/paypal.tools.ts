@@ -1,6 +1,7 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { PayPalService, PayPalTransaction } from "../connectors/paypal.service";
 import type { HeyRizTool } from "./tool.types";
+import { connectorSetupUrl } from "./connector-links";
 
 type PayPalSnapshotPayload = {
   /** How many days of transactions to include (default 7, max 31). */
@@ -24,7 +25,7 @@ export function createPayPalSnapshotTool(
         return {
           tool: "paypal_snapshot",
           status: "needs_connection",
-          message: `PayPal isn't connected yet, ${context.honorific} — add your REST app client ID and secret in Connectors.`,
+          message: `PayPal isn't connected yet, ${context.honorific}. Add the REST app credentials here: ${connectorSetupUrl("paypal")}`,
         };
       }
 
@@ -64,7 +65,7 @@ export function createPayPalSnapshotTool(
           return {
             tool: "paypal_snapshot",
             status: "needs_connection",
-            message: `PayPal rejected the saved credentials, ${context.honorific} — re-enter the client ID and secret in Connectors.`,
+            message: `PayPal rejected the saved credentials, ${context.honorific}. Reconnect it here: ${connectorSetupUrl("paypal")}`,
           };
         }
         if (code === "paypal_reporting_not_enabled") {

@@ -4,6 +4,7 @@ import { env } from "@heyriz/shared/env";
 import { ConnectorRepository } from "./connector.repository";
 import { ConnectorVaultService } from "./connector-vault.service";
 import { MongoIntrospectionService } from "./mongo-introspection.service";
+import { PostgresIntrospectionService } from "./postgres-introspection.service";
 import type {
   CalComOAuthSecret,
   CompleteOAuthInput,
@@ -72,6 +73,8 @@ export class ConnectorService {
     private readonly vault: ConnectorVaultService,
     @Inject(MongoIntrospectionService)
     private readonly mongoIntrospection: MongoIntrospectionService,
+    @Inject(PostgresIntrospectionService)
+    private readonly postgresIntrospection: PostgresIntrospectionService,
   ) {}
 
   async list(userId = "default") {
@@ -91,15 +94,44 @@ export class ConnectorService {
       throw new Error("invalid_connector_payload:missing_provider_or_secret");
     }
 
+    const existing = input.accountId
+      ? await this.repository.findById(input.accountId)
+      : undefined;
+    if (input.accountId && (!existing || existing.userId !== userId || existing.provider !== provider)) {
+      throw new Error("account_not_found_or_not_owned");
+    }
+    const existingSecret = existing
+      ? this.vault.decrypt(existing.encryptedPayload)
+      : {};
+    const resolvedSecret = mergeConnectorSecrets(existingSecret, input.secret);
+
+    if (provider === "postgres") {
+      const connectionUrl = resolvedSecret.connectionUrl;
+      if (typeof connectionUrl !== "string" || !connectionUrl.trim()) {
+        throw new Error("invalid_connector_payload:postgres");
+      }
+      resolvedSecret.connectionUrl = connectionUrl.trim();
+      try {
+        await this.postgresIntrospection.assertReadOnlyCredentials(resolvedSecret.connectionUrl);
+      } catch (error) {
+        if (error instanceof Error && error.message === "postgres_connection_not_read_only") {
+          throw new Error(
+            "Postgres credentials must be read-only. Create a login with CONNECT, schema USAGE, and SELECT privileges only.",
+          );
+        }
+        throw new Error(`Couldn't verify the Postgres connection: ${safeConnectionError(error)}`);
+      }
+    }
+
     if (provider === "mongodb") {
-      const connectionUrl = input.secret.connectionUrl;
+      const connectionUrl = resolvedSecret.connectionUrl;
       if (typeof connectionUrl !== "string" || !connectionUrl) {
         throw new Error("invalid_connector_payload:mongodb");
       }
-      input.secret.connectionUrl = await this.readOnlyMongoConnectionUrl(connectionUrl);
+      resolvedSecret.connectionUrl = await this.readOnlyMongoConnectionUrl(connectionUrl.trim());
     }
 
-    const encryptedPayload = this.vault.encrypt(input.secret);
+    const encryptedPayload = this.vault.encrypt(resolvedSecret);
 
     // For multi-account (credential-based) providers, insert a new row per
     // account. For everything else, upsert by (userId, provider) so there's
@@ -121,6 +153,7 @@ export class ConnectorService {
           label: input.label ?? providerLabel(provider),
           status: "connected",
           encryptedPayload,
+          metadata: { ...existing?.metadata, ...(input.metadata ?? {}) },
         });
       if (!updated) throw new Error("account_not_found_or_not_owned");
       account = updated;
@@ -168,7 +201,7 @@ export class ConnectorService {
     } catch (error) {
       if (!(error instanceof Error) || !error.message.startsWith("mongo_connection_not_read_only")) {
         throw new Error(
-          `Couldn't verify that MongoDB connection: ${error instanceof Error ? error.message : String(error)}`,
+          `Couldn't verify the MongoDB connection: ${safeConnectionError(error)}`,
         );
       }
     }
@@ -179,7 +212,7 @@ export class ConnectorService {
     } catch (error) {
       throw new Error(
         "This MongoDB user can write to your database, and Rizly couldn't automatically create a " +
-          `read-only user for you (${error instanceof Error ? error.message : String(error)}). Create one manually ` +
+          `read-only user for you (${safeConnectionError(error)}). Create one manually ` +
           'with: db.createUser({ user: "rizly_readonly", pwd: "<password>", roles: [{ role: "read", db: "<your database name>" }] })',
       );
     }
@@ -290,14 +323,22 @@ export class ConnectorService {
     return { botToken };
   }
 
-  /** Decrypts the Discord webhook URL. Returns null if not connected. */
-  async getDiscordSecret(userId: string): Promise<{ webhookUrl: string } | null> {
+  /** Decrypts Discord read and/or webhook credentials. */
+  async getDiscordSecret(userId: string): Promise<{
+    webhookUrl?: string;
+    botToken?: string;
+    channelId?: string;
+    guildId?: string;
+  } | null> {
     const account = await this.repository.find(userId, "discord");
     if (!account) return null;
     const payload = this.vault.decrypt(account.encryptedPayload);
-    const webhookUrl = payload.webhookUrl;
-    if (typeof webhookUrl !== "string" || !webhookUrl) return null;
-    return { webhookUrl };
+    const webhookUrl = stringSecret(payload.webhookUrl);
+    const botToken = stringSecret(payload.botToken);
+    const channelId = stringSecret(payload.channelId);
+    const guildId = stringSecret(payload.guildId);
+    if (!webhookUrl && !(botToken && channelId)) return null;
+    return { webhookUrl, botToken, channelId, guildId };
   }
 
   /** Decrypts the M-Pesa Daraja credentials. Returns null if not connected. */
@@ -346,9 +387,17 @@ export class ConnectorService {
   async getDataSourceSecret(
     userId: string,
     provider: DataSourceProvider,
+    accountId?: string,
   ): Promise<DataSourceSecretResult> {
-    const account = await this.repository.find(userId, provider);
-    if (!account) return { connected: false };
+    const account = accountId
+      ? await this.repository.findById(accountId)
+      : await this.repository.find(userId, provider);
+    if (
+      !account
+      || account.userId !== userId
+      || account.provider !== provider
+      || account.status !== "connected"
+    ) return { connected: false };
 
     const payload = this.vault.decrypt(account.encryptedPayload);
 
@@ -497,6 +546,15 @@ export class ConnectorService {
         oauthClient,
         codeVerifier,
         region,
+      });
+    }
+
+    if (provider === "github") {
+      return this.completeGitHubOAuth({
+        code: input.code,
+        userId,
+        returnTo: storedState.returnTo,
+        scopes,
       });
     }
 
@@ -668,6 +726,45 @@ export class ConnectorService {
     return { ...this.toSummary(account), returnTo: input.returnTo };
   }
 
+  private async completeGitHubOAuth(input: {
+    code: string;
+    userId: string;
+    returnTo?: string;
+    scopes: string[];
+  }): Promise<CompleteOAuthResult> {
+    const tokenJson = await exchangeGitHubToken({
+      code: input.code,
+      redirectUri: env.GITHUB_REDIRECT_URI,
+    });
+
+    const accessToken = stringSecret(tokenJson.access_token);
+    if (!accessToken) {
+      throw new Error("GitHub token exchange did not return an access token");
+    }
+
+    const login = await fetchGitHubLogin(accessToken);
+    const grantedScopes = splitScopes(stringSecret(tokenJson.scope)?.replace(/,/g, " "));
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: "github",
+      authType: "oauth",
+      label: login ? `GitHub (@${login})` : providerLabel("github"),
+      status: "connected",
+      // Store under "token" so getGitHubSecret reads OAuth and PAT
+      // connections identically.
+      encryptedPayload: this.vault.encrypt({ ...tokenJson, token: accessToken }),
+      scopes: grantedScopes ?? input.scopes,
+      metadata: {
+        setup: "oauth",
+        hasRefreshToken: Boolean(tokenJson.refresh_token),
+        ...(login ? { accountUsername: login } : {}),
+      },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
   private async refreshCalComOAuth(
     account: ConnectedAccount,
     refreshToken: string,
@@ -777,11 +874,14 @@ function oauthStateSecret(): string {
 }
 
 function isConnectorOAuthProvider(value: unknown): value is ConnectorOAuthProvider {
-  return value === "gmail" || value === "calendar" || value === "calcom" || value === "notion";
+  return value === "gmail" || value === "calendar" || value === "calcom" || value === "notion" || value === "github";
 }
 
 function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
   if (provider === "notion") return [];
+  // "repo" is required to see private-repo issues/PRs; classic OAuth apps
+  // have no read-only variant of it. The GitHubService still only GETs.
+  if (provider === "github") return ["repo", "read:user"];
   return provider === "calcom" ? calComOAuthScopes : oauthScopesByProvider[provider];
 }
 
@@ -797,6 +897,13 @@ function missingOAuthConfig(provider: ConnectorOAuthProvider) {
     return {
       status: "missing_config" as const,
       message: "NOTION_CLIENT_ID and NOTION_CLIENT_SECRET are missing",
+    };
+  }
+
+  if (provider === "github" && (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET)) {
+    return {
+      status: "missing_config" as const,
+      message: "GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are missing",
     };
   }
 
@@ -823,6 +930,15 @@ function authorizationUrlForProvider(
     url.searchParams.set("client_id", env.NOTION_CLIENT_ID ?? "");
     url.searchParams.set("redirect_uri", env.NOTION_REDIRECT_URI);
     url.searchParams.set("response_type", "code");
+    url.searchParams.set("state", state);
+    return url.toString();
+  }
+
+  if (provider === "github") {
+    const url = new URL("https://github.com/login/oauth/authorize");
+    url.searchParams.set("client_id", env.GITHUB_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.GITHUB_REDIRECT_URI);
+    url.searchParams.set("scope", scopes.join(" "));
     url.searchParams.set("state", state);
     return url.toString();
   }
@@ -1032,8 +1148,89 @@ async function exchangeNotionToken(input: {
   return (await response.json()) as NotionTokenJson;
 }
 
+async function exchangeGitHubToken(input: {
+  code: string;
+  redirectUri: string;
+}): Promise<ConnectorSecretPayload> {
+  if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+    throw new Error("GitHub OAuth env vars are missing");
+  }
+
+  const response = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      client_id: env.GITHUB_CLIENT_ID,
+      client_secret: env.GITHUB_CLIENT_SECRET,
+      code: input.code,
+      redirect_uri: input.redirectUri,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`GitHub token exchange failed: ${errorText}`);
+  }
+
+  const payload = (await response.json()) as ConnectorSecretPayload & { error?: string; error_description?: string };
+  // GitHub reports OAuth errors (bad_verification_code, …) with HTTP 200.
+  if (typeof payload.error === "string" && payload.error) {
+    throw new Error(`GitHub token exchange failed: ${payload.error_description ?? payload.error}`);
+  }
+  return payload;
+}
+
+async function fetchGitHubLogin(accessToken: string): Promise<string | undefined> {
+  const response = await fetch("https://api.github.com/user", {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+    },
+  });
+  if (!response.ok) return undefined;
+  const user = (await response.json()) as { login?: string };
+  return stringSecret(user.login);
+}
+
 function stringSecret(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function mergeConnectorSecrets(
+  existing: ConnectorSecretPayload,
+  incoming: ConnectorSecretPayload,
+): ConnectorSecretPayload {
+  const merged: ConnectorSecretPayload = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      merged[key] = trimmed;
+      continue;
+    }
+    merged[key] = value;
+  }
+  return merged;
+}
+
+function safeConnectionError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/password authentication|authentication failed|auth failed|bad auth/i.test(message)) {
+    return "authentication failed";
+  }
+  if (/ECONNREFUSED|connection refused/i.test(message)) {
+    return "the database host refused the connection";
+  }
+  if (/ENOTFOUND|getaddrinfo|DNS/i.test(message)) {
+    return "the database host could not be resolved";
+  }
+  if (/timeout|ETIMEDOUT/i.test(message)) return "the connection timed out";
+  if (/certificate|TLS|SSL/i.test(message)) return "TLS/SSL validation failed";
+  return "the connection could not be established";
 }
 
 function numberSecret(value: unknown): number | undefined {

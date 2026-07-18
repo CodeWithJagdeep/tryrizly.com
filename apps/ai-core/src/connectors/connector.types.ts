@@ -74,7 +74,7 @@ export type DeleteConnectorInput = {
 };
 
 export type GoogleOAuthProvider = "gmail" | "calendar";
-export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion";
+export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion" | "github";
 
 export type StartOAuthInput = {
   userId?: string;
@@ -131,7 +131,12 @@ export type PayPalConnectorSecret = { clientId: string; clientSecret: string };
 export type GitHubConnectorSecret = { token: string };
 export type SlackConnectorSecret = { botToken: string };
 export type NotionConnectorSecret = { apiToken: string };
-export type DiscordConnectorSecret = { webhookUrl: string };
+export type DiscordConnectorSecret = {
+  webhookUrl?: string;
+  botToken?: string;
+  channelId?: string;
+  guildId?: string;
+};
 export type MpesaConnectorSecret = {
   consumerKey: string;
   consumerSecret: string;

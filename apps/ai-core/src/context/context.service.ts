@@ -14,7 +14,6 @@ import { UserPreferencesRepository } from "../preferences/user-preferences.repos
 import { zonedTimeToUtc } from "../lib/timezone";
 import { logger } from "@heyriz/shared/logger";
 
-const DATA_SOURCE_PROVIDERS = new Set(["postgres", "mongodb", "razorpay", "stripe"]);
 const LIVE_TIMEOUT_MS = 3000;
 
 @Injectable()
@@ -40,7 +39,7 @@ export class ContextService {
     // background event ingestion doesn't need it and shouldn't pay the latency.
     const [semantic, live] = await Promise.all([
       query
-        ? this.vectorMemory.search({ userId: input.userId, query, limit: 3 })
+        ? this.vectorMemory.search({ userId: input.userId, query, limit: 8 })
         : Promise.resolve([]),
       input.source === "telegram"
         ? this.fetchLive(input.userId, timezone)
@@ -49,7 +48,7 @@ export class ContextService {
 
     const connected = await this.connectors.list(input.userId);
     const connectedDataSources = connected
-      .filter((c) => c.status === "connected" && DATA_SOURCE_PROVIDERS.has(c.provider))
+      .filter((c) => c.status === "connected")
       .map((c) => c.provider);
 
     return {
@@ -97,6 +96,9 @@ export class ContextService {
       connected: false,
       calendarConnected: false,
       inboxConnected: false,
+      calendarStatus: "not_connected",
+      inboxStatus: "not_connected",
+      checkedAt: new Date().toISOString(),
       schedule: [],
       unread: [],
     };
@@ -104,20 +106,24 @@ export class ContextService {
     if (cal.status === "fulfilled" && cal.value.connected) {
       live.connected = true;
       live.calendarConnected = true;
+      live.calendarStatus = "fresh";
       for (const e of cal.value.events) {
         live.schedule.push({ title: e.title, start: e.start, end: e.end, allDay: e.allDay });
       }
     } else if (cal.status === "rejected") {
+      live.calendarStatus = "unavailable";
       logger.warn("context: live calendar fetch failed", { error: String(cal.reason) });
     }
 
     if (inbox.status === "fulfilled" && inbox.value.connected) {
       live.connected = true;
       live.inboxConnected = true;
+      live.inboxStatus = "fresh";
       for (const m of inbox.value.messages) {
         live.unread.push({ from: m.from, subject: m.subject });
       }
     } else if (inbox.status === "rejected") {
+      live.inboxStatus = "unavailable";
       logger.warn("context: live inbox fetch failed", { error: String(inbox.reason) });
     }
 

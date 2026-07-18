@@ -57,6 +57,15 @@ export class EmailPreferencesRepository implements OnModuleDestroy {
     inMemoryStore.set(key(pref.userId, pref.category), record);
   }
 
+  async deleteAll(userId: string): Promise<void> {
+    if (this.ready && this.client) {
+      await this.collection().deleteMany({ userId });
+    }
+    for (const [storeKey, preference] of inMemoryStore) {
+      if (preference.userId === userId) inMemoryStore.delete(storeKey);
+    }
+  }
+
   private collection() {
     return this.client!.db("heyriz").collection("email_preferences");
   }

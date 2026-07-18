@@ -1,6 +1,7 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { SlackService } from "../connectors/slack.service";
 import type { HeyRizTool } from "./tool.types";
+import { connectorSetupUrl } from "./connector-links";
 
 type SlackBriefingPayload = {
   /** Channel name to read recent messages from, e.g. "general". Omit to list available channels. */
@@ -17,7 +18,7 @@ export function createSlackBriefingTool(
     name: "slack_briefing",
     category: "business",
     description:
-      "List the principal's connected Slack channels, or read recent messages from a named channel. Use when they ask what's happening on Slack or to check a specific channel.",
+      "List Slack channels the connected bot has joined, or read recent messages from a named channel with authors, times, and source links. Use when they ask what's happening on Slack or to check a specific channel.",
     approvalRequired: false,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -26,7 +27,7 @@ export function createSlackBriefingTool(
         return {
           tool: "slack_briefing",
           status: "needs_connection",
-          message: `Slack isn't connected yet, ${context.honorific} — add a bot token in Connectors.`,
+          message: `Slack isn't connected yet, ${context.honorific}. Add the bot token here: ${connectorSetupUrl("slack")}`,
         };
       }
 
@@ -42,11 +43,11 @@ export function createSlackBriefingTool(
               data: { channels: [] },
             };
           }
-          const lines = channels.map((c) => `• #${c.name}`);
+          const lines = channels.slice(0, 30).map((c) => `• #${c.name}`);
           return {
             tool: "slack_briefing",
             status: "ok",
-            message: `${channels.length} Slack channel${channels.length === 1 ? "" : "s"} the bot can see, ${context.honorific}:\n\n${lines.join("\n")}`,
+            message: `Slack · connected channels · checked ${formatCheckedAt(context.timezone)}\n\n${lines.join("\n")}\n\nAsk: "What happened in #channel?"`,
             data: { channels },
           };
         }
@@ -74,11 +75,15 @@ export function createSlackBriefingTool(
           };
         }
 
-        const lines = messages.map((m) => `• ${m.text}`);
+        const lines = messages.slice(0, 8).map((message) => {
+          const author = message.userName ?? "Slack member";
+          const text = truncate(message.text.replace(/\s+/g, " ").trim(), 240);
+          return `• ${author} · ${formatSlackTime(message.ts, context.timezone)}\n  ${text}${message.permalink ? `\n  ${message.permalink}` : ""}`;
+        });
         return {
           tool: "slack_briefing",
           status: "ok",
-          message: `${messages.length} recent message${messages.length === 1 ? "" : "s"} in #${match.name}, ${context.honorific}:\n\n${lines.join("\n")}`,
+          message: `Slack · #${match.name} · checked ${formatCheckedAt(context.timezone)}\n\n${lines.join("\n\n")}${messages.length > 8 ? `\n\n${messages.length - 8} more recent messages were not shown.` : ""}`,
           data: { channel: match.name, count: messages.length },
         };
       } catch (error) {
@@ -87,11 +92,37 @@ export function createSlackBriefingTool(
           return {
             tool: "slack_briefing",
             status: "needs_connection",
-            message: `Slack rejected the saved bot token, ${context.honorific} — re-enter it in Connectors.`,
+            message: `Slack rejected the saved bot token, ${context.honorific}. Reconnect it here: ${connectorSetupUrl("slack")}`,
           };
         }
         throw error;
       }
     },
   };
+}
+
+function formatSlackTime(ts: string, timezone: string): string {
+  const seconds = Number(ts.split(".")[0]);
+  if (!Number.isFinite(seconds)) return "unknown time";
+  return new Date(seconds * 1000).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+}
+
+function formatCheckedAt(timezone: string): string {
+  return new Date().toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+}
+
+function truncate(value: string, limit: number): string {
+  return value.length > limit ? `${value.slice(0, limit - 3)}...` : value;
 }

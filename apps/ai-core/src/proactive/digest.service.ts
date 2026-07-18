@@ -185,10 +185,10 @@ export class DigestService {
     userId: string,
     windows: CountWindow[],
   ): Promise<SignupCounts | undefined> {
-    const secret = await this.connectors.getDataSourceSecret(userId, "postgres");
-    if (!secret.connected || secret.provider !== "postgres") return undefined;
+    const account = await this.digestDatabaseAccount(userId, "postgres");
+    if (!account) return undefined;
 
-    const schema = await this.postgres.getSchema(userId, secret.secret.connectionUrl);
+    const schema = await this.postgres.getSchema(userId, account.connectionUrl);
     const columns = windows
       .map((w) => `${w.label} = count of rows created between ${w.untilDaysAgo} and ${w.sinceDaysAgo} days ago`)
       .join("; ");
@@ -202,7 +202,7 @@ export class DigestService {
     const sql = await this.textToQuery.sqlFor(userId, question, schema);
     if (!sql) return undefined;
 
-    const { rows } = await this.postgres.runReadOnlyQuery(secret.secret.connectionUrl, sql, [], schema);
+    const { rows } = await this.postgres.runReadOnlyQuery(account.connectionUrl, sql, [], schema);
     const row = rows[0] as Record<string, unknown> | undefined;
     if (!row) return undefined;
 
@@ -213,25 +213,40 @@ export class DigestService {
     userId: string,
     windows: CountWindow[],
   ): Promise<SignupCounts | undefined> {
-    const secret = await this.connectors.getDataSourceSecret(userId, "mongodb");
-    if (!secret.connected || secret.provider !== "mongodb") return undefined;
+    const account = await this.digestDatabaseAccount(userId, "mongodb");
+    if (!account) return undefined;
 
-    const schema = await this.mongo.getSchema(userId, secret.secret.connectionUrl);
+    const schema = await this.mongo.getSchema(userId, account.connectionUrl);
     const counts: SignupCounts = {};
 
     for (const w of windows) {
-      const question = `Find documents created between ${w.untilDaysAgo} and ${w.sinceDaysAgo} days ago, in the collection most likely representing new user signups.`;
-      const spec = await this.textToQuery.mongoSpecFor(userId, question, schema);
+      const question = `Count documents created between ${w.untilDaysAgo} and ${w.sinceDaysAgo} days ago in the collection most likely representing new user signups.`;
+      const spec = await this.textToQuery.mongoCountSpecFor(userId, question, schema);
       if (!spec) return undefined;
-      const { documents } = await this.mongo.runFind(secret.secret.connectionUrl, {
-        ...spec,
-        limit: 50,
-      });
-      // capped at 50 by runFind — undercounts beyond that, acceptable for early-stage volumes
-      counts[w.label] = documents.length;
+      counts[w.label] = await this.mongo.countDocuments(account.connectionUrl, spec, schema);
     }
 
     return counts;
+  }
+
+  private async digestDatabaseAccount(
+    userId: string,
+    provider: "postgres" | "mongodb",
+  ): Promise<{ id: string; label: string; connectionUrl: string } | undefined> {
+    const accounts = await this.connectors.getAllDataSourceSecrets(userId, provider);
+    if (accounts.length <= 1) return accounts[0];
+
+    const preferred = accounts.filter((account) =>
+      /\b(primary|production|prod|live)\b/i.test(account.label),
+    );
+    if (preferred.length === 1) return preferred[0];
+
+    logger.warn("digest skipped ambiguous database accounts", {
+      userId,
+      provider,
+      accountCount: accounts.length,
+    });
+    return undefined;
   }
 
   private async razorpayWindowStats(
@@ -239,7 +254,9 @@ export class DigestService {
     untilDaysAgo: number,
     sinceDaysAgo: number,
   ): Promise<{ captured: number; failedCount: number } | undefined> {
-    const secret = await this.connectors.getDataSourceSecret(userId, "razorpay");
+    const accountId = await this.digestDataSourceAccountId(userId, "razorpay");
+    if (!accountId) return undefined;
+    const secret = await this.connectors.getDataSourceSecret(userId, "razorpay", accountId);
     if (!secret.connected || secret.provider !== "razorpay") return undefined;
 
     const now = Date.now();
@@ -260,6 +277,26 @@ export class DigestService {
       if (p.status === "failed") failedCount += 1;
     }
     return { captured, failedCount };
+  }
+
+  private async digestDataSourceAccountId(
+    userId: string,
+    provider: DataSourceProvider,
+  ): Promise<string | undefined> {
+    const accounts = (await this.connectors.list(userId)).filter(
+      (account) => account.provider === provider && account.status === "connected",
+    );
+    if (accounts.length <= 1) return accounts[0]?.id;
+    const preferred = accounts.filter((account) =>
+      /\b(primary|production|prod|live)\b/i.test(account.label),
+    );
+    if (preferred.length === 1) return preferred[0].id;
+    logger.warn("digest skipped ambiguous provider accounts", {
+      userId,
+      provider,
+      accountCount: accounts.length,
+    });
+    return undefined;
   }
 }
 

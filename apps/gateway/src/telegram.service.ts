@@ -54,6 +54,8 @@ export type TelegramUpdate = {
 
 type ChatResponse = {
   reply: string;
+  error?: string;
+  upgradeRequired?: boolean;
   pendingApproval?: { tool: string; payload: Record<string, unknown>; preview: string };
 };
 
@@ -282,7 +284,7 @@ export class TelegramService {
 
     let res: ChatResponse;
     try {
-      res = await this.gateway.sendToAiCore<ChatResponse>("chat.message", {
+      res = await this.gateway.sendChatToAiCore<ChatResponse>({
         userId,
         message,
         history,
@@ -321,6 +323,13 @@ export class TelegramService {
 
   private async runApproved(chatId: number, pending: PendingApprovalRecord): Promise<void> {
     const userId = await this.userIdForChat(chatId);
+    if (!(await this.gateway.hasProductAccess(userId))) {
+      await sendTelegramMessage({
+        chatId,
+        text: "Your Rizly trial has ended. Choose a paid plan to continue: https://getrizly.com/dashboard/upgrade",
+      });
+      return;
+    }
     const conversationKey = String(chatId);
     await this.approvals.remove(userId, pending.id);
     await appendActionAudit({
@@ -337,11 +346,11 @@ export class TelegramService {
 
     let res: ChatResponse;
     try {
-      res = await this.gateway.sendToAiCore<ChatResponse>("chat.message", {
+      res = await this.gateway.sendChatToAiCore<ChatResponse>({
         userId,
         message: "approved",
         approve: true,
-        pendingApproval: { tool: pending.tool, payload: pending.payload },
+        pendingApproval: { id: pending.id, tool: pending.tool, payload: pending.payload },
         history,
       });
     } finally {

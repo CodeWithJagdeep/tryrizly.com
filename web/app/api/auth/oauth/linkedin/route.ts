@@ -24,11 +24,16 @@ export async function GET(request: Request) {
       returnTo,
       redirectUri,
     }));
-  } catch {
+  } catch (error) {
+    console.error("linkedin oauth state init: gateway unreachable", error);
     state = undefined;
   }
 
   if (!state) {
+    console.error("linkedin oauth state init failed", {
+      internalSecretConfigured: Boolean(process.env.AUTH_INTERNAL_SECRET),
+      gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL,
+    });
     const baseUrl = getAuthRedirectBaseUrl(url);
     return Response.redirect(`${baseUrl}/login?error=linkedin_state_init_failed`);
   }

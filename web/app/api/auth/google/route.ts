@@ -17,18 +17,24 @@ export async function GET(request: Request) {
   const redirectUri = resolveGoogleRedirectUri(url);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
-  let stateResult: { state?: string; error?: string };
+  let stateResult: { state?: string; error?: string; message?: string };
   try {
-    stateResult = await callGateway<{ state?: string; error?: string }>("/api/auth/oauth/state", {
+    stateResult = await callGateway<{ state?: string; error?: string; message?: string }>("/api/auth/oauth/state", {
       provider: "google",
       returnTo,
       redirectUri,
     });
-  } catch {
+  } catch (error) {
+    console.error("google oauth state init: gateway unreachable", error);
     stateResult = {};
   }
 
   if (!stateResult.state) {
+    console.error("google oauth state init failed", {
+      gatewayError: stateResult.error ?? stateResult.message ?? "no state returned",
+      internalSecretConfigured: Boolean(process.env.AUTH_INTERNAL_SECRET),
+      gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL,
+    });
     const baseUrl = getAuthRedirectBaseUrl(new URL(request.url));
     return Response.redirect(`${baseUrl}/login?error=google_state_init_failed`);
   }

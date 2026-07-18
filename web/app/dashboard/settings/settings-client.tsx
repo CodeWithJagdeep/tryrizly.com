@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { getSessions } from "../lib/chat-store";
+import { clearLocalChatData, getSessions } from "../lib/chat-store";
 
 const TIMEZONES: { label: string; value: string }[] = [
   { label: "UTC", value: "UTC" },
@@ -116,6 +116,34 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
   const [memories, setMemories] = useState<MemoryNote[]>([]);
   const [memoryLoading, setMemoryLoading] = useState(true);
   const [memoryMessage, setMemoryMessage] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function deleteAccount() {
+    if (deleteConfirmation.trim().toLowerCase() !== email.trim().toLowerCase()) {
+      setDeleteError("Type your account email exactly to confirm deletion.");
+      return;
+    }
+    setDeletingAccount(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmation: deleteConfirmation }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setDeleteError(result.message ?? "Account deletion did not complete. Please retry.");
+        return;
+      }
+      clearLocalChatData();
+      window.location.assign("/");
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
 
   useEffect(() => {
     setChatCount(getSessions().length);
@@ -597,6 +625,38 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                 >
                   Manage Telegram
                 </a>
+              </div>
+
+              <div className="mt-10 border-t border-red-200 pt-7">
+                <h3 className="text-[16px] font-semibold text-red-700">Delete account</h3>
+                <p className="mt-2 max-w-2xl text-[14px] leading-6 text-slate-500">
+                  This cancels an active subscription, disconnects every integration, removes queued
+                  work, and deletes your account data. Accounting records that must be retained are
+                  anonymized. This cannot be undone.
+                </p>
+                <label className="mt-5 block max-w-md text-[14px] font-medium text-slate-700">
+                  Type {email} to confirm
+                  <input
+                    className="mt-2 h-10 w-full border border-red-200 bg-white px-3 text-[15px] text-slate-900 outline-none focus:border-red-400"
+                    value={deleteConfirmation}
+                    onChange={(event) => setDeleteConfirmation(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={deletingAccount || deleteConfirmation.trim().toLowerCase() !== email.trim().toLowerCase()}
+                    onClick={() => void deleteAccount()}
+                    className="inline-flex h-9 items-center justify-center bg-red-700 px-4 text-[14px] font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {deletingAccount ? "Deleting..." : "Permanently delete account"}
+                  </button>
+                  <a href="/privacy#retention-deletion" className="text-[14px] text-slate-500 underline underline-offset-2 hover:text-slate-900">
+                    Retention and deletion policy
+                  </a>
+                </div>
+                {deleteError ? <p className="mt-3 text-[14px] text-red-700">{deleteError}</p> : null}
               </div>
             </SettingsPanel>
           )}

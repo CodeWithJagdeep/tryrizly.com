@@ -58,6 +58,13 @@ export function deleteSession(id: string) {
   writeSessions(readSessions().filter((session) => session.id !== id));
 }
 
+export function clearLocalChatData() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSIONS_KEY);
+  window.localStorage.removeItem(CONTEXT_KEY);
+  window.dispatchEvent(new Event(SESSIONS_EVENT));
+}
+
 export function toggleFavorite(id: string) {
   writeSessions(
     readSessions().map((session) =>

@@ -6,6 +6,32 @@ type RedirectEnvironment = {
   NEXT_PUBLIC_SITE_URL?: string;
 };
 
+type RequestUrlSource = URL | Pick<Request, "url" | "headers">;
+
+function externalRequestUrl(source: RequestUrlSource): URL {
+  if (source instanceof URL) return source;
+
+  const internalUrl = new URL(source.url);
+  const forwardedHost = source.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const host = forwardedHost || source.headers.get("host")?.trim();
+  if (!host) return internalUrl;
+
+  const forwardedProtocol = source.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
+  const protocol = forwardedProtocol === "http" ? "http:" : "https:";
+
+  try {
+    return new URL(`${protocol}//${host}`);
+  } catch {
+    return internalUrl;
+  }
+}
+
 function localOrigin(requestUrl: URL): string {
   // 0.0.0.0 and :: are bind addresses, not browser destinations. Keep the
   // active development port but always return through the canonical loopback
@@ -32,9 +58,10 @@ function productionBaseUrl(environment: RedirectEnvironment): URL {
 }
 
 export function getAuthRedirectBaseUrl(
-  requestUrl: URL,
+  requestSource: RequestUrlSource,
   environment: RedirectEnvironment = process.env as RedirectEnvironment,
 ): string {
+  const requestUrl = externalRequestUrl(requestSource);
   if (LOCAL_HOSTS.has(requestUrl.hostname)) {
     return localOrigin(requestUrl);
   }
@@ -43,11 +70,12 @@ export function getAuthRedirectBaseUrl(
 }
 
 export function resolveOAuthCallbackUrl(
-  requestUrl: URL,
+  requestSource: RequestUrlSource,
   callbackPath: string,
   configuredRedirectUri: string | undefined,
   environment: RedirectEnvironment = process.env as RedirectEnvironment,
 ): string {
+  const requestUrl = externalRequestUrl(requestSource);
   if (LOCAL_HOSTS.has(requestUrl.hostname)) {
     return new URL(callbackPath, localOrigin(requestUrl)).toString();
   }

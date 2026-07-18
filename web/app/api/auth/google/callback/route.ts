@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const baseUrl = getAuthRedirectBaseUrl(url);
+  const baseUrl = getAuthRedirectBaseUrl(request);
 
   if (!code || !state) {
     return Response.redirect(`${baseUrl}/login?error=google_missing_code`);

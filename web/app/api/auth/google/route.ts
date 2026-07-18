@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const redirectUri = resolveGoogleRedirectUri(url);
+  const redirectUri = resolveGoogleRedirectUri(request);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
   let stateResult: { state?: string; error?: string; message?: string };
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       internalSecretConfigured: Boolean(process.env.AUTH_INTERNAL_SECRET),
       gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL,
     });
-    const baseUrl = getAuthRedirectBaseUrl(new URL(request.url));
+    const baseUrl = getAuthRedirectBaseUrl(request);
     return Response.redirect(`${baseUrl}/login?error=google_state_init_failed`);
   }
 
@@ -53,9 +53,9 @@ export async function GET(request: Request) {
 // Always send the single registered production callback so the URI matches the
 // Google OAuth client config regardless of which host (apex, www, preview) the
 // visitor is on. Localhost keeps its own origin so local dev can complete the flow.
-function resolveGoogleRedirectUri(requestUrl: URL) {
+function resolveGoogleRedirectUri(request: Request) {
   return resolveOAuthCallbackUrl(
-    requestUrl,
+    request,
     GOOGLE_CALLBACK_PATH,
     process.env.GOOGLE_LOGIN_REDIRECT_URI,
   );

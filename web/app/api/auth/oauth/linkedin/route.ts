@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const redirectUri = resolveLinkedInRedirectUri(url);
+  const redirectUri = resolveLinkedInRedirectUri(request);
   const returnTo = sanitizeReturnPath(url.searchParams.get("return_to"));
 
   let state: string | undefined;
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       internalSecretConfigured: Boolean(process.env.AUTH_INTERNAL_SECRET),
       gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL,
     });
-    const baseUrl = getAuthRedirectBaseUrl(url);
+    const baseUrl = getAuthRedirectBaseUrl(request);
     return Response.redirect(`${baseUrl}/login?error=linkedin_state_init_failed`);
   }
 
@@ -53,9 +53,9 @@ export async function GET(request: Request) {
 // Always send the single registered production callback so the URI matches the
 // LinkedIn app config regardless of which host (apex, www, preview) the visitor
 // is on. Localhost keeps its own origin so local dev can complete the flow.
-function resolveLinkedInRedirectUri(requestUrl: URL) {
+function resolveLinkedInRedirectUri(request: Request) {
   return resolveOAuthCallbackUrl(
-    requestUrl,
+    request,
     LINKEDIN_CALLBACK_PATH,
     process.env.LINKEDIN_REDIRECT_URI,
   );

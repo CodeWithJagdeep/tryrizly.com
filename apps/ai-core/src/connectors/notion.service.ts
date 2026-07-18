@@ -15,7 +15,12 @@ export class NotionService {
     const res = await fetch("https://api.notion.com/v1/search", {
       method: "POST",
       headers: this.headers(secret),
-      body: JSON.stringify({ query, page_size: 10 }),
+      body: JSON.stringify({
+        ...(query.trim() ? { query: query.trim() } : {}),
+        filter: { property: "object", value: "page" },
+        sort: { direction: "descending", timestamp: "last_edited_time" },
+        page_size: 10,
+      }),
     });
 
     if (!res.ok) throw new Error(`notion_api_${res.status}`);

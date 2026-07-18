@@ -148,6 +148,20 @@ export class AuthController {
     return { ok: true };
   }
 
+  @Post("account/delete")
+  async deleteAccount(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string; confirmation?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.email || !body.confirmation) return { error: "email_and_confirmation_required" };
+    try {
+      return await this.auth.deleteAccount(body.email, body.confirmation);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "account_deletion_failed" };
+    }
+  }
+
   @Post("oauth/state")
   async createState(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

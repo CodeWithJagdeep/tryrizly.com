@@ -32,7 +32,10 @@ export type ToolExecutionResult = {
     | "ok"
     | "pending_approval"
     | "not_implemented"
+    | "invalid_input"
     | "needs_connection"
+    | "transient_error"
+    | "forbidden"
     | "conflict";
   message: string;
   priority?: HeyRizPriority;
@@ -40,5 +43,8 @@ export type ToolExecutionResult = {
 };
 
 export type HeyRizTool<TPayload = unknown> = HeyRizToolDefinition & {
+  validate?: (
+    payload: unknown,
+  ) => { ok: true; value: TPayload } | { ok: false; error: string };
   execute(input: ToolExecutionInput<TPayload>): Promise<ToolExecutionResult>;
 };

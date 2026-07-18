@@ -81,6 +81,10 @@
     "./action-audit": {
       "types": "./dist/action-audit.d.ts",
       "default": "./dist/action-audit.js"
+    },
+    "./action-execution": {
+      "types": "./dist/action-execution.d.ts",
+      "default": "./dist/action-execution.js"
     }
   },
   "files": [

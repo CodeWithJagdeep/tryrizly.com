@@ -6,6 +6,7 @@
     "postcss": "8.5.10"
   },
   "workspaces": [
+    "web",
     "shared",
     "apps/gateway",
     "apps/billing",
@@ -13,16 +14,16 @@
     "apps/worker"
   ],
   "scripts": {
-    "dev": "next dev web",
-    "dev:web": "next dev web -H 0.0.0.0 -p 3000",
+    "dev": "npm run dev -w web",
+    "dev:web": "npm run dev -w web -- -H 0.0.0.0 -p 3000",
     "dev:gateway": "npm run start:dev -w apps/gateway",
     "dev:billing": "npm run start:dev -w apps/billing",
     "dev:ai-core": "npm run start:dev -w apps/ai-core",
     "dev:worker": "npm run start:dev -w apps/worker",
-    "build": "next build web && npm run build:server",
+    "build": "npm run build -w web && npm run build:server",
     "build:server": "npm run build -w shared && npm run build -w apps/gateway && npm run build -w apps/billing && npm run build -w apps/ai-core && npm run build -w apps/worker",
-    "start": "next start web",
-    "start:web": "next start web -H 0.0.0.0 -p 3000",
+    "start": "npm run start -w web",
+    "start:web": "npm run start -w web -- -H 0.0.0.0 -p 3000",
     "start:gateway": "npm run start:prod -w apps/gateway",
     "start:billing": "npm run start:prod -w apps/billing",
     "start:ai-core": "npm run start:prod -w apps/ai-core",
@@ -36,6 +37,8 @@
     "smoke:conversation": "npm run smoke:conversation -w apps/gateway",
     "smoke:telegram": "npm run smoke:telegram -w apps/gateway",
     "smoke:automemory": "npm run smoke:automemory -w apps/ai-core",
+    "smoke:sqlguard": "npm run smoke:sqlguard -w apps/ai-core",
+    "smoke:businesssnapshot": "npm run smoke:businesssnapshot -w apps/ai-core",
     "smoke:gmailthreading": "npm run smoke:gmailthreading -w apps/ai-core"
   },
   "dependencies": {

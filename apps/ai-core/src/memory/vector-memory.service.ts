@@ -1,4 +1,5 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import {
   EmbeddingsService,
@@ -43,13 +44,25 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
   }
 
   async remember(input: MemoryWriteInput): Promise<{ id: string }> {
+    const summary = input.summary.trim().slice(0, 4_000);
+    if (!summary) throw new Error("memory_summary_required");
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const embedding = await this.embeddings.embed(input.summary);
+    const candidateEmbedding = await this.embeddings.embed(summary);
+    const embedding =
+      candidateEmbedding?.length === env.EMBEDDINGS_DIMENSIONS ? candidateEmbedding : null;
+    const dedupeKey =
+      input.metadata?.dedupeKey?.toString() ??
+      createHash("sha256")
+        .update(`${input.source}|${String(input.metadata?.kind ?? "memory")}|${normalize(summary)}`)
+        .digest("hex");
 
     const metadata = {
       provenance: input.metadata?.provenance ?? input.source,
       confidence: input.metadata?.confidence ?? "medium",
+      dedupeKey,
+      embeddingModel: embedding ? env.EMBEDDINGS_MODEL : "keyword-only",
+      lastConfirmedAt: createdAt,
       expiresAt:
         input.metadata?.expiresAt ??
         new Date(Date.now() + DEFAULT_RETENTION_DAYS * DAY_MS).toISOString(),
@@ -58,7 +71,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     const memory: StoredMemory = {
       id,
       userId: input.userId,
-      summary: input.summary,
+      summary,
       source: input.source,
       score: 1,
       createdAt,
@@ -67,11 +80,33 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     };
 
     if (!this.pool) {
+      const existing = this.inMemory.find(
+        (item) => item.userId === input.userId && item.metadata?.dedupeKey === dedupeKey,
+      );
+      if (existing) {
+        existing.metadata = { ...existing.metadata, ...metadata };
+        return { id: existing.id };
+      }
       this.inMemory.push(memory);
       return { id };
     }
 
     await this.ensureTable();
+    const existing = await this.pool.query<{ id: string }>(
+      `select id from memories
+        where user_id = $1 and metadata->>'dedupeKey' = $2
+        limit 1`,
+      [input.userId, dedupeKey],
+    );
+    if (existing.rows[0]?.id) {
+      await this.pool.query(
+        `update memories
+            set metadata = metadata || $3::jsonb
+          where id = $1 and user_id = $2`,
+        [existing.rows[0].id, input.userId, JSON.stringify(metadata)],
+      );
+      return { id: existing.rows[0].id };
+    }
     await this.pool.query(
       `insert into memories (id, user_id, summary, source, embedding, metadata, created_at)
        values ($1,$2,$3,$4,$5,$6,$7)`,
@@ -91,7 +126,16 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
   async search(input: MemorySearchInput): Promise<SemanticMemoryHit[]> {
     const limit = input.limit ?? 5;
     const queryEmbedding = await this.embeddings.embed(input.query);
-    const candidates = await this.loadCandidates(input.userId, input.source);
+    const candidates =
+      this.pool && queryEmbedding?.length === env.EMBEDDINGS_DIMENSIONS
+        ? await this.loadRelevantCandidates(input, queryEmbedding, limit).catch(() =>
+            this.loadCandidates(input.userId, input.source),
+          )
+        : this.pool
+          ? await this.loadLexicalCandidates(input, Math.max(limit * 8, 50)).catch(() =>
+              this.loadCandidates(input.userId, input.source),
+            )
+          : await this.loadCandidates(input.userId, input.source);
 
     const scored = candidates
       .filter((memory) => !isExpired(memory.metadata?.expiresAt))
@@ -117,6 +161,7 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
       score: Number(score.toFixed(4)),
       source: memory.source,
       createdAt: memory.createdAt,
+      metadata: memory.metadata,
     }));
   }
 
@@ -251,6 +296,80 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
     }));
   }
 
+  /**
+   * Hybrid retrieval over the full tenant corpus. Vector and full-text queries
+   * each select their best candidates in Postgres before the common recency and
+   * threshold ranking runs in TypeScript.
+   */
+  private async loadRelevantCandidates(
+    input: MemorySearchInput,
+    queryEmbedding: number[],
+    limit: number,
+  ): Promise<StoredMemory[]> {
+    const candidateLimit = Math.max(limit * 8, 50);
+    const [semantic, lexical] = await Promise.all([
+      this.loadVectorCandidates(input, queryEmbedding, candidateLimit),
+      this.loadLexicalCandidates(input, candidateLimit),
+    ]);
+    const unique = new Map<string, StoredMemory>();
+    for (const memory of [...semantic, ...lexical]) unique.set(memory.id, memory);
+    return [...unique.values()];
+  }
+
+  private async loadVectorCandidates(
+    input: MemorySearchInput,
+    queryEmbedding: number[],
+    limit: number,
+  ): Promise<StoredMemory[]> {
+    if (!this.pool) return [];
+    await this.ensureTable();
+    const result = await this.pool.query<MemoryRow>(
+      `select id, summary, source, embedding::text as embedding, metadata, created_at
+         from memories
+        where user_id = $1
+          and embedding is not null
+          and not (
+            metadata ? 'expiresAt'
+            and pg_input_is_valid(metadata->>'expiresAt', 'timestamptz')
+            and (metadata->>'expiresAt')::timestamptz <= now()
+          )
+          ${input.source ? "and source = $4" : ""}
+        order by embedding <=> $2::vector
+        limit $3`,
+      input.source
+        ? [input.userId, `[${queryEmbedding.join(",")}]`, limit, input.source]
+        : [input.userId, `[${queryEmbedding.join(",")}]`, limit],
+    );
+    return result.rows.map((row) => memoryFromRow(input.userId, row));
+  }
+
+  private async loadLexicalCandidates(
+    input: MemorySearchInput,
+    limit: number,
+  ): Promise<StoredMemory[]> {
+    if (!this.pool) return [];
+    await this.ensureTable();
+    const result = await this.pool.query<MemoryRow>(
+      `select id, summary, source, embedding::text as embedding, metadata, created_at
+         from memories
+        where user_id = $1
+          and to_tsvector('simple', summary) @@ plainto_tsquery('simple', $2)
+          and not (
+            metadata ? 'expiresAt'
+            and pg_input_is_valid(metadata->>'expiresAt', 'timestamptz')
+            and (metadata->>'expiresAt')::timestamptz <= now()
+          )
+          ${input.source ? "and source = $4" : ""}
+        order by ts_rank_cd(to_tsvector('simple', summary), plainto_tsquery('simple', $2)) desc,
+                 created_at desc
+        limit $3`,
+      input.source
+        ? [input.userId, input.query, limit, input.source]
+        : [input.userId, input.query, limit],
+    );
+    return result.rows.map((row) => memoryFromRow(input.userId, row));
+  }
+
   private ensureTable(): Promise<void> {
     if (!this.pool) return Promise.resolve();
     this.tableReady ??= this.pool
@@ -261,10 +380,17 @@ export class VectorMemoryService implements MemoryStore, OnModuleDestroy {
           user_id text not null,
           summary text not null,
           source text not null,
-          embedding vector(1536),
+          embedding vector(${env.EMBEDDINGS_DIMENSIONS}),
           metadata jsonb not null default '{}'::jsonb,
           created_at timestamptz not null
-        )`,
+        );
+        create index if not exists memories_user_created
+          on memories (user_id, created_at desc);
+        create index if not exists memories_summary_fts
+          on memories using gin (to_tsvector('simple', summary));
+        create unique index if not exists memories_user_dedupe
+          on memories (user_id, (metadata->>'dedupeKey'))
+          where metadata ? 'dedupeKey'`,
       )
       .then(() => undefined);
     return this.tableReady;
@@ -299,15 +425,13 @@ function isExpired(value: unknown): boolean {
 }
 
 export function keywordOverlap(summary: string, query: string): number {
-  const words = query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter(Boolean);
+  const words = [...new Set(tokenize(query))];
   if (words.length === 0) return 0;
-  const text = summary.toLowerCase();
-  const matches = words.filter((word) => text.includes(word)).length;
-  return matches / words.length;
+  const textWords = new Set(tokenize(summary));
+  const matches = words.filter((word) => textWords.has(word)).length;
+  const coverage = matches / Math.min(words.length, 5);
+  const phraseBoost = normalize(summary).includes(normalize(query)) ? 0.2 : 0;
+  return Math.min(1, coverage + phraseBoost);
 }
 
 export function blendRecency(similarity: number, createdAt: string): number {
@@ -315,4 +439,44 @@ export function blendRecency(similarity: number, createdAt: string): number {
   const recency = Math.exp(-ageDays / env.MEMORY_RECENCY_HALFLIFE_DAYS);
   const w = env.MEMORY_RECENCY_WEIGHT;
   return (1 - w) * similarity + w * recency;
+}
+
+type MemoryRow = {
+  id: string;
+  summary: string;
+  source: HeyRizEventSource;
+  embedding: string | null;
+  metadata: Record<string, string | number | boolean | null>;
+  created_at: Date;
+};
+
+function memoryFromRow(userId: string, row: MemoryRow): StoredMemory {
+  return {
+    id: row.id,
+    userId,
+    summary: row.summary,
+    source: row.source,
+    score: 1,
+    createdAt: new Date(row.created_at).toISOString(),
+    embedding: row.embedding ? (JSON.parse(row.embedding) as number[]) : undefined,
+    metadata: row.metadata,
+  };
+}
+
+const STOP_WORDS = new Set([
+  "a", "an", "and", "are", "about", "did", "do", "for", "from", "has", "have",
+  "i", "in", "is", "it", "latest", "me", "my", "of", "on", "the", "to", "was",
+  "what", "when", "where", "with", "you",
+]);
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]+/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 1 && !STOP_WORDS.has(word));
+}
+
+function normalize(value: string): string {
+  return tokenize(value).join(" ");
 }

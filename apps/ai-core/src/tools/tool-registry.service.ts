@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { createBusinessSnapshotTool } from "./business.tools";
 import { createCalComBriefingTool, createCalComBookTool } from "./calcom.tools";
 import { createConnectGoogleTool } from "./connect.tools";
+import { createConnectorStatusTool } from "./connector-status.tools";
 import { createLookupContactTool } from "./contact.tools";
 import {
   createCalendarBriefingTool,
@@ -62,6 +63,7 @@ import { createMpesaStatusTool } from "./mpesa.tools";
 import { createNotionSearchTool } from "./notion.tools";
 import { createSlackBriefingTool } from "./slack.tools";
 import { createDiscordSendTool } from "./discord.tools";
+import { createSourceUpdatesTool } from "./source-updates.tools";
 import { TextToQueryService } from "../connectors/text-to-query.service";
 import { TaskRepository } from "../tasks/task.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
@@ -75,6 +77,13 @@ import { LlmRouterService } from "../llm/llm-router.service";
 import { VectorMemoryService } from "../memory/vector-memory.service";
 import type { HeyRizRuntimeContext } from "../context/context.types";
 import { appendActionAudit } from "@heyriz/shared/action-audit";
+import {
+  claimActionExecution,
+  completeActionExecution,
+  markActionExecutionUnknown,
+} from "@heyriz/shared/action-execution";
+import { SourceReceiptRepository } from "../intelligence/source-receipt.repository";
+import { AvailabilityService } from "../availability/availability.service";
 
 @Injectable()
 export class ToolRegistryService {
@@ -85,6 +94,8 @@ export class ToolRegistryService {
     private readonly vectorMemory: VectorMemoryService,
     @Inject(GoogleService)
     private readonly google: GoogleService,
+    @Inject(AvailabilityService)
+    private readonly availability: AvailabilityService,
     @Inject(LlmRouterService)
     private readonly llm: LlmRouterService,
     @Inject(UserPreferencesRepository)
@@ -133,9 +144,12 @@ export class ToolRegistryService {
     private readonly eventRepo: EventRepository,
     @Inject(DraftCacheService)
     private readonly draftCache: DraftCacheService,
+    @Inject(SourceReceiptRepository)
+    private readonly sourceReceipts: SourceReceiptRepository,
   ) {
     this.tools = [
       scheduleReminderTool,
+      createConnectorStatusTool(this.connectorService),
       createConnectGoogleTool(),
       createLookupContactTool(this.google, this.entityRepository),
       createGmailTriageTool(this.google, this.llm),
@@ -146,17 +160,25 @@ export class ToolRegistryService {
       createSendEmailTool(this.google, this.draftCache),
       createWatchForReplyTool(this.google),
       createCalendarBriefingTool(this.google),
-      createCheckCalendarConflictTool(this.google),
-      createCreateCalendarEventTool(this.google),
-      createRescheduleCalendarEventTool(this.google),
+      createCheckCalendarConflictTool(this.availability),
+      createCreateCalendarEventTool(this.google, this.availability),
+      createRescheduleCalendarEventTool(this.google, this.availability),
       createCalComBriefingTool(this.connectorService, this.calcom),
-      createCalComBookTool(this.connectorService, this.calcom),
+      createCalComBookTool(this.connectorService, this.calcom, this.availability),
       createPayPalSnapshotTool(this.connectorService, this.paypal),
       createGitHubBriefingTool(this.connectorService, this.github),
       createMpesaStatusTool(this.connectorService, this.mpesa),
       createNotionSearchTool(this.connectorService, this.notion),
       createSlackBriefingTool(this.connectorService, this.slack),
       createDiscordSendTool(this.connectorService, this.discord),
+      createSourceUpdatesTool(
+        this.connectorService,
+        this.google,
+        this.slack,
+        this.notion,
+        this.discord,
+        this.sourceReceipts,
+      ),
       createBusinessSnapshotTool(
         this.connectorService,
         this.postgresIntrospection,
@@ -199,12 +221,33 @@ export class ToolRegistryService {
     return this.tools.find((tool) => tool.name === name);
   }
 
+  validatePayload(
+    name: string,
+    payload: unknown,
+  ): { ok: true; value: unknown } | { ok: false; error: string } {
+    const tool = this.get(name);
+    if (!tool) return { ok: false, error: `unknown tool: ${name}` };
+    if (!isPlainRecord(payload)) {
+      return { ok: false, error: "tool input must be a JSON object" };
+    }
+    const serialized = JSON.stringify(payload);
+    if (serialized.length > 64_000) {
+      return { ok: false, error: "tool input exceeds the 64 KB safety limit" };
+    }
+    if (hasUnsafeKey(payload)) {
+      return { ok: false, error: "tool input contains an unsafe object key" };
+    }
+    return tool.validate ? tool.validate(payload) : { ok: true, value: payload };
+  }
+
   async execute(input: {
     name: string;
     userId: string;
     payload: unknown;
     context: HeyRizRuntimeContext;
     approvalGranted?: boolean;
+    /** Opaque approval id or durable queue job id used for exactly-once claiming. */
+    executionId?: string;
   }): Promise<ToolExecutionResult> {
     const tool = this.get(input.name);
 
@@ -212,12 +255,21 @@ export class ToolRegistryService {
       throw new Error(`tool_not_found:${input.name}`);
     }
 
+    const validated = this.validatePayload(input.name, input.payload);
+    if (!validated.ok) {
+      return {
+        tool: tool.name,
+        status: "invalid_input",
+        message: `Invalid tool input: ${validated.error}`,
+      };
+    }
+
     if (tool.approvalRequired && !input.approvalGranted) {
       await appendActionAudit({
         userId: input.userId,
         event: "blocked",
         tool: tool.name,
-        payload: input.payload,
+        payload: validated.value,
       }).catch(() => undefined);
       return {
         tool: tool.name,
@@ -226,10 +278,30 @@ export class ToolRegistryService {
       };
     }
 
+    if (tool.approvalRequired && input.executionId) {
+      const claim = await claimActionExecution({
+        userId: input.userId,
+        executionId: input.executionId,
+        tool: tool.name,
+        payload: validated.value,
+      });
+      if (claim.state === "completed") return claim.result as ToolExecutionResult;
+      if (claim.state !== "claimed") {
+        return {
+          tool: tool.name,
+          status: "transient_error",
+          message:
+            claim.state === "in_progress"
+              ? "This approved action is already executing. I will not run it twice."
+              : "The provider outcome is uncertain, so I stopped the retry to prevent a duplicate action.",
+        };
+      }
+    }
+
     try {
       const result = await tool.execute({
         userId: input.userId,
-        payload: input.payload,
+        payload: validated.value,
         context: input.context,
       });
       if (tool.approvalRequired) {
@@ -237,20 +309,59 @@ export class ToolRegistryService {
           userId: input.userId,
           event: result.status === "ok" ? "executed" : "failed",
           tool: tool.name,
-          payload: input.payload,
+          payload: validated.value,
+          approvalId: input.executionId,
         }).catch(() => undefined);
+      }
+      if (tool.approvalRequired && input.executionId) {
+        await completeActionExecution({
+          userId: input.userId,
+          executionId: input.executionId,
+          tool: tool.name,
+          payload: validated.value,
+          result,
+        });
       }
       return result;
     } catch (error) {
+      if (tool.approvalRequired && input.executionId) {
+        await markActionExecutionUnknown({
+          userId: input.userId,
+          executionId: input.executionId,
+          tool: tool.name,
+          payload: validated.value,
+          error,
+        }).catch(() => undefined);
+      }
       if (tool.approvalRequired) {
         await appendActionAudit({
           userId: input.userId,
           event: "failed",
           tool: tool.name,
-          payload: input.payload,
+          payload: validated.value,
+          approvalId: input.executionId,
         }).catch(() => undefined);
       }
       throw error;
     }
   }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasUnsafeKey(value: unknown, depth = 0): boolean {
+  if (depth > 12) return true;
+  if (Array.isArray(value)) return value.some((item) => hasUnsafeKey(item, depth + 1));
+  if (!value || typeof value !== "object") return false;
+  return Object.entries(value).some(
+    ([key, child]) =>
+      key === "__proto__" ||
+      key === "prototype" ||
+      key === "constructor" ||
+      hasUnsafeKey(child, depth + 1),
+  );
 }

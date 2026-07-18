@@ -48,7 +48,7 @@ export type ChatPayload = {
   message?: string;
   /** Set true together with `pendingApproval` to approve a previously-proposed action. */
   approve?: boolean;
-  pendingApproval?: { tool: string; payload: unknown };
+  pendingApproval?: { id?: string; tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
   history?: ConversationTurn[];
   /** Where the reply renders: web dashboard (Markdown) or telegram (plain text). Defaults to telegram. */
@@ -61,6 +61,7 @@ type ToolExecutePayload = {
   payload?: unknown;
   source?: HeyRizEventSource;
   authorization?: "scheduled-approved";
+  executionId?: string;
 };
 
 type CheckThreadReplyPayload = {
@@ -438,6 +439,7 @@ export class AiCoreService {
         ? {
             tool: body.pendingApproval.tool,
             payload: body.pendingApproval.payload,
+            id: body.pendingApproval.id,
           }
         : undefined;
 
@@ -460,20 +462,26 @@ export class AiCoreService {
           }),
         );
 
-      // Store every conversation turn in vector memory so RAG can surface it as
-      // context on follow-up questions — even when no tool was called.
-      void this.vectorMemory
-        .remember({
-          userId,
-          source: "telegram",
-          summary: `User: ${message.slice(0, 200)} | Assistant: ${result.reply.slice(0, 300)}`,
-          metadata: { kind: "turn" },
-        })
-        .catch((error: unknown) =>
-          logger.warn("turn vector-store failed", {
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
+      // Episodic recall stores only principal-authored text. Assistant replies
+      // can contain mistakes or tentative synthesis and must never become facts.
+      if (shouldStoreEpisode(message)) {
+        void this.vectorMemory
+          .remember({
+            userId,
+            source: "telegram",
+            summary: `Principal said: ${message.slice(0, 800)}`,
+            metadata: {
+              kind: "episode",
+              provenance: "principal",
+              confidence: "high",
+            },
+          })
+          .catch((error: unknown) =>
+            logger.warn("turn vector-store failed", {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+      }
 
       // Spine: capture explicit decisions the principal made this turn (gated,
       // best-effort, off the hot path).
@@ -560,6 +568,7 @@ export class AiCoreService {
       payload: body.payload ?? {},
       context,
       approvalGranted: body.authorization === "scheduled-approved",
+      executionId: body.executionId,
     });
   }
 
@@ -972,4 +981,14 @@ function isPlausiblePhone(
   const hasPhoneFormatting = alias.includes("+") || /[\s().-]/.test(alias);
 
   return hasPhoneLabel || hasPhoneFormatting;
+}
+
+function shouldStoreEpisode(message: string): boolean {
+  const text = message.trim();
+  if (text.length < 12 || text.length > 2_000) return false;
+  if (/^(?:yes|no|ok(?:ay)?|approved?|continue|thanks?|hello|hey|hi)[.!\s]*$/i.test(text)) return false;
+  // Do not persist likely credentials or payment/authentication material from chat.
+  if (/\b(?:password|passcode|otp|api[_ -]?key|secret|private key|access token|bearer|cvv)\b/i.test(text)) return false;
+  if (/\b(?:sk|pk|xox[baprs]|gh[pousr])_[A-Za-z0-9_-]{12,}\b/.test(text)) return false;
+  return true;
 }

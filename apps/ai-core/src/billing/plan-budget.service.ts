@@ -11,7 +11,11 @@ import {
   usdForCredits,
 } from "@heyriz/shared/billing/plan-budgets";
 
-type SubscriptionRow = { plan_id: string; status: string };
+type SubscriptionRow = {
+  plan_id: string;
+  status: string;
+  trial_ends_at: Date | null;
+};
 type TrialRow = { plan_id: string; ends_at: Date; consumed: boolean };
 type PurchaseRow = { plan_id: string; status: string };
 type CycleRow = {
@@ -28,7 +32,7 @@ type RolloverRow = {
   rollover_credits: number;
 };
 
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "authenticated", "trialing"]);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "authenticated"]);
 const PAID_PURCHASE_STATUSES = new Set(["paid", "captured"]);
 
 /**
@@ -305,7 +309,7 @@ export class PlanBudgetService implements OnModuleDestroy {
     if (!this.pool) return "free";
     try {
       const subscription = await this.pool.query<SubscriptionRow>(
-        `select plan_id, status from billing_subscriptions where user_id = $1
+        `select plan_id, status, trial_ends_at from billing_subscriptions where user_id = $1
          order by case status
            when 'active' then 1
            when 'authenticated' then 2
@@ -318,6 +322,13 @@ export class PlanBudgetService implements OnModuleDestroy {
       );
       const sub = subscription.rows[0];
       if (sub && ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status)) return sub.plan_id;
+      if (
+        sub?.status === "trialing" &&
+        sub.trial_ends_at &&
+        new Date(sub.trial_ends_at).getTime() > Date.now()
+      ) {
+        return sub.plan_id;
+      }
 
       const trial = await this.pool.query<TrialRow>(
         `select plan_id, ends_at, consumed from billing_trials where user_id = $1`,

@@ -44,6 +44,11 @@ describe("credits conversion", () => {
 });
 
 describe("plan budgets", () => {
+  it("assigns no AI credits to the post-trial free state", () => {
+    expect(PLAN_AI_BUDGETS.free).toBe(0);
+    expect(PLAN_CREDITS.free).toBe(0);
+  });
+
   it("has a PLAN_CREDITS entry derived from PLAN_AI_BUDGETS for every plan", () => {
     for (const planId of Object.keys(PLAN_AI_BUDGETS) as (keyof typeof PLAN_AI_BUDGETS)[]) {
       expect(PLAN_CREDITS[planId]).toBe(creditsForUsd(PLAN_AI_BUDGETS[planId]));

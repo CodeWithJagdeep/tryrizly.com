@@ -305,7 +305,7 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
     const result = await this.query<BillingSubscriptionRecord>(
       `
         update billing_subscriptions set
-          user_id = coalesce($2, user_id),
+          user_id = case when user_id like 'deleted:%' then user_id else coalesce($2, user_id) end,
           plan_id = coalesce($3, plan_id),
           provider = coalesce($4, provider),
           status = $5,
@@ -467,7 +467,10 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
         )
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         on conflict (provider_order_id) do update set
-          user_id = coalesce(nullif(excluded.user_id, 'unknown'), billing_purchases.user_id),
+          user_id = case
+            when billing_purchases.user_id like 'deleted:%' then billing_purchases.user_id
+            else coalesce(nullif(excluded.user_id, 'unknown'), billing_purchases.user_id)
+          end,
           plan_id = coalesce(nullif(excluded.plan_id, 'unknown'), billing_purchases.plan_id),
           status = excluded.status,
           amount = coalesce(excluded.amount, billing_purchases.amount),
@@ -510,6 +513,63 @@ export class BillingRepository implements OnModuleInit, OnModuleDestroy {
       [userId],
     );
     return result.rows[0] ?? null;
+  }
+
+  async anonymizeUserData(userId: string, anonymousUserId: string): Promise<void> {
+    if (!this.pool) return;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const customer = await client.query<{ provider_customer_id: string | null }>(
+        "select provider_customer_id from billing_customers where user_id = $1",
+        [userId],
+      );
+      const providerCustomerId = customer.rows[0]?.provider_customer_id;
+
+      await client.query("delete from billing_trials where user_id = $1", [userId]);
+      await client.query("delete from billing_customers where user_id = $1", [userId]);
+      await client.query(
+        `update billing_subscriptions
+           set user_id = $2, metadata = '{"retainedFor":"accounting"}'::jsonb, updated_at = now()
+         where user_id = $1`,
+        [userId, anonymousUserId],
+      );
+      await client.query(
+        `update billing_purchases
+           set user_id = $2, metadata = '{"retainedFor":"accounting"}'::jsonb, updated_at = now()
+         where user_id = $1`,
+        [userId, anonymousUserId],
+      );
+      await client.query(
+        `update billing_events
+           set payload = '{"redacted":true,"retainedFor":"fraud-and-accounting"}'::jsonb
+         where strpos(payload::text, $1) > 0
+            or ($2::text is not null and strpos(payload::text, $2) > 0)`,
+        [userId, providerCustomerId ?? null],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async hasDeletedProviderReference(providerReferences: string[]): Promise<boolean> {
+    const references = providerReferences.filter(Boolean);
+    if (references.length === 0) return false;
+    const result = await this.query<{ found: boolean }>(
+      `select exists (
+         select 1 from billing_subscriptions
+          where provider_subscription_id = any($1::text[]) and user_id like 'deleted:%'
+         union all
+         select 1 from billing_purchases
+          where provider_order_id = any($1::text[]) and user_id like 'deleted:%'
+       ) as found`,
+      [references],
+    );
+    return result.rows[0]?.found ?? false;
   }
 
   async findProviderPlanId(provider: string, localPlanId: string): Promise<string | null> {

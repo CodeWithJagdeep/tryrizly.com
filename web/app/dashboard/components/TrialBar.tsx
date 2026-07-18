@@ -78,7 +78,7 @@ export function TrialBar() {
     );
   }
 
-  // Free plan — soft light blue banner
+  // No active subscription — the trial has ended and paid features are locked.
   if (state === "free") {
     return (
       <div className="sticky top-0 z-40 w-full border-b-2 border-[#FE7F2D] bg-black px-5 py-3">
@@ -88,8 +88,8 @@ export function TrialBar() {
               <InfoIcon />
             </span>
             <div>
-              <p className="text-sm font-semibold text-white">You&apos;re on the free plan</p>
-              <p className="text-xs text-white/60">Upgrade to unlock unlimited messages, connectors, and AI features.</p>
+              <p className="text-sm font-semibold text-white">Your free trial has ended</p>
+              <p className="text-xs text-white/60">Choose a paid plan to continue using Riz.</p>
             </div>
           </div>
           <Link

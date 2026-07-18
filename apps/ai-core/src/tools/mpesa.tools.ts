@@ -1,6 +1,7 @@
 import type { ConnectorService } from "../connectors/connector.service";
 import type { MpesaService } from "../connectors/mpesa.service";
 import type { HeyRizTool } from "./tool.types";
+import { connectorSetupUrl } from "./connector-links";
 
 type MpesaStatusPayload = Record<string, never>;
 
@@ -21,7 +22,7 @@ export function createMpesaStatusTool(
         return {
           tool: "mpesa_status",
           status: "needs_connection",
-          message: `M-Pesa isn't connected yet, ${context.honorific} — add your Daraja consumer key, secret, and shortcode in Connectors.`,
+          message: `M-Pesa isn't connected yet, ${context.honorific}. Add the Daraja credentials here: ${connectorSetupUrl("mpesa")}`,
         };
       }
 
@@ -33,7 +34,7 @@ export function createMpesaStatusTool(
           return {
             tool: "mpesa_status",
             status: "needs_connection",
-            message: `Safaricom rejected the saved Daraja credentials, ${context.honorific} — re-enter them in Connectors.`,
+            message: `Safaricom rejected the saved Daraja credentials, ${context.honorific}. Reconnect it here: ${connectorSetupUrl("mpesa")}`,
           };
         }
         throw error;

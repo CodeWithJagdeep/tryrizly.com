@@ -5,12 +5,23 @@ import type { LlmRouterService } from "../llm/llm-router.service";
 import type { ToolRegistryService } from "../tools/tool-registry.service";
 import type { HeyRizRuntimeContext } from "../context/context.types";
 import type { ToolExecutionResult } from "../tools/tool.types";
+import type { AgentPlanRepository } from "../planning/agent-plan.repository";
 
 // Always-ok budget gate — these scenarios test tool-loop behavior, not billing.
 const fakeBudgetGate = {
   check: async () => ({ state: "ok" as const, spendUsd: 0, budgetUsd: Number.POSITIVE_INFINITY, ratio: 0 }),
   consumeWarnOnce: () => false,
 } as unknown as BudgetGateService;
+
+const fakePlans = {
+  getActive: async () => undefined,
+  start: async () => undefined,
+  markRunning: async (plan: unknown) => plan,
+  markAwaitingApproval: async (plan: unknown) => plan,
+  recordResult: async (plan: unknown) => plan,
+  recordApprovedResult: async (plan: unknown) => plan,
+  complete: async (plan: unknown) => plan,
+} as unknown as AgentPlanRepository;
 
 // A scripted LLM: returns one canned step per call, in order.
 function fakeLlm(script: string[]): LlmRouterService {
@@ -31,6 +42,7 @@ const fakeTools = {
     { name: "reschedule_calendar_event", category: "calendar", description: "move an event", approvalRequired: true, sensitiveDataPolicy: "live_fetch_only" },
   ],
   get: (name: string) => ({ name, approvalRequired: name === "send_email" || name === "reschedule_calendar_event" }),
+  validatePayload: (_name: string, payload: unknown) => ({ ok: true, value: payload }),
   execute: async ({ name }: { name: string }): Promise<ToolExecutionResult> => {
     if (name === "calendar_briefing")
       return { tool: name, status: "ok", message: "2 meetings today; next: Naman 15:00." };
@@ -56,7 +68,16 @@ const context: HeyRizRuntimeContext = {
   source: "telegram",
   structured: { activeDeals: [], preferences: [], pendingStates: [] },
   semantic: [],
-  live: { connected: false, schedule: [], unread: [] },
+  live: {
+    connected: false,
+    calendarConnected: false,
+    inboxConnected: false,
+    calendarStatus: "not_connected",
+    inboxStatus: "not_connected",
+    checkedAt: new Date(0).toISOString(),
+    schedule: [],
+    unread: [],
+  },
   honorific: "sir",
   timezone: "UTC",
   timezoneConfirmed: true,
@@ -73,6 +94,7 @@ async function main() {
       '{"thought":"send it","action":"tool","tool_name":"send_email","tool_input":{"to":"naman@x.com","subject":"Re: Proposal","body":"Sounds good."}}',
     ]),
     fakeBudgetGate,
+    fakePlans,
   );
   const a = await agentA.run({ userId: "default", message: "Reply to Naman accepting", context });
   console.log("SCENARIO_A_steps:", a.steps.map((s) => s.tool).join(" -> "));
@@ -83,6 +105,7 @@ async function main() {
     fakeTools,
     fakeLlm(['{"action":"final","say":"Sent, sir — your reply is on its way to Naman."}']),
     fakeBudgetGate,
+    fakePlans,
   );
   const b = await agentB.run({
     userId: "default",
@@ -102,6 +125,7 @@ async function main() {
       '{"thought":"move the clashing event instead","action":"tool","tool_name":"reschedule_calendar_event","tool_input":{"eventId":"evt_naman_1","newStart":"2026-06-22T17:00:00Z","newEnd":"2026-06-22T17:30:00Z"}}',
     ]),
     fakeBudgetGate,
+    fakePlans,
   );
   const c = await agentC.run({
     userId: "default",
@@ -118,6 +142,7 @@ async function main() {
   const dateTools = {
     list: () => fakeTools.list(),
     get: (name: string) => ({ name, approvalRequired: false }),
+    validatePayload: (_name: string, payload: unknown) => ({ ok: true, value: payload }),
     execute: async ({ name, payload }: { name: string; payload: Record<string, unknown> }): Promise<ToolExecutionResult> => {
       if (name === "calendar_briefing") {
         dPayload = payload;
@@ -137,6 +162,7 @@ async function main() {
       },
     } as unknown as LlmRouterService,
     fakeBudgetGate,
+    fakePlans,
   );
   const d = await agentD.run({
     userId: "default",

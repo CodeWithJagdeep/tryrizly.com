@@ -50,6 +50,10 @@ export type LiveContext = {
   connected: boolean;
   calendarConnected: boolean;
   inboxConnected: boolean;
+  /** Distinguishes a real missing connection from a temporary fetch failure. */
+  calendarStatus: "fresh" | "not_connected" | "unavailable";
+  inboxStatus: "fresh" | "not_connected" | "unavailable";
+  checkedAt: string;
   schedule: LiveScheduleEntry[];
   unread: LiveInboxEntry[];
 };
@@ -58,6 +62,9 @@ export const EMPTY_LIVE: LiveContext = {
   connected: false,
   calendarConnected: false,
   inboxConnected: false,
+  calendarStatus: "not_connected",
+  inboxStatus: "not_connected",
+  checkedAt: new Date(0).toISOString(),
   schedule: [],
   unread: [],
 };
@@ -80,6 +87,6 @@ export type HeyRizRuntimeContext = {
   timezoneConfirmed: boolean;
   /** The language/style to reply in (e.g. "Hinglish"), or undefined to mirror the principal's own message. */
   language?: string;
-  /** Provider names only (postgres/mongodb/razorpay) — no secrets. */
+  /** Connected provider names only — never credentials or connector content. */
   connectedDataSources: string[];
 };

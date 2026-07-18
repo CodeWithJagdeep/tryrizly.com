@@ -24,15 +24,19 @@ export class OutboundEmailWorkerService implements OnModuleInit, OnModuleDestroy
         const { userId, to, subject, body, threadId, inReplyTo } = job.data;
         logger.info("outbound email job started", { jobId: job.id, to });
 
-        await firstValueFrom(
-          this.aiCore.send("tool.execute", {
+        const result = await firstValueFrom(
+          this.aiCore.send<{ status?: string; message?: string }>("tool.execute", {
             userId,
             name: "send_email",
             payload: { to, subject, body, threadId, inReplyTo, approved: true },
             source: "scheduled",
             authorization: "scheduled-approved",
+            executionId: String(job.id),
           }),
         );
+        if (result.status !== "ok") {
+          throw new Error(`outbound_email_not_completed:${result.status ?? "unknown"}:${result.message ?? ""}`);
+        }
 
         logger.info("outbound email job completed", { jobId: job.id, to });
       },

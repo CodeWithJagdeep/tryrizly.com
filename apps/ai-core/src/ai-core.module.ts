@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AvailabilityService } from "./availability/availability.service";
 import { AgentService } from "./agent/agent.service";
 import { AiCoreController } from "./ai-core.controller";
 import { AiCoreService } from "./ai-core.service";
@@ -20,6 +21,9 @@ import { MpesaService } from "./connectors/mpesa.service";
 import { DiscordService } from "./connectors/discord.service";
 import { TextToQueryService } from "./connectors/text-to-query.service";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
+import { AccountDeletionService } from "./account/account-deletion.service";
+import { SourceReceiptRepository } from "./intelligence/source-receipt.repository";
+import { AgentPlanRepository } from "./planning/agent-plan.repository";
 import { ContextService } from "./context/context.service";
 import { EmailClassifierService } from "./email/email-classifier.service";
 import { EmailPreferencesRepository } from "./email/email-preferences.repository";
@@ -50,8 +54,11 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
   controllers: [AiCoreController],
   providers: [
     AgentService,
+    AccountDeletionService,
+    AgentPlanRepository,
     AiCoreService,
     AutoMemoryService,
+    AvailabilityService,
     BudgetGateService,
     PlanBudgetService,
     ConnectorRepository,
@@ -94,6 +101,7 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     UserPreferencesRepository,
     VectorMemoryService,
     NotificationLogRepository,
+    SourceReceiptRepository,
   ],
 })
 export class AiCoreModule {}

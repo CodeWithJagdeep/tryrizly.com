@@ -70,8 +70,17 @@ export class BudgetGateService {
         previousSpendCredits: creditsForUsd(previousSpendUsd),
       });
       const budgetUsd = budgetBeforeRolloverUsd + usdForCredits(rolloverCredits);
-      if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+      if (!Number.isFinite(budgetUsd)) {
         return { state: "ok", spendUsd, budgetUsd, ratio: 0, rolloverCredits };
+      }
+      if (planId === "free" || budgetUsd <= 0) {
+        return {
+          state: "exceeded",
+          spendUsd,
+          budgetUsd: Math.max(0, budgetUsd),
+          ratio: 1,
+          rolloverCredits: 0,
+        };
       }
       const ratio = spendUsd / budgetUsd;
       const state: BudgetState = ratio >= 1 ? "exceeded" : ratio >= WARN_RATIO ? "warn" : "ok";

@@ -38,4 +38,48 @@ describe("ConnectorRepository.updateOwned", () => {
     expect(updated?.label).toBe("Updated");
     expect(updated?.userId).toBe("owner@example.com");
   });
+
+  it("deletes every connector owned by one tenant without touching another", async () => {
+    const repository = new ConnectorRepository();
+    repositories.push(repository);
+    const owner = "delete-owner@example.com";
+    const other = "delete-other@example.com";
+    await repository.insert({
+      id: crypto.randomUUID(), userId: owner, provider: "postgres", authType: "manual",
+      label: "DB", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+    });
+    await repository.insert({
+      id: crypto.randomUUID(), userId: owner, provider: "stripe", authType: "manual",
+      label: "Stripe", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+    });
+    await repository.insert({
+      id: crypto.randomUUID(), userId: other, provider: "postgres", authType: "manual",
+      label: "Other DB", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+    });
+
+    await expect(repository.deleteAll(owner)).resolves.toBe(2);
+    await expect(repository.list(owner)).resolves.toEqual([]);
+    await expect(repository.list(other)).resolves.toHaveLength(1);
+    await repository.deleteAll(other);
+  });
+
+  it("finds a named multi-account connector in the in-memory fallback", async () => {
+    const repository = new ConnectorRepository();
+    repositories.push(repository);
+    const userId = "multi-account@example.com";
+    const inserted = await repository.insert({
+      id: crypto.randomUUID(),
+      userId,
+      provider: "stripe",
+      authType: "manual",
+      label: "US Stripe",
+      status: "connected",
+      encryptedPayload: "ciphertext",
+      scopes: [],
+      metadata: {},
+    });
+
+    await expect(repository.find(userId, "stripe")).resolves.toMatchObject({ id: inserted.id });
+    await repository.deleteAll(userId);
+  });
 });

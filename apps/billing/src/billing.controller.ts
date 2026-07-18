@@ -48,6 +48,11 @@ export class BillingController {
     return this.billingService.cancelSubscription(payload);
   }
 
+  @MessagePattern("billing.user.deleteData")
+  deleteUserData(payload: { userId?: string; email?: string; name?: string }) {
+    return this.billingService.deleteUserData(payload);
+  }
+
   @MessagePattern("billing.sweep")
   runBillingSweep() {
     return this.billingService.runBillingSweep();

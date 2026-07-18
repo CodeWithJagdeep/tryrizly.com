@@ -9,6 +9,7 @@ type ChatReply = {
   /** Opaque id + human preview only — the real tool/payload never leave the server. */
   pendingApproval?: { id: string; preview: string };
   error?: string;
+  upgradeRequired?: boolean;
 };
 
 type ChatBody = {
@@ -37,6 +38,16 @@ export async function POST(request: Request) {
       history: body?.history ?? [],
       ...(body?.approve ? { approve: true, pendingApprovalId: body.pendingApprovalId } : {}),
     });
+
+    if (result?.upgradeRequired || result?.error === "upgrade_required") {
+      return NextResponse.json(
+        {
+          error: "Your trial has ended. Choose a paid plan to continue using Riz.",
+          upgradeRequired: true,
+        },
+        { status: 402 },
+      );
+    }
 
     if (!result?.reply) {
       return NextResponse.json({ error: result?.error || "The assistant didn't respond." }, { status: 502 });

@@ -25,6 +25,9 @@ const OTP_PATTERNS = [
   /\blog.?in link\b/i,
 ];
 
+const BULK_CAREER_MAIL_PATTERN =
+  /\b(jobs? matching your profile|job alert|job feed|new jobs? for you|still looking for a job|work at a startup|community digest|first \d+ applicants|career (digest|newsletter|coaching)|apply to \d+ jobs?|weekly job)\b/i;
+
 @Injectable()
 export class EmailClassifierService {
   constructor(private readonly llm: LlmRouterService) {}
@@ -84,7 +87,7 @@ export class EmailClassifierService {
               "  meeting_request - interview, meeting invite, call request, schedule",
               "  investor_update - investor asking for update, term sheet, cap table, due diligence",
               "  follow_up_needed - email that requires a reply the founder hasn't sent",
-              "  newsletter   - digest, marketing, blog, announcement, cold outreach. Never use this for an email warning that an account/service/project will stop working — that is account_alert, even if the email also has an unsubscribe footer.",
+              "  newsletter   - digest, marketing, blog, announcement, cold outreach, job alert/feed, community digest, career campaign, or bulk recruiting promotion. Never use this for a direct message from a specific recruiter about a specific role. Never use this for an email warning that an account/service/project will stop working — that is account_alert, even if the email also has an unsubscribe footer.",
               "  general_high - urgent message from a real person that doesn't fit above",
               "  general_medium - normal reply or update from a known contact",
               "  general_low  - misc low-importance email",
@@ -272,6 +275,27 @@ export class EmailClassifierService {
         isMarketing: false,
         replyIntent: "pay",
         confidence: "medium",
+      };
+    }
+
+    // Bulk job feeds often contain words such as "interview" or "schedule" in
+    // their recommendations. Classify them before the direct meeting-request
+    // rule so a digest cannot become a false action item.
+    if (BULK_CAREER_MAIL_PATTERN.test(`${input.from} ${text}`)) {
+      return {
+        category: "newsletter",
+        summary: "Bulk career or community update",
+        contactCandidate: rejectContactCandidate("Bulk career or community email"),
+        requiresReply: false,
+        urgency: "low",
+        senderType: "automated",
+        suggestedAction: "ignore",
+        reason: "Bulk career, job-feed, or community campaign.",
+        riskLevel: "low",
+        isAutomated: true,
+        isMarketing: true,
+        replyIntent: "ignore",
+        confidence: "high",
       };
     }
 

@@ -77,6 +77,11 @@ export function createRememberFactTool(
         userId,
         source: payload.source ?? "telegram",
         summary: text,
+        metadata: {
+          kind: "explicit-fact",
+          provenance: "principal",
+          confidence: "high",
+        },
       });
 
       return {

@@ -5,18 +5,18 @@ import {
 } from "./approval-store";
 import { AuthRepository } from "./auth/auth.repository";
 import { CONVERSATION_STORE, type ConversationStore, type ConversationTurn } from "./conversation-store";
-import { GatewayService } from "./gateway.service";
+import { GatewayService, upgradeRequiredResult } from "./gateway.service";
 import { requireInternalSecret } from "./internal-auth";
 import { appendActionAudit, listActionAudit } from "@heyriz/shared/action-audit";
 
-type ChatResponse = { reply: string };
+type ChatResponse = { reply: string; error?: string; upgradeRequired?: boolean };
 
 const PROPOSABLE_TOOLS = new Set([
   "send_email",
   "create_calendar_event",
   "reschedule_calendar_event",
   "create_calcom_booking",
-  "post_discord_message",
+  "discord_send",
 ]);
 
 function turn(role: ConversationTurn["role"], content: string): ConversationTurn {
@@ -116,6 +116,10 @@ export class ApprovalsController {
       return { ok: true, reply: `Cancelled #${record.id} (${record.label}).` };
     }
 
+    if (!(await this.gateway.hasProductAccess(body.userId))) {
+      return upgradeRequiredResult();
+    }
+
     await this.approvals.remove(body.userId, record.id);
     await appendActionAudit({
       userId: body.userId,
@@ -125,11 +129,11 @@ export class ApprovalsController {
       approvalId: record.id,
     });
     const history = await this.conversations.get(conversationKey);
-    const res = await this.gateway.sendToAiCore<ChatResponse>("chat.message", {
+    const res = await this.gateway.sendChatToAiCore<ChatResponse>({
       userId: body.userId,
       message: "approved",
       approve: true,
-      pendingApproval: { tool: record.tool, payload: record.payload },
+      pendingApproval: { id: record.id, tool: record.tool, payload: record.payload },
       history,
     });
 

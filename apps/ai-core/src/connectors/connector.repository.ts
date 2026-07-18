@@ -224,7 +224,10 @@ export class ConnectorRepository implements OnModuleDestroy {
 
   async find(userId: string, provider: ConnectorProvider) {
     if (!this.pool) {
-      return inMemoryAccounts.get(this.key(userId, provider));
+      return inMemoryAccounts.get(this.key(userId, provider))
+        ?? [...inMemoryAccounts.values()].find(
+          (account) => account.userId === userId && account.provider === provider,
+        );
     }
 
     await this.ensureTable();
@@ -244,6 +247,7 @@ export class ConnectorRepository implements OnModuleDestroy {
         updated_at as "updatedAt"
       from connected_accounts
       where user_id = $1 and provider = $2
+      order by created_at asc
       limit 1
       `,
       [userId, provider],
@@ -298,6 +302,37 @@ export class ConnectorRepository implements OnModuleDestroy {
       [userId, provider],
     );
     return true;
+  }
+
+  async deleteAll(userId: string): Promise<number> {
+    if (!this.pool) {
+      let removed = 0;
+      for (const [key, account] of inMemoryAccounts) {
+        if (account.userId === userId) {
+          inMemoryAccounts.delete(key);
+          removed += 1;
+        }
+      }
+      for (const [stateId, state] of inMemoryOAuthStates) {
+        if (state.userId === userId) inMemoryOAuthStates.delete(stateId);
+      }
+      return removed;
+    }
+
+    await this.ensureTable();
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("delete from connector_oauth_states where user_id = $1", [userId]);
+      const result = await client.query("delete from connected_accounts where user_id = $1", [userId]);
+      await client.query("commit");
+      return result.rowCount ?? 0;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async deleteById(id: string): Promise<boolean> {

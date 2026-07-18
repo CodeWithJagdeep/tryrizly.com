@@ -1,7 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { LlmRouterService, extractJson } from "../llm/llm-router.service";
 import type { DataSourceProvider } from "./connector.types";
-import type { MongoIntrospectedSchema, MongoQuerySpec } from "./mongo-introspection.service";
+import type {
+  MongoCountSpec,
+  MongoIntrospectedSchema,
+  MongoQuerySpec,
+} from "./mongo-introspection.service";
 import type { PostgresIntrospectedSchema } from "./postgres-introspection.service";
 import type { RazorpayEndpoint } from "./razorpay.service";
 import type { StripeEndpoint } from "./stripe.service";
@@ -31,7 +35,10 @@ export class TextToQueryService {
     if (!this.llm.hasProvider()) return undefined;
 
     const schemaText = schema.tables
-      .map((t) => `${t.name}(${t.columns.map((c) => `${c.name}: ${c.dataType}`).join(", ")})`)
+      .map((table) => {
+        const qualifiedName = `"${table.schema ?? "public"}"."${table.name}"`;
+        return `${qualifiedName}(${table.columns.map((column) => `${column.name}: ${column.dataType}`).join(", ")})`;
+      })
       .join("\n");
 
     const raw = await this.llm.complete({
@@ -45,6 +52,7 @@ export class TextToQueryService {
             "You write a single read-only Postgres SELECT statement to answer the question.",
             "Output ONLY the SQL. No markdown, no explanation, no semicolon-separated statements.",
             "You may use WITH/CTEs. Never use INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/CREATE/GRANT/COPY/CALL/MERGE.",
+            "Use schema-qualified table names exactly as shown. Use only standard read-only analytics functions.",
             "Schema:",
             schemaText || "(no tables found)",
           ].join("\n"),
@@ -78,8 +86,13 @@ export class TextToQueryService {
         {
           role: "system",
           content: [
-            'Output ONLY JSON of this exact shape: {"collection":"...","filter":{...},"projection":{...},"sort":{...},"limit":50}.',
-            "filter may only use standard query operators ($eq,$gt,$gte,$lt,$lte,$in,$ne,$regex,$and,$or). Never use $where or $function.",
+            "Return ONLY one JSON object for a read-only MongoDB query.",
+            'For document retrieval use: {"operation":"find","collection":"...","filter":{},"projection":{"field":1},"sort":{"field":-1},"limit":50}.',
+            'For totals, grouped metrics, or trends use: {"operation":"aggregate","collection":"...","pipeline":[{"$match":{}},{"$group":{"_id":"$field","total":{"$sum":1}}},{"$sort":{"total":-1}}]}.',
+            "Allowed filter operators: $eq,$ne,$gt,$gte,$lt,$lte,$in,$nin,$exists,$regex,$and,$or,$not,$elemMatch.",
+            "Allowed aggregation stages: $match,$group,$project,$sort,$limit,$count,$unwind.",
+            "Never use $where,$function,$lookup,$unionWith,$out,$merge, JavaScript, or unknown operators.",
+            `Current UTC time: ${new Date().toISOString()}. Encode dates as {"$date":"ISO-8601"} and ObjectIds as {"$oid":"24-hex"}.`,
             "Collections (sampled fields):",
             schemaText || "(no collections found)",
           ].join("\n"),
@@ -89,6 +102,41 @@ export class TextToQueryService {
     });
 
     return raw ? extractJson<MongoQuerySpec>(raw) : undefined;
+  }
+
+  async mongoCountSpecFor(
+    userId: string,
+    question: string,
+    schema: MongoIntrospectedSchema,
+  ): Promise<MongoCountSpec | undefined> {
+    if (!this.llm.hasProvider()) return undefined;
+
+    const schemaText = schema.collections
+      .map(
+        (collection) =>
+          `${collection.name}(${collection.sampledFields.map((field) => `${field.name}: ${field.types.join("|")}`).join(", ")})`,
+      )
+      .join("\n");
+    const raw = await this.llm.complete({
+      task: "query",
+      userId,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: [
+            'Return ONLY JSON of this exact shape: {"collection":"...","filter":{...}}.',
+            "This specification is passed to countDocuments, so do not include projection, sort, limit, pipeline, or operation.",
+            "Allowed operators: $eq,$ne,$gt,$gte,$lt,$lte,$in,$nin,$exists,$regex,$and,$or,$not,$elemMatch.",
+            `Current UTC time: ${new Date().toISOString()}. Encode dates as {"$date":"ISO-8601"}.`,
+            "Collections (sampled fields):",
+            schemaText || "(no collections found)",
+          ].join("\n"),
+        },
+        { role: "user", content: question },
+      ],
+    });
+    return raw ? extractJson<MongoCountSpec>(raw) : undefined;
   }
 
   /** Used only when more than one data source is connected and a keyword guess didn't land. */

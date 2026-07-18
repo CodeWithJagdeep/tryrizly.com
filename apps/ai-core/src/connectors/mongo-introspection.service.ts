@@ -1,62 +1,163 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId, type Document } from "mongodb";
 import { env } from "@heyriz/shared/env";
 
 export type MongoIntrospectedField = { name: string; types: string[] };
 export type MongoIntrospectedCollection = { name: string; sampledFields: MongoIntrospectedField[] };
 export type MongoIntrospectedSchema = { collections: MongoIntrospectedCollection[] };
 
-export type MongoQuerySpec = {
+export type MongoFindSpec = {
+  operation?: "find";
   collection: string;
-  filter: Record<string, unknown>;
+  filter?: Record<string, unknown>;
   projection?: Record<string, 0 | 1>;
   sort?: Record<string, 1 | -1>;
   limit?: number;
 };
 
+export type MongoAggregateSpec = {
+  operation: "aggregate";
+  collection: string;
+  pipeline: Record<string, unknown>[];
+};
+
+export type MongoQuerySpec = MongoFindSpec | MongoAggregateSpec;
+export type MongoCountSpec = { collection: string; filter?: Record<string, unknown> };
+type ValidatedMongoFindSpec = {
+  operation: "find";
+  collection: string;
+  filter: Record<string, unknown>;
+  projection?: Record<string, 0 | 1>;
+  sort?: Record<string, 1 | -1>;
+  limit: number;
+};
+
+type ClientEntry = { client: MongoClient; lastUsedAt: number };
+type SchemaCacheEntry = { at: number; schema: MongoIntrospectedSchema };
+
 const MAX_DOCS = 50;
+const MAX_CLIENTS = 32;
+const MAX_COLLECTIONS = 100;
+const MAX_SCHEMA_CACHE_ENTRIES = 128;
+const MAX_PIPELINE_STAGES = 8;
+const MAX_FILTER_DEPTH = 8;
+const MAX_ARRAY_ITEMS = 100;
+const MAX_OBJECT_KEYS = 100;
+
+const FILTER_OPERATORS = new Set([
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+  "$in",
+  "$nin",
+  "$exists",
+  "$regex",
+  "$and",
+  "$or",
+  "$not",
+  "$elemMatch",
+]);
+
+const AGGREGATE_STAGES = new Set([
+  "$match",
+  "$group",
+  "$project",
+  "$sort",
+  "$limit",
+  "$count",
+  "$unwind",
+]);
+
+const ACCUMULATORS = new Set(["$sum", "$avg", "$min", "$max", "$first", "$last"]);
+const EXPRESSION_OPERATORS = new Set([
+  "$literal",
+  "$ifNull",
+  "$cond",
+  "$dateToString",
+  "$dateTrunc",
+  "$toDate",
+  "$toString",
+  "$subtract",
+  "$add",
+  "$multiply",
+  "$divide",
+  "$size",
+  "$sum",
+  "$avg",
+  "$min",
+  "$max",
+  "$first",
+  "$last",
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+  "$and",
+  "$or",
+  "$not",
+]);
 
 /**
- * Talks to a principal's OWN external MongoDB cluster (vault-stored
- * connectionUrl) — distinct from shared/'s mongo client, which is heyriz's
- * own app database. Schema is inferred by sampling, since Mongo has none.
- * The LLM-driven query path only ever calls find() — never aggregate() —
- * so $out/$merge/$where/db.eval are not just denylisted, they're not
- * reachable through this shape at all.
+ * Executes read-only queries against a principal's external MongoDB. Every
+ * model-produced query is normalized through a small allowlist before the
+ * driver sees it; connector credentials are independently verified at save.
  */
 @Injectable()
 export class MongoIntrospectionService implements OnModuleDestroy {
-  private readonly clients = new Map<string, MongoClient>();
+  private readonly clients = new Map<string, ClientEntry>();
+  private readonly schemaCache = new Map<string, SchemaCacheEntry>();
 
-  async getSchema(_userId: string, connectionUrl: string): Promise<MongoIntrospectedSchema> {
+  async getSchema(userId: string, connectionUrl: string): Promise<MongoIntrospectedSchema> {
+    const cacheKey = `${userId}:${hash(connectionUrl)}`;
+    const cached = this.schemaCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < env.CONNECTOR_SCHEMA_CACHE_TTL_MS) {
+      return cached.schema;
+    }
+
     const db = await this.dbFor(connectionUrl);
-    const collections = await db.listCollections().toArray();
+    const collections = (
+      await db.listCollections({}, {
+        nameOnly: true,
+        maxTimeMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
+      }).toArray()
+    ).slice(0, MAX_COLLECTIONS);
 
     const result: MongoIntrospectedCollection[] = [];
-    for (const { name } of collections) {
-      const sample = (await db
-        .collection(name)
-        .aggregate([{ $sample: { size: env.CONNECTOR_MONGO_SAMPLE_SIZE } }])
-        .toArray()) as Record<string, unknown>[];
-      result.push({ name, sampledFields: inferFields(sample) });
+    for (let index = 0; index < collections.length; index += 5) {
+      const batch = collections.slice(index, index + 5);
+      result.push(...await Promise.all(batch.map(async ({ name }) => {
+        const sample = await db
+          .collection(name)
+          .find({})
+          .limit(env.CONNECTOR_MONGO_SAMPLE_SIZE)
+          .maxTimeMS(env.CONNECTOR_QUERY_TIMEOUT_MS)
+          .toArray();
+        return {
+          name,
+          sampledFields: inferFields(sample as Record<string, unknown>[]),
+        };
+      })));
     }
-    return { collections: result };
+    const schema = { collections: result };
+    evictOldestCacheEntry(this.schemaCache, MAX_SCHEMA_CACHE_ENTRIES);
+    this.schemaCache.set(cacheKey, { at: Date.now(), schema });
+    return schema;
   }
 
-  /**
-   * Rejects a connection string whose authenticated user can write. Checked
-   * once at connector-save time (see ConnectorService.saveManual) — mirrors
-   * the protection Postgres gets for free from `BEGIN READ ONLY`, which Mongo
-   * has no equivalent of, so it has to be enforced by inspecting privileges.
-   */
   async assertReadOnly(connectionUrl: string): Promise<void> {
-    const client = new MongoClient(connectionUrl);
+    const client = mongoClient(connectionUrl);
     try {
       await client.connect();
       const status = (await client.db().admin().command({
         connectionStatus: 1,
         showPrivileges: true,
+        maxTimeMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
       })) as {
         authInfo?: {
           authenticatedUserPrivileges?: Array<{ actions?: string[] }>;
@@ -67,7 +168,8 @@ export class MongoIntrospectionService implements OnModuleDestroy {
       const privileges = status.authInfo?.authenticatedUserPrivileges;
       if (privileges) {
         const writeActions = new Set(
-          privileges.flatMap((p) => p.actions ?? []).filter((a) => !READ_ONLY_ACTIONS.has(a)),
+          privileges.flatMap((privilege) => privilege.actions ?? [])
+            .filter((action) => !READ_ONLY_ACTIONS.has(action)),
         );
         if (writeActions.size > 0) {
           throw new Error(
@@ -77,14 +179,11 @@ export class MongoIntrospectionService implements OnModuleDestroy {
         return;
       }
 
-      // Server didn't return expanded privileges (showPrivileges can be
-      // restricted) — fail closed unless every role is a known read-only
-      // built-in. A custom role with unknown grants is treated as unsafe.
       const roles = status.authInfo?.authenticatedUserRoles ?? [];
-      const unsafeRoles = roles.filter((r) => !READ_ONLY_ROLES.has(r.role ?? ""));
+      const unsafeRoles = roles.filter((role) => !READ_ONLY_ROLES.has(role.role ?? ""));
       if (roles.length === 0 || unsafeRoles.length > 0) {
         throw new Error(
-          `mongo_connection_not_read_only:${unsafeRoles.map((r) => r.role).join(",") || "unknown_privileges"}`,
+          `mongo_connection_not_read_only:${unsafeRoles.map((role) => role.role).join(",") || "unknown_privileges"}`,
         );
       }
     } finally {
@@ -92,15 +191,8 @@ export class MongoIntrospectionService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Lets a user paste whatever credentials they already have (often an admin
-   * account) instead of hand-rolling a scoped user first. Uses those
-   * credentials exactly once to provision a same-database `read`-role user,
-   * returns a connection string for the new user, and never persists the
-   * write-capable one it was given.
-   */
   async provisionReadOnlyUser(connectionUrl: string): Promise<string> {
-    const client = new MongoClient(connectionUrl);
+    const client = mongoClient(connectionUrl);
     try {
       await client.connect();
       const db = client.db();
@@ -110,6 +202,7 @@ export class MongoIntrospectionService implements OnModuleDestroy {
         createUser: username,
         pwd: password,
         roles: [{ role: "read", db: db.databaseName }],
+        maxTimeMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
       });
       return withScopedCredentials(connectionUrl, username, password, db.databaseName);
     } finally {
@@ -117,38 +210,142 @@ export class MongoIntrospectionService implements OnModuleDestroy {
     }
   }
 
-  async runFind(connectionUrl: string, spec: MongoQuerySpec): Promise<{ documents: unknown[] }> {
-    assertSafeFilter(spec.filter);
-    const db = await this.dbFor(connectionUrl);
-    const documents = await db
-      .collection(spec.collection)
-      .find(spec.filter, { projection: spec.projection, sort: spec.sort })
-      .limit(Math.min(spec.limit ?? MAX_DOCS, MAX_DOCS))
+  async runQuery(
+    connectionUrl: string,
+    candidate: unknown,
+    schema: MongoIntrospectedSchema,
+  ): Promise<{ documents: unknown[] }> {
+    const spec = validateMongoQuerySpec(candidate, schema);
+    const collection = (await this.dbFor(connectionUrl)).collection(spec.collection);
+    if (spec.operation === "aggregate") {
+      const documents = await collection
+        .aggregate(spec.pipeline as Document[], {
+          allowDiskUse: false,
+          maxTimeMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
+        })
+        .toArray();
+      return { documents };
+    }
+
+    const documents = await collection
+      .find(spec.filter as Document, {
+        projection: spec.projection,
+        sort: spec.sort,
+      })
+      .limit(spec.limit)
+      .maxTimeMS(env.CONNECTOR_QUERY_TIMEOUT_MS)
       .toArray();
     return { documents };
   }
 
+  async runFind(
+    connectionUrl: string,
+    candidate: MongoFindSpec,
+    schema?: MongoIntrospectedSchema,
+  ): Promise<{ documents: unknown[] }> {
+    const resolvedSchema = schema ?? await this.getSchema("runtime", connectionUrl);
+    return this.runQuery(connectionUrl, { ...candidate, operation: "find" }, resolvedSchema);
+  }
+
+  async countDocuments(
+    connectionUrl: string,
+    candidate: unknown,
+    schema: MongoIntrospectedSchema,
+  ): Promise<number> {
+    const spec = validateMongoCountSpec(candidate, schema);
+    return (await this.dbFor(connectionUrl))
+      .collection(spec.collection)
+      .countDocuments(spec.filter as Document, {
+        maxTimeMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
+      });
+  }
+
   async onModuleDestroy() {
-    await Promise.all([...this.clients.values()].map((client) => client.close()));
+    await Promise.all([...this.clients.values()].map(({ client }) => client.close()));
   }
 
   private async dbFor(connectionUrl: string) {
-    let client = this.clients.get(connectionUrl);
-    if (!client) {
-      client = new MongoClient(connectionUrl);
-      await client.connect();
-      this.clients.set(connectionUrl, client);
+    const key = hash(connectionUrl);
+    const existing = this.clients.get(key);
+    if (existing) {
+      existing.lastUsedAt = Date.now();
+      return existing.client.db();
     }
+
+    if (this.clients.size >= MAX_CLIENTS) {
+      const oldest = [...this.clients.entries()].sort(
+        (left, right) => left[1].lastUsedAt - right[1].lastUsedAt,
+      )[0];
+      if (oldest) {
+        this.clients.delete(oldest[0]);
+        void oldest[1].client.close().catch(() => undefined);
+      }
+    }
+
+    const client = mongoClient(connectionUrl);
+    await client.connect();
+    this.clients.set(key, { client, lastUsedAt: Date.now() });
     return client.db();
   }
 }
 
-/**
- * Exactly the actions MongoDB's built-in "read" role grants (per Mongo docs),
- * plus a couple of harmless server-info reads — everything else is treated
- * as write access. Keeping this matched to "read" avoids false-rejecting the
- * exact role we're telling users to create.
- */
+export function validateMongoQuerySpec(
+  candidate: unknown,
+  schema: MongoIntrospectedSchema,
+): ValidatedMongoFindSpec | MongoAggregateSpec {
+  const raw = assertPlainObject(candidate, "invalid_mongo_query");
+  const collection = validateCollection(raw.collection, schema);
+  const operation = raw.operation ?? "find";
+
+  if (operation === "find") {
+    rejectUnexpectedKeys(raw, new Set([
+      "operation",
+      "collection",
+      "filter",
+      "projection",
+      "sort",
+      "limit",
+    ]));
+    return {
+      operation: "find",
+      collection,
+      filter: validateFilter(raw.filter ?? {}, 0),
+      projection: validateProjection(raw.projection),
+      sort: validateSort(raw.sort),
+      limit: validatePositiveLimit(raw.limit ?? MAX_DOCS),
+    };
+  }
+
+  if (operation !== "aggregate") throw new Error("mongo_operation_not_allowed");
+  rejectUnexpectedKeys(raw, new Set(["operation", "collection", "pipeline"]));
+  if (!Array.isArray(raw.pipeline) || raw.pipeline.length === 0) {
+    throw new Error("invalid_mongo_pipeline");
+  }
+  if (raw.pipeline.length > MAX_PIPELINE_STAGES) throw new Error("mongo_pipeline_too_long");
+
+  const pipeline = raw.pipeline.map((stage) => validatePipelineStage(stage));
+  const finalStage = pipeline.at(-1);
+  if (finalStage && "$limit" in finalStage) {
+    finalStage.$limit = validatePositiveLimit(finalStage.$limit);
+  } else {
+    if (pipeline.length >= MAX_PIPELINE_STAGES) throw new Error("mongo_pipeline_too_long");
+    pipeline.push({ $limit: MAX_DOCS });
+  }
+  return { operation: "aggregate", collection, pipeline };
+}
+
+export function validateMongoCountSpec(
+  candidate: unknown,
+  schema: MongoIntrospectedSchema,
+): Required<MongoCountSpec> {
+  const raw = assertPlainObject(candidate, "invalid_mongo_count_query");
+  rejectUnexpectedKeys(raw, new Set(["collection", "filter"]));
+  return {
+    collection: validateCollection(raw.collection, schema),
+    filter: validateFilter(raw.filter ?? {}, 0),
+  };
+}
+
 const READ_ONLY_ACTIONS = new Set([
   "changeStream",
   "collStats",
@@ -164,14 +361,18 @@ const READ_ONLY_ACTIONS = new Set([
   "listSessions",
 ]);
 
-/** Built-in roles known to grant read-only access. Custom roles are never trusted by name alone. */
 const READ_ONLY_ROLES = new Set(["read", "readAnyDatabase"]);
 
-/**
- * Swaps the userinfo and authSource of a mongodb(+srv):// URI for a new
- * same-database user, preserving the original host list and every other
- * query option (tls, replicaSet, etc.) untouched.
- */
+function mongoClient(connectionUrl: string): MongoClient {
+  if (!/^mongodb(?:\+srv)?:\/\//i.test(connectionUrl)) {
+    throw new Error("invalid_mongodb_connection_url");
+  }
+  return new MongoClient(connectionUrl, {
+    connectTimeoutMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
+    serverSelectionTimeoutMS: env.CONNECTOR_QUERY_TIMEOUT_MS,
+  });
+}
+
 function withScopedCredentials(
   connectionUrl: string,
   username: string,
@@ -190,38 +391,397 @@ function withScopedCredentials(
 
 function inferFields(sample: Record<string, unknown>[]): MongoIntrospectedField[] {
   const fields = new Map<string, Set<string>>();
-  for (const doc of sample) {
-    for (const [key, value] of Object.entries(doc)) {
-      const types = fields.get(key) ?? new Set<string>();
-      types.add(typeOf(value));
-      fields.set(key, types);
+  for (const document of sample) collectFields(document, "", fields, 0);
+  return [...fields.entries()].map(([name, types]) => ({ name, types: [...types] }));
+}
+
+function collectFields(
+  value: Record<string, unknown>,
+  prefix: string,
+  fields: Map<string, Set<string>>,
+  depth: number,
+) {
+  for (const [key, child] of Object.entries(value)) {
+    const name = prefix ? `${prefix}.${key}` : key;
+    const types = fields.get(name) ?? new Set<string>();
+    types.add(typeOf(child));
+    fields.set(name, types);
+    if (depth < 2 && isPlainObject(child) && !isExtendedJson(child)) {
+      collectFields(child, name, fields, depth + 1);
     }
   }
-  return [...fields.entries()].map(([name, types]) => ({ name, types: [...types] }));
 }
 
 function typeOf(value: unknown): string {
   if (value === null) return "null";
   if (Array.isArray(value)) return "array";
   if (value instanceof Date) return "date";
+  if (value instanceof ObjectId) return "objectId";
   return typeof value;
 }
 
-/** Defense against `filter` being typed Record<string, unknown> — a prompt instruction isn't enforcement, this is. */
-function assertSafeFilter(filter: Record<string, unknown>, depth = 0): void {
-  if (depth > 8) return;
-  for (const [key, value] of Object.entries(filter)) {
-    if (key === "$where" || key === "$function") {
-      throw new Error("forbidden_mongo_operator");
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (item && typeof item === "object") {
-          assertSafeFilter(item as Record<string, unknown>, depth + 1);
-        }
-      }
-    } else if (value && typeof value === "object") {
-      assertSafeFilter(value as Record<string, unknown>, depth + 1);
-    }
+function validateCollection(value: unknown, schema: MongoIntrospectedSchema): string {
+  if (typeof value !== "string" || !safeMongoName(value)) {
+    throw new Error("invalid_mongo_collection");
   }
+  if (!schema.collections.some((collection) => collection.name === value)) {
+    throw new Error("unknown_mongo_collection");
+  }
+  return value;
+}
+
+function validateFilter(value: unknown, depth: number): Record<string, unknown> {
+  if (depth > MAX_FILTER_DEPTH) throw new Error("mongo_filter_too_deep");
+  const filter = assertPlainObject(value, "invalid_mongo_filter");
+  if (Object.keys(filter).length > MAX_OBJECT_KEYS) throw new Error("mongo_filter_too_large");
+  const output: Record<string, unknown> = {};
+
+  for (const [key, child] of Object.entries(filter)) {
+    if (key.startsWith("$")) {
+      if (!FILTER_OPERATORS.has(key)) throw new Error(`mongo_operator_not_allowed:${key}`);
+      if (key === "$and" || key === "$or") {
+        if (!Array.isArray(child) || child.length === 0 || child.length > MAX_ARRAY_ITEMS) {
+          throw new Error(`invalid_mongo_operator_value:${key}`);
+        }
+        output[key] = child.map((item) => validateFilter(item, depth + 1));
+        continue;
+      }
+      throw new Error(`mongo_operator_wrong_context:${key}`);
+    }
+
+    if (!safeMongoName(key)) throw new Error("invalid_mongo_field");
+    output[key] = validateFieldCondition(child, depth + 1);
+  }
+  return output;
+}
+
+function validateFieldCondition(value: unknown, depth: number): unknown {
+  if (depth > MAX_FILTER_DEPTH) throw new Error("mongo_filter_too_deep");
+  const hydrated = hydrateExtendedJson(value);
+  if (!isPlainObject(hydrated)) return validateLiteral(hydrated, depth);
+
+  const entries = Object.entries(hydrated);
+  if (entries.some(([key]) => key.startsWith("$"))) {
+    const output: Record<string, unknown> = {};
+    for (const [operator, operand] of entries) {
+      if (!FILTER_OPERATORS.has(operator)) {
+        throw new Error(`mongo_operator_not_allowed:${operator}`);
+      }
+      if (operator === "$and" || operator === "$or") {
+        throw new Error(`mongo_operator_wrong_context:${operator}`);
+      }
+      if (operator === "$exists") {
+        if (typeof operand !== "boolean") throw new Error("invalid_mongo_exists");
+        output[operator] = operand;
+      } else if (operator === "$regex") {
+        if (typeof operand !== "string" || operand.length > 200) {
+          throw new Error("invalid_mongo_regex");
+        }
+        output[operator] = operand;
+      } else if (operator === "$in" || operator === "$nin") {
+        if (!Array.isArray(operand) || operand.length > MAX_ARRAY_ITEMS) {
+          throw new Error(`invalid_mongo_operator_value:${operator}`);
+        }
+        output[operator] = operand.map((item) => validateLiteral(hydrateExtendedJson(item), depth + 1));
+      } else if (operator === "$not" || operator === "$elemMatch") {
+        output[operator] = operator === "$elemMatch"
+          ? validateFilter(operand, depth + 1)
+          : validateFieldCondition(operand, depth + 1);
+      } else {
+        output[operator] = validateLiteral(hydrateExtendedJson(operand), depth + 1);
+      }
+    }
+    return output;
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, child] of entries) {
+    if (!safeMongoName(key)) throw new Error("invalid_mongo_field");
+    output[key] = validateFieldCondition(child, depth + 1);
+  }
+  return output;
+}
+
+function validateLiteral(value: unknown, depth: number): unknown {
+  if (depth > MAX_FILTER_DEPTH) throw new Error("mongo_filter_too_deep");
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date || value instanceof ObjectId) return value;
+  if (Array.isArray(value)) {
+    if (value.length > MAX_ARRAY_ITEMS) throw new Error("mongo_array_too_large");
+    return value.map((item) => validateLiteral(hydrateExtendedJson(item), depth + 1));
+  }
+  if (isPlainObject(value)) return validateFieldCondition(value, depth + 1);
+  throw new Error("invalid_mongo_value");
+}
+
+function validateProjection(value: unknown): Record<string, 0 | 1> | undefined {
+  if (value === undefined) return undefined;
+  const projection = assertPlainObject(value, "invalid_mongo_projection");
+  if (Object.keys(projection).length > MAX_OBJECT_KEYS) throw new Error("mongo_projection_too_large");
+  const output: Record<string, 0 | 1> = {};
+  for (const [field, include] of Object.entries(projection)) {
+    if (!safeMongoName(field) || (include !== 0 && include !== 1)) {
+      throw new Error("invalid_mongo_projection");
+    }
+    output[field] = include;
+  }
+  return output;
+}
+
+function validateSort(value: unknown): Record<string, 1 | -1> | undefined {
+  if (value === undefined) return undefined;
+  const sort = assertPlainObject(value, "invalid_mongo_sort");
+  if (Object.keys(sort).length > 20) throw new Error("mongo_sort_too_large");
+  const output: Record<string, 1 | -1> = {};
+  for (const [field, direction] of Object.entries(sort)) {
+    if (!safeMongoName(field) || (direction !== 1 && direction !== -1)) {
+      throw new Error("invalid_mongo_sort");
+    }
+    output[field] = direction;
+  }
+  return output;
+}
+
+function validatePipelineStage(value: unknown): Record<string, unknown> {
+  const stage = assertPlainObject(value, "invalid_mongo_pipeline_stage");
+  const entries = Object.entries(stage);
+  if (entries.length !== 1 || !AGGREGATE_STAGES.has(entries[0][0])) {
+    throw new Error("mongo_pipeline_stage_not_allowed");
+  }
+  const [operator, operand] = entries[0];
+  if (operator === "$match") return { $match: validateFilter(operand, 0) };
+  if (operator === "$sort") return { $sort: validateSort(operand) ?? {} };
+  if (operator === "$limit") return { $limit: validatePositiveLimit(operand) };
+  if (operator === "$count") {
+    if (typeof operand !== "string" || !safeMongoName(operand)) throw new Error("invalid_mongo_count");
+    return { $count: operand };
+  }
+  if (operator === "$unwind") return { $unwind: validateUnwind(operand) };
+  if (operator === "$group") return { $group: validateGroup(operand) };
+  return { $project: validateAggregateProject(operand) };
+}
+
+function validateGroup(value: unknown): Record<string, unknown> {
+  const group = assertPlainObject(value, "invalid_mongo_group");
+  if (!("_id" in group) || Object.keys(group).length > MAX_OBJECT_KEYS) {
+    throw new Error("invalid_mongo_group");
+  }
+  const output: Record<string, unknown> = { _id: validateExpression(group._id, 0) };
+  for (const [field, accumulator] of Object.entries(group)) {
+    if (field === "_id") continue;
+    if (!safeMongoName(field)) throw new Error("invalid_mongo_group_field");
+    const expression = assertPlainObject(accumulator, "invalid_mongo_accumulator");
+    const entries = Object.entries(expression);
+    if (entries.length !== 1 || !ACCUMULATORS.has(entries[0][0])) {
+      throw new Error("mongo_accumulator_not_allowed");
+    }
+    output[field] = { [entries[0][0]]: validateExpression(entries[0][1], 0) };
+  }
+  return output;
+}
+
+function validateAggregateProject(value: unknown): Record<string, unknown> {
+  const project = assertPlainObject(value, "invalid_mongo_project");
+  if (Object.keys(project).length > MAX_OBJECT_KEYS) throw new Error("mongo_project_too_large");
+  const output: Record<string, unknown> = {};
+  for (const [field, expression] of Object.entries(project)) {
+    if (!safeMongoName(field)) throw new Error("invalid_mongo_project_field");
+    output[field] = expression === 0 || expression === 1
+      ? expression
+      : validateExpression(expression, 0);
+  }
+  return output;
+}
+
+function validateUnwind(value: unknown): string | Record<string, unknown> {
+  if (
+    typeof value === "string"
+    && /^\$[^$\0]+$/.test(value)
+    && safeMongoName(value.slice(1))
+  ) return value;
+  const unwind = assertPlainObject(value, "invalid_mongo_unwind");
+  rejectUnexpectedKeys(unwind, new Set(["path", "preserveNullAndEmptyArrays"]));
+  if (
+    typeof unwind.path !== "string"
+    || !/^\$[^$\0]+$/.test(unwind.path)
+    || !safeMongoName(unwind.path.slice(1))
+  ) {
+    throw new Error("invalid_mongo_unwind");
+  }
+  if (
+    unwind.preserveNullAndEmptyArrays !== undefined &&
+    typeof unwind.preserveNullAndEmptyArrays !== "boolean"
+  ) {
+    throw new Error("invalid_mongo_unwind");
+  }
+  return unwind;
+}
+
+function validateExpression(value: unknown, depth: number): unknown {
+  if (depth > MAX_FILTER_DEPTH) throw new Error("mongo_expression_too_deep");
+  const hydrated = hydrateExtendedJson(value);
+  if (hydrated === null || typeof hydrated === "boolean") return hydrated;
+  if (typeof hydrated === "number" && Number.isFinite(hydrated)) return hydrated;
+  if (typeof hydrated === "string") {
+    if (hydrated.startsWith("$$") && hydrated !== "$$NOW") {
+      throw new Error("mongo_variable_not_allowed");
+    }
+    if (hydrated.startsWith("$") && !hydrated.startsWith("$$") && !safeMongoName(hydrated.slice(1))) {
+      throw new Error("invalid_mongo_field_reference");
+    }
+    return hydrated;
+  }
+  if (hydrated instanceof Date || hydrated instanceof ObjectId) return hydrated;
+  if (Array.isArray(hydrated)) {
+    if (hydrated.length > MAX_ARRAY_ITEMS) throw new Error("mongo_array_too_large");
+    return hydrated.map((item) => validateExpression(item, depth + 1));
+  }
+  const expression = assertPlainObject(hydrated, "invalid_mongo_expression");
+  const output: Record<string, unknown> = {};
+  const entries = Object.entries(expression);
+  if (entries.every(([key]) => !key.startsWith("$"))) {
+    for (const [field, child] of entries) {
+      if (!safeMongoName(field)) throw new Error("invalid_mongo_expression_field");
+      output[field] = validateExpression(child, depth + 1);
+    }
+    return output;
+  }
+  for (const [operator, operand] of entries) {
+    if (!EXPRESSION_OPERATORS.has(operator)) {
+      throw new Error(`mongo_expression_not_allowed:${operator}`);
+    }
+    output[operator] = validateExpressionOperand(operator, operand, depth + 1);
+  }
+  return output;
+}
+
+function validateExpressionOperand(operator: string, value: unknown, depth: number): unknown {
+  if (operator === "$literal") return validateLiteral(hydrateExtendedJson(value), depth);
+  if (operator === "$dateTrunc") {
+    const options = assertPlainObject(value, "invalid_mongo_date_trunc");
+    rejectUnexpectedKeys(options, new Set(["date", "unit", "binSize", "timezone", "startOfWeek"]));
+    if (!("date" in options) || typeof options.unit !== "string") {
+      throw new Error("invalid_mongo_date_trunc");
+    }
+    const output: Record<string, unknown> = {
+      date: validateExpression(options.date, depth + 1),
+      unit: options.unit,
+    };
+    if (options.binSize !== undefined) {
+      if (typeof options.binSize !== "number" || !Number.isInteger(options.binSize) || options.binSize <= 0) {
+        throw new Error("invalid_mongo_date_trunc");
+      }
+      output.binSize = options.binSize;
+    }
+    if (options.timezone !== undefined) {
+      if (typeof options.timezone !== "string" || options.timezone.length > 100) {
+        throw new Error("invalid_mongo_date_trunc");
+      }
+      output.timezone = options.timezone;
+    }
+    if (options.startOfWeek !== undefined) {
+      if (typeof options.startOfWeek !== "string" || options.startOfWeek.length > 16) {
+        throw new Error("invalid_mongo_date_trunc");
+      }
+      output.startOfWeek = options.startOfWeek;
+    }
+    return output;
+  }
+  if (operator === "$dateToString") {
+    const options = assertPlainObject(value, "invalid_mongo_date_to_string");
+    rejectUnexpectedKeys(options, new Set(["date", "format", "timezone", "onNull"]));
+    if (!("date" in options)) throw new Error("invalid_mongo_date_to_string");
+    const output: Record<string, unknown> = {
+      date: validateExpression(options.date, depth + 1),
+    };
+    for (const option of ["format", "timezone"] as const) {
+      if (options[option] !== undefined) {
+        if (typeof options[option] !== "string" || options[option].length > 200) {
+          throw new Error("invalid_mongo_date_to_string");
+        }
+        output[option] = options[option];
+      }
+    }
+    if (options.onNull !== undefined) {
+      output.onNull = validateExpression(options.onNull, depth + 1);
+    }
+    return output;
+  }
+  if (operator === "$cond" && isPlainObject(value)) {
+    const condition = assertPlainObject(value, "invalid_mongo_cond");
+    rejectUnexpectedKeys(condition, new Set(["if", "then", "else"]));
+    if (!("if" in condition) || !("then" in condition) || !("else" in condition)) {
+      throw new Error("invalid_mongo_cond");
+    }
+    return {
+      if: validateExpression(condition.if, depth + 1),
+      then: validateExpression(condition.then, depth + 1),
+      else: validateExpression(condition.else, depth + 1),
+    };
+  }
+  return validateExpression(value, depth + 1);
+}
+
+function hydrateExtendedJson(value: unknown): unknown {
+  if (!isPlainObject(value)) return value;
+  const entries = Object.entries(value);
+  if (entries.length === 1 && entries[0][0] === "$date") {
+    if (typeof entries[0][1] !== "string") throw new Error("invalid_mongo_date");
+    const date = new Date(entries[0][1]);
+    if (Number.isNaN(date.getTime())) throw new Error("invalid_mongo_date");
+    return date;
+  }
+  if (entries.length === 1 && entries[0][0] === "$oid") {
+    if (typeof entries[0][1] !== "string" || !ObjectId.isValid(entries[0][1])) {
+      throw new Error("invalid_mongo_object_id");
+    }
+    return new ObjectId(entries[0][1]);
+  }
+  return value;
+}
+
+function isExtendedJson(value: Record<string, unknown>): boolean {
+  const keys = Object.keys(value);
+  return keys.length === 1 && (keys[0] === "$date" || keys[0] === "$oid");
+}
+
+function validatePositiveLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error("invalid_mongo_limit");
+  }
+  return Math.min(value, MAX_DOCS);
+}
+
+function rejectUnexpectedKeys(value: Record<string, unknown>, allowed: Set<string>) {
+  const unexpected = Object.keys(value).find((key) => !allowed.has(key));
+  if (unexpected) throw new Error(`unexpected_mongo_query_key:${unexpected}`);
+}
+
+function safeMongoName(value: string): boolean {
+  if (!value || value.length > 200 || value.includes("$") || value.includes("\0")) return false;
+  return !value.split(".").some((part) =>
+    !part || part === "__proto__" || part === "prototype" || part === "constructor"
+  );
+}
+
+function assertPlainObject(value: unknown, message: string): Record<string, unknown> {
+  if (!isPlainObject(value)) throw new Error(message);
+  return value;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hash(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 24);
+}
+
+function evictOldestCacheEntry<T extends { at: number }>(cache: Map<string, T>, max: number) {
+  if (cache.size < max) return;
+  const oldest = [...cache.entries()].sort((left, right) => left[1].at - right[1].at)[0];
+  if (oldest) cache.delete(oldest[0]);
 }

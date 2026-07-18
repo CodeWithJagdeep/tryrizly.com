@@ -1,5 +1,9 @@
 import type { GoogleService } from "../google/google.service";
 import type { CalendarEvent } from "../google/google.types";
+import {
+  AvailabilityService,
+  type AvailabilityCheckResult,
+} from "../availability/availability.service";
 import { localDateTimeToUtc, zonedTimeToUtc } from "../lib/timezone";
 import type { HeyRizTool } from "./tool.types";
 
@@ -91,6 +95,7 @@ type CreateEventPayload = {
 
 export function createCreateCalendarEventTool(
   google: GoogleService,
+  availability: AvailabilityService,
 ): HeyRizTool<CreateEventPayload> {
   return {
     name: "create_calendar_event",
@@ -116,22 +121,14 @@ export function createCreateCalendarEventTool(
       }
 
       if (!payload.overrideConflict) {
-        const dayEvents = await google.listEvents(userId, {
-          timeMin: startOfDay(new Date(payload.start), context.timezone),
-          timeMax: endOfDay(new Date(payload.start), context.timezone),
-          maxResults: 25,
+        const check = await availability.check({
+          userId,
+          start: payload.start,
+          end: payload.end,
+          timezone: context.timezone,
         });
-        if (dayEvents.connected) {
-          const conflict = findConflict(dayEvents.events, payload.start, payload.end);
-          if (conflict) {
-            return {
-              tool: "create_calendar_event",
-              status: "conflict",
-              message: `Hold on, ${context.honorific} — that clashes with "${conflict.title}" at ${fmtTime(conflict.start, context.timezone)}. Want a different time, or should I book it anyway?`,
-              data: { conflict },
-            };
-          }
-        }
+        const blocked = blockedByAvailability("create_calendar_event", check, context);
+        if (blocked) return blocked;
       }
 
       const res = await google.createEvent(userId, {
@@ -169,7 +166,7 @@ type CheckConflictPayload = {
 };
 
 export function createCheckCalendarConflictTool(
-  google: GoogleService,
+  availability: AvailabilityService,
 ): HeyRizTool<CheckConflictPayload> {
   return {
     name: "check_calendar_conflict",
@@ -187,31 +184,40 @@ export function createCheckCalendarConflictTool(
         };
       }
 
-      const res = await google.listEvents(userId, {
-        timeMin: startOfDay(new Date(payload.start), context.timezone),
-        timeMax: endOfDay(new Date(payload.start), context.timezone),
-        maxResults: 25,
+      const check = await availability.check({
+        userId,
+        start: payload.start,
+        end: payload.end,
+        timezone: context.timezone,
       });
-      if (!res.connected) {
-        return notConnected("check_calendar_conflict", context.honorific);
+      if (!check.valid) {
+        return {
+          tool: "check_calendar_conflict",
+          status: "invalid_input",
+          message: check.reason ?? "That meeting window is invalid.",
+        };
       }
-
-      const conflict = findConflict(res.events, payload.start, payload.end);
-      if (!conflict) {
+      if (!check.complete) {
+        return availabilityUnavailable("check_calendar_conflict", check, context.honorific);
+      }
+      if (check.connectedSources.length === 0) {
+        return {
+          tool: "check_calendar_conflict",
+          status: "needs_connection",
+          message: `Neither Google Calendar nor Cal.com is connected, ${context.honorific}. Connect a calendar before I verify availability.`,
+          data: { coverage: check.coverage },
+        };
+      }
+      if (check.conflicts.length === 0) {
         return {
           tool: "check_calendar_conflict",
           status: "ok",
-          message: `That window's free, ${context.honorific}.`,
-          data: { conflict: null },
+          message: `That window is free across ${sourceLabel(check)}, ${context.honorific}.`,
+          data: { conflict: null, conflicts: [], coverage: check.coverage },
         };
       }
 
-      return {
-        tool: "check_calendar_conflict",
-        status: "conflict",
-        message: `That clashes with "${conflict.title}"${conflict.attendees.length ? ` (with ${conflict.attendees.join(", ")})` : ""} at ${fmtTime(conflict.start, context.timezone)}, ${context.honorific}.`,
-        data: { conflict },
-      };
+      return conflictResult("check_calendar_conflict", check, context);
     },
   };
 }
@@ -223,16 +229,19 @@ type RescheduleEventPayload = {
   notifyAttendee?: boolean;
   timeZone?: string;
   approved?: boolean;
+  /** Only set after the principal explicitly chooses to double-book. */
+  overrideConflict?: boolean;
 };
 
 export function createRescheduleCalendarEventTool(
   google: GoogleService,
+  availability: AvailabilityService,
 ): HeyRizTool<RescheduleEventPayload> {
   return {
     name: "reschedule_calendar_event",
     category: "calendar",
     description:
-      "Move an existing calendar event to a new time and notify the attendee. Requires explicit approval. Needs eventId (from calendar_briefing or check_calendar_conflict — never invent one), newStart, newEnd (ISO).",
+      'Move an existing calendar event to a new time and notify the attendee. Requires explicit approval. Needs eventId (from calendar_briefing or check_calendar_conflict — never invent one), newStart, newEnd (ISO). The tool enforces a fresh Google Calendar + Cal.com conflict check immediately before moving. Only pass overrideConflict:true after the principal explicitly chooses to double-book.',
     approvalRequired: true,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -249,6 +258,18 @@ export function createRescheduleCalendarEventTool(
           status: "not_implemented",
           message: `I need to know which event and the new start/end time before I can move it, ${context.honorific}.`,
         };
+      }
+
+      if (!payload.overrideConflict) {
+        const check = await availability.check({
+          userId,
+          start: payload.newStart,
+          end: payload.newEnd,
+          timezone: context.timezone,
+          exclude: { googleEventId: payload.eventId },
+        });
+        const blocked = blockedByAvailability("reschedule_calendar_event", check, context);
+        if (blocked) return blocked;
       }
 
       const res = await google.updateEvent(userId, payload.eventId, {
@@ -272,21 +293,6 @@ export function createRescheduleCalendarEventTool(
       };
     },
   };
-}
-
-function findConflict(
-  events: CalendarEvent[],
-  start: string,
-  end: string,
-): CalendarEvent | undefined {
-  const startMs = Date.parse(start);
-  const endMs = Date.parse(end);
-  return events.find((e) => {
-    if (e.allDay || !e.start || !e.end) return false;
-    const eStart = Date.parse(e.start);
-    const eEnd = Date.parse(e.end);
-    return startMs < eEnd && endMs > eStart;
-  });
 }
 
 function summarizeSchedule(
@@ -327,6 +333,72 @@ function notConnected(tool: string, honorific: string) {
     message: `Google not connected. NEXT STEP: call the connect_google tool immediately to send ${honorific} a direct sign-in link. Do not tell them to use the dashboard.`,
     data: { connected: false },
   };
+}
+
+function blockedByAvailability(
+  tool: string,
+  check: AvailabilityCheckResult,
+  context: { honorific: string; timezone: string },
+) {
+  if (!check.valid) {
+    return {
+      tool,
+      status: "invalid_input" as const,
+      message: check.reason ?? "That meeting window is invalid.",
+    };
+  }
+  if (!check.complete) return availabilityUnavailable(tool, check, context.honorific);
+  if (check.conflicts.length > 0) return conflictResult(tool, check, context);
+  return undefined;
+}
+
+function availabilityUnavailable(
+  tool: string,
+  check: AvailabilityCheckResult,
+  honorific: string,
+) {
+  const failed = (Object.entries(check.coverage) as Array<[string, string]>)
+    .filter(([, status]) => status === "error")
+    .map(([source]) => source === "calcom" ? "Cal.com" : "Google Calendar");
+  return {
+    tool,
+    status: "transient_error" as const,
+    message: `I couldn't verify ${failed.join(" and ")} availability, ${honorific}, so I stopped before changing the schedule. Try again in a moment.`,
+    data: { coverage: check.coverage },
+  };
+}
+
+function conflictResult(
+  tool: string,
+  check: AvailabilityCheckResult,
+  context: { honorific: string; timezone: string },
+) {
+  const first = check.conflicts[0];
+  const attendeeText = first.attendees.length > 0
+    ? ` with ${first.attendees.join(", ")}`
+    : "";
+  const alternatives = check.alternatives.length > 0
+    ? ` Free alternatives: ${check.alternatives
+        .map((slot) => fmtDateTime(slot.start, context.timezone))
+        .join(", ")}.`
+    : "";
+  return {
+    tool,
+    status: "conflict" as const,
+    message: `That clashes with "${first.title}"${attendeeText} at ${fmtDateTime(first.start, context.timezone)}, ${context.honorific}.${alternatives} Choose an alternative, or explicitly tell me to double-book.`,
+    data: {
+      conflict: first,
+      conflicts: check.conflicts,
+      alternatives: check.alternatives,
+      coverage: check.coverage,
+    },
+  };
+}
+
+function sourceLabel(check: AvailabilityCheckResult): string {
+  return check.connectedSources
+    .map((source) => source === "calcom" ? "Cal.com" : "Google Calendar")
+    .join(" and ");
 }
 
 function startOfDay(d: Date, timezone: string): Date {

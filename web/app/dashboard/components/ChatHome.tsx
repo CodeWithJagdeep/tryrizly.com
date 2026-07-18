@@ -30,6 +30,8 @@ const suggestions = [
   "Summarize unread emails from this morning.",
 ];
 
+type AccessState = "loading" | "active" | "blocked";
+
 export function ChatHome({ name }: { name?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -43,6 +45,7 @@ export function ChatHome({ name }: { name?: string }) {
   const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
   const [onboarding, setOnboarding] = useState<{ googleConnected?: boolean; telegramLinked?: boolean } | null>(null);
   const [connectorProviders, setConnectorProviders] = useState<Set<string>>(new Set());
+  const [accessState, setAccessState] = useState<AccessState>("loading");
 
   useEffect(() => {
     setError(null);
@@ -78,6 +81,13 @@ export function ChatHome({ name }: { name?: string }) {
   }, [sessionId]);
 
   useEffect(() => {
+    fetch("/api/billing/status")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("billing_status_unavailable");
+        return response.json() as Promise<{ access?: { active?: boolean } }>;
+      })
+      .then((billing) => setAccessState(billing.access?.active ? "active" : "blocked"))
+      .catch(() => setAccessState("blocked"));
     fetch("/api/telegram")
       .then((r) => r.json())
       .then((d: { linked?: boolean }) => setTelegramLinked(Boolean(d.linked)))
@@ -122,7 +132,7 @@ export function ChatHome({ name }: { name?: string }) {
     displayContent: string,
     apiOverrides: { approve?: boolean; pendingApprovalId?: string } = {},
   ) {
-    if (sending) return;
+    if (sending || accessState !== "active") return;
 
     setError(null);
     setSending(true);
@@ -167,7 +177,11 @@ export function ChatHome({ name }: { name?: string }) {
         reply?: string;
         pendingApproval?: PendingApproval;
         error?: string;
+        upgradeRequired?: boolean;
       } | null;
+      if (response.status === 402 || data?.upgradeRequired) {
+        setAccessState("blocked");
+      }
       if (!response.ok || !data?.reply) {
         throw new Error(data?.error || "The assistant didn't respond.");
       }
@@ -251,7 +265,7 @@ export function ChatHome({ name }: { name?: string }) {
                         <div className="mt-3 flex gap-2">
                           <button
                             type="button"
-                            disabled={sending}
+                            disabled={sending || accessState !== "active"}
                             onClick={() => void handleApprove(approval)}
                             className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
                           >
@@ -282,7 +296,13 @@ export function ChatHome({ name }: { name?: string }) {
           <div className="sticky bottom-0 bg-white px-6 pb-24 pt-3 lg:pb-8">
             <div className="mx-auto w-full max-w-2xl">
               {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-              <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
+              <ChatInputForm
+                accessState={accessState}
+                message={message}
+                sending={sending}
+                onMessageChange={setMessage}
+                onSubmit={sendMessage}
+              />
             </div>
           </div>
         </>
@@ -307,7 +327,13 @@ export function ChatHome({ name }: { name?: string }) {
               {/* Copilot-style input card */}
               <div className="mt-8 w-full">
                 {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-                <ChatInputForm message={message} sending={sending} onMessageChange={setMessage} onSubmit={sendMessage} />
+                <ChatInputForm
+                  accessState={accessState}
+                  message={message}
+                  sending={sending}
+                  onMessageChange={setMessage}
+                  onSubmit={sendMessage}
+                />
                 <p className="mt-2.5 text-center text-xs text-slate-400">
                   Riz is AI and can make mistakes. Double-check important actions.
                 </p>
@@ -319,8 +345,9 @@ export function ChatHome({ name }: { name?: string }) {
                   <button
                     key={suggestion}
                     type="button"
+                    disabled={accessState !== "active"}
                     onClick={() => sendMessage(suggestion)}
-                    className="rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white"
+                    className="rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {suggestion}
                   </button>
@@ -383,16 +410,35 @@ export function ChatHome({ name }: { name?: string }) {
 }
 
 function ChatInputForm({
+  accessState,
   message,
   sending,
   onMessageChange,
   onSubmit,
 }: {
+  accessState: AccessState;
   message: string;
   sending: boolean;
   onMessageChange: (v: string) => void;
   onSubmit: (v: string) => void;
 }) {
+  if (accessState === "blocked") {
+    return (
+      <div className="flex min-h-32 flex-col items-center justify-center border-2 border-black bg-white px-5 py-5 text-center">
+        <p className="text-sm font-bold text-slate-900">Your free trial has ended</p>
+        <p className="mt-1 text-sm text-slate-500">Choose a paid plan to continue using Riz.</p>
+        <Link
+          href="/dashboard/upgrade"
+          className="mt-4 bg-[#FE7F2D] px-5 py-2 text-sm font-bold text-white transition hover:brightness-105"
+        >
+          View plans
+        </Link>
+      </div>
+    );
+  }
+
+  const accessLoading = accessState === "loading";
+
   return (
     <form
       className="border-2 border-black bg-white transition"
@@ -417,15 +463,15 @@ function ChatInputForm({
               onSubmit(message);
             }
           }}
-          placeholder="Ask anything, or tell me what to handle…"
+          placeholder={accessLoading ? "Checking plan access…" : "Ask anything, or tell me what to handle…"}
           rows={3}
-          disabled={sending}
+          disabled={sending || accessLoading}
           className="w-full resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
         />
         <div className="mt-2 flex items-center justify-end">
           <button
             type="submit"
-            disabled={!message.trim() || sending}
+            disabled={!message.trim() || sending || accessLoading}
             className="flex h-8 w-8 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white transition hover:brightness-105 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-400"
           >
             <ArrowUpIcon className="h-4 w-4" />

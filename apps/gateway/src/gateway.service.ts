@@ -47,7 +47,7 @@ export class GatewayService implements OnModuleDestroy {
   async healthCheck() {
     const [aiCore, billing] = await Promise.allSettled([
       this.sendToAiCore<{ ok: boolean }>("health.check", {}),
-      this.billing.send<{ ok: boolean }>("health.check"),
+      this.billing.send<{ ok: boolean }>("billing.health"),
     ]);
     const dependencies = {
       aiCore: aiCore.status === "fulfilled" && aiCore.value.ok,

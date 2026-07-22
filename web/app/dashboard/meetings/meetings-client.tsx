@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { CreditsBadge } from "../components/CreditsBadge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,14 @@ export function MeetingsClient() {
     return { today: today.length, upcoming: upcoming.length, past: past.length, all: meetings.length };
   }, [meetings, now, todayKey]);
 
+  // Earliest meeting that hasn't ended yet, regardless of tab/search — the
+  // "what's next" answer, not filtered view of it.
+  const nextMeeting = useMemo(() => {
+    return [...meetings]
+      .filter((m) => m.start && meetingEndMs(m) > now)
+      .sort((a, b) => Date.parse(a.start!) - Date.parse(b.start!))[0];
+  }, [meetings, now]);
+
   const tabbed = useMemo(() => {
     let list: Meeting[];
     if (activeTab === "today") {
@@ -247,17 +256,22 @@ export function MeetingsClient() {
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="min-h-screen bg-[#f8f8f7] text-slate-900">
+      {/* Top bar — matches the chat page's sticky chrome */}
+      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
+        <div className="flex h-8 items-center rounded-lg px-2 text-base font-normal text-slate-900 md:text-lg">
+          Meetings
+        </div>
+        <CreditsBadge />
+      </div>
+
       {/* Header */}
-      <header className="border-b border-slate-200 px-6 pt-5">
+      <header className="border-b border-slate-200 px-4 pt-1 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Meetings</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Google Calendar and Cal.com, in one place</p>
-          </div>
+          <p className="text-[15px] text-slate-500">Google Calendar and Cal.com, in one place</p>
           <div className="flex items-center gap-2">
             {!loading && (
-              <span className="rounded border border-slate-200 px-3 py-1 text-sm text-slate-500">
+              <span className="rounded-full border border-black/20 bg-white px-3 py-1 text-sm text-slate-500">
                 {meetings.length} meeting{meetings.length !== 1 ? "s" : ""}
               </span>
             )}
@@ -265,14 +279,14 @@ export function MeetingsClient() {
               type="button"
               onClick={() => void load(true)}
               disabled={refreshing || loading}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+              className="flex items-center gap-2 rounded-full border border-black/20 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-black/40 hover:text-slate-900 disabled:opacity-40"
             >
               <RefreshIcon spinning={refreshing} />
               Refresh
             </button>
             <Link
               href="/dashboard/calendar?new=meeting"
-              className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
+              className="rounded-full bg-[#FE7F2D] px-3.5 py-1.5 text-sm font-normal text-white transition hover:brightness-105"
             >
               + Schedule
             </Link>
@@ -286,28 +300,28 @@ export function MeetingsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by title, attendee, or location…"
-            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#FE7F2D] focus:outline-none"
           />
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0 overflow-x-auto">
+        {/* Tabs — pure bordered pills, matching the emails page */}
+        <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-normal transition ${
                 activeTab === tab.key
-                  ? "border-slate-900 text-slate-900"
-                  : "border-transparent text-slate-500 hover:text-slate-600"
+                  ? "border-black/20 bg-slate-100 text-black/80"
+                  : "border-transparent bg-white text-black/80 hover:border-black/20 hover:bg-slate-50"
               }`}
             >
               {tab.label}
               {!loading && counts[tab.key] > 0 && (
                 <span
-                  className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                    activeTab === tab.key ? "bg-[#FE7F2D]/10 text-[#FE7F2D]" : "bg-slate-100 text-slate-500"
+                  className={`rounded-full px-1.5 py-0.5 text-[11px] leading-none ${
+                    activeTab === tab.key ? "bg-white text-black/80" : "bg-slate-100 text-slate-500"
                   }`}
                 >
                   {counts[tab.key]}
@@ -318,7 +332,7 @@ export function MeetingsClient() {
         </div>
       </header>
 
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-4 py-6 sm:px-6">
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
@@ -378,6 +392,12 @@ export function MeetingsClient() {
           </div>
         )}
 
+        {!loading && !error && !query.trim() && nextMeeting && (
+          <div className="mb-6">
+            <NextMeetingHero meeting={nextMeeting} now={now} />
+          </div>
+        )}
+
         {!loading && !error && filtered.length > 0 && activeTab === "upcoming" && (
           <MeetingsAgenda meetings={filtered} now={now} conflictIds={conflictIds} />
         )}
@@ -414,6 +434,74 @@ export function MeetingsClient() {
         )}
       </div>
     </main>
+  );
+}
+
+// ── Next meeting hero — real countdown to the next real meeting, not a mock ────
+
+function countdownLabel(startMs: number, now: number): string {
+  const diffMin = Math.round((startMs - now) / 60_000);
+  if (diffMin <= 0) return "Happening now";
+  if (diffMin < 60) return `In ${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  if (diffH < 24) return remMin > 0 ? `In ${diffH}h ${remMin}m` : `In ${diffH}h`;
+  return `In ${Math.floor(diffH / 24)}d`;
+}
+
+function NextMeetingHero({ meeting, now }: { meeting: Meeting; now: number }) {
+  const color = avatarColor(meeting.id);
+  const { date, time } = formatDateTime(meeting);
+  const startMs = meeting.start ? Date.parse(meeting.start) : now;
+  const inProgress = startMs <= now;
+  const attendeesShown = meeting.attendees.slice(0, 4);
+  const extra = meeting.attendees.length - attendeesShown.length;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-[#FE7F2D]/10 via-white to-white p-5 sm:p-6">
+      <p className="flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.1em] text-[#D96420]">
+        <span className={`h-1.5 w-1.5 rounded-full ${inProgress ? "bg-emerald-500 animate-pulse" : "bg-[#FE7F2D]"}`} />
+        {inProgress ? "Happening now" : "Next up"}
+      </p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-normal text-slate-950 sm:text-2xl">{meeting.title}</h2>
+          <p className="mt-1 text-[15px] text-slate-600">
+            {date} · {time} <span className="text-slate-400">— {countdownLabel(startMs, now)}</span>
+          </p>
+          {meeting.attendees.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="flex -space-x-2">
+                {attendeesShown.map((a) => (
+                  <span
+                    key={a}
+                    title={a}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium ring-2 ring-white ${avatarColor(a)}`}
+                  >
+                    {a.charAt(0).toUpperCase()}
+                  </span>
+                ))}
+              </span>
+              {extra > 0 && <span className="text-xs text-slate-500">+{extra} more</span>}
+            </div>
+          )}
+        </div>
+        {meeting.meetingUrl ? (
+          <a
+            href={meeting.meetingUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D] px-6 text-sm font-normal text-white transition hover:brightness-105"
+          >
+            Join meeting
+          </a>
+        ) : (
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-medium ${color}`}>
+            {initials(meeting.title)}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -567,7 +655,7 @@ function MeetingRow({ meeting, now, conflict }: { meeting: Meeting; now: number;
 function SearchIcon() {
   return (
     <svg
-      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+      className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
       viewBox="0 0 16 16"
       fill="none"
       aria-hidden="true"

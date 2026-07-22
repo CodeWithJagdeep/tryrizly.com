@@ -69,6 +69,22 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  // Slack chat surface (DM with the Rizly bot) — distinct from the per-user
+  // Slack read connector in ai-core. Bot token (xoxb-…) sends messages; the
+  // app-level token (xapp-…, connections:write) opens Socket Mode, which —
+  // like Telegram long-polling — needs no public HTTPS/domain.
+  SLACK_SURFACE_BOT_TOKEN: z.string().optional(),
+  SLACK_APP_TOKEN: z.string().optional(),
+  // "Add to Slack" OAuth install (client credentials from the Slack app's
+  // Basic Information page). Redirect URI must be HTTPS and registered on the
+  // app's OAuth & Permissions page; unset in dev, where manual linking is used.
+  SLACK_CLIENT_ID: z.string().optional(),
+  SLACK_CLIENT_SECRET: z.string().optional(),
+  SLACK_SURFACE_REDIRECT_URI: z.string().optional(),
+  SLACK_SOCKET_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
@@ -173,6 +189,19 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/github/callback"),
+  // Stripe Apps OAuth. The client ID and mode-specific app developer key come
+  // from Developers > Apps after uploading the public OAuth app. The secret
+  // key is backend-only and must never be exposed through Next.js `env`.
+  STRIPE_APP_CLIENT_ID: z.string().optional(),
+  STRIPE_APP_SECRET_KEY: z.string().optional(),
+  STRIPE_APP_AUTHORIZE_URL: z
+    .string()
+    .url()
+    .default("https://marketplace.stripe.com/oauth/v2/authorize"),
+  STRIPE_APP_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/stripe/callback"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

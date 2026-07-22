@@ -5,18 +5,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  CalComIcon,
   CalendarIcon,
+  GitHubIcon,
   GmailIcon,
   MongoDbIcon,
+  MpesaIcon,
   PostgresIcon,
   RazorpayIcon,
+  SlackIcon,
   StripeIcon,
+  TelegramIcon,
 } from "../components/ConnectorIcons";
 
 type OnboardingState = {
   source?: string;
   googleConnected?: boolean;
   telegramLinked?: boolean;
+  slackLinked?: boolean;
+  profileCompleted?: boolean;
   completedAt?: string;
 };
 
@@ -27,13 +34,14 @@ type ConnectorField = {
   label: string;
   type?: string;
   placeholder?: string;
+  required?: boolean;
 };
 
 type ConnectorItem = {
   provider: string;
   title: string;
   description: string;
-  category: "Google" | "Payments" | "Databases" | "APIs";
+  category: "Google" | "Scheduling" | "Payments" | "Databases" | "Team" | "APIs";
   authType: "oauth" | "manual";
   icon: React.ComponentType<{ className?: string }>;
   fields?: ConnectorField[];
@@ -78,6 +86,23 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     privacy: "https://policies.google.com/privacy",
   },
   {
+    provider: "calcom",
+    title: "Cal.com",
+    description:
+      "rizly views your bookings, creates meetings, and sends scheduling notifications through Cal.com.",
+    category: "Scheduling",
+    authType: "oauth",
+    icon: CalComIcon,
+    prompts: [
+      "What meetings do I have booked through Cal.com this week?",
+      "Create a 30-minute Cal.com booking link for tomorrow.",
+      "Any new bookings I haven't confirmed yet?",
+      "Cancel my 4pm Cal.com meeting and notify the attendee.",
+    ],
+    website: "https://cal.com",
+    privacy: "https://cal.com/privacy",
+  },
+  {
     provider: "razorpay",
     title: "Razorpay",
     description:
@@ -104,9 +129,14 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     description:
       "Read-only subscription, MRR, invoices, and failed payment checks surfaced in your morning brief.",
     category: "Payments",
-    authType: "manual",
+    authType: "oauth",
     icon: StripeIcon,
-    fields: [{ name: "secretKey", label: "Secret Key", type: "password" }],
+    // Manual fallback: a restricted secret key works for users who'd rather
+    // not grant OAuth Connect access to their full account.
+    fields: [
+      { name: "secretKey", label: "Secret Key", type: "password", placeholder: "sk_live_..." },
+      { name: "stripeAccountId", label: "Stripe Account ID (optional)", placeholder: "acct_...", required: false },
+    ],
     prompts: [
       "What's our current MRR and how has it changed this month?",
       "Show subscriptions that churned this week.",
@@ -115,6 +145,46 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     ],
     website: "https://stripe.com",
     privacy: "https://stripe.com/privacy",
+  },
+  {
+    provider: "mpesa",
+    title: "M-Pesa",
+    description:
+      "Safaricom Daraja business credentials — connection checks now, balance and transaction pulls coming next.",
+    category: "Payments",
+    authType: "manual",
+    icon: MpesaIcon,
+    fields: [
+      { name: "consumerKey", label: "Consumer Key", type: "password" },
+      { name: "consumerSecret", label: "Consumer Secret", type: "password" },
+      { name: "shortcode", label: "Business Shortcode", placeholder: "e.g. 174379" },
+      { name: "environment", label: "Environment", placeholder: "production or sandbox" },
+    ],
+    prompts: [
+      "Did the M-Pesa connection check pass?",
+      "What's our business shortcode set to?",
+      "Confirm my Daraja credentials are still valid.",
+      "Let me know when M-Pesa balance pulls are available.",
+    ],
+    website: "https://developer.safaricom.co.ke",
+    privacy: "https://www.safaricom.co.ke/privacy-policy",
+  },
+  {
+    provider: "github",
+    title: "GitHub",
+    description:
+      "Open PRs, issues, and review requests involving you — briefed on demand so nothing sits waiting.",
+    category: "Team",
+    authType: "oauth",
+    icon: GitHubIcon,
+    prompts: [
+      "What PRs are waiting on my review right now?",
+      "Summarize open issues assigned to me.",
+      "Any PRs I opened that have been sitting without comments?",
+      "What merged into main today?",
+    ],
+    website: "https://github.com",
+    privacy: "https://docs.github.com/en/site-policy/privacy-policies",
   },
   {
     provider: "postgres",
@@ -168,7 +238,8 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
   },
 ];
 
-const CATEGORIES = ["Google", "Payments", "Databases"] as const;
+const CATEGORIES = ["Google", "Scheduling", "Payments", "Databases", "Team"] as const;
+const RECOMMENDED_CONNECTOR_PROVIDERS = new Set(["gmail", "calendar", "stripe"]);
 
 const SOURCE_OPTIONS = ["Twitter / X", "LinkedIn", "Friend or colleague", "Search", "Other"];
 
@@ -197,30 +268,6 @@ function getTimezoneOptions(current: string): string[] {
       ? Intl.supportedValuesOf("timeZone")
       : FALLBACK_TIMEZONES;
   return supported.includes(current) ? supported : [current, ...supported];
-}
-
-// ── Chat bubble icon for example prompts ────────────────────────────────────
-function PromptIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0 text-black/50"
-      aria-hidden="true"
-    >
-      <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
-      <path d="M8 12h.01" />
-      <path d="M12 12h.01" />
-      <path d="M16 12h.01" />
-    </svg>
-  );
 }
 
 // ── Arrow-up-right icon for links ────────────────────────────────────────────
@@ -261,173 +308,239 @@ function ConnectorDialog({
 }) {
   const Icon = connector.icon;
   const isOAuth = connector.authType === "oauth";
+  // Some OAuth connectors (e.g. Stripe) also carry a manual API-key fallback
+  // for users who'd rather not grant OAuth access to their full account.
+  const showManualFallback = Boolean(connector.fields?.length);
   const oauthHref = `/api/connectors/${connector.provider}/start?returnTo=/onboarding`;
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const titleId = `connector-dialog-${connector.provider}-title`;
+  const descriptionId = `connector-dialog-${connector.provider}-description`;
+  const accessLabel = isOAuth
+    ? "Secure OAuth"
+    : connector.category === "Databases"
+      ? "Read-only access"
+      : "Encrypted credentials";
 
-  const dialogBody = (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="relative m-auto flex w-full max-w-[95%] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl sm:w-[600px]"
-    >
-      {/* ── Hero header ───────────────────────────────────────────────────── */}
-      <div className="relative flex flex-col items-center gap-5 border-b border-slate-200 px-8 pb-8 pt-10 text-center">
-        {/* close */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-4 top-4 flex size-8 items-center justify-center border border-slate-200 bg-white text-black transition-colors hover:bg-[#FE7F2D] hover:text-white"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-          </svg>
-        </button>
+  useEffect(() => {
+    closeButtonRef.current?.focus();
 
-        {/* icon */}
-        <div className="flex size-[72px] items-center justify-center border border-slate-200 bg-white">
-          <Icon className="size-10" />
-        </div>
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
 
-        {/* title + description */}
-        <div className="flex flex-col gap-2">
-          <h2 className="text-[22px] font-semibold tracking-tight text-black">{connector.title}</h2>
-          <p className="mx-auto max-w-sm text-[13px] leading-6 text-slate-500">
-            {connector.description}
-          </p>
-        </div>
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
-        {/* OAuth CTA — only for oauth type */}
-        {isOAuth && (
-          <a
-            href={oauthHref}
-            className="inline-flex h-10 items-center gap-2 bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+  const connectionDetails = (
+    <>
+      <div className="rounded-2xl bg-slate-50 px-4 py-4 sm:px-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z" />
+              <path d="m9 12 2 2 4-4" />
             </svg>
-            Connect {connector.title}
-          </a>
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-slate-950">
+                {isOAuth
+                  ? connector.provider === "stripe"
+                    ? "OAuth coming soon"
+                    : `Continue securely with ${connector.title}`
+                  : accessLabel}
+              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                Secure
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] leading-5 text-slate-500">
+              {isOAuth
+                ? connector.provider === "stripe"
+                  ? "Use the API key option below for now — one-click OAuth is on the way."
+                  : `You’ll go to ${connector.title} to review and approve access before anything is connected.`
+                : connector.category === "Databases"
+                  ? "Use a read-only connection. Rizly verifies the permissions before saving it."
+                  : "Your credentials are encrypted at rest and used only to connect this account."}
+            </p>
+          </div>
+        </div>
+
+        {isOAuth && (
+          connector.provider === "stripe" ? (
+            <span
+              aria-disabled="true"
+              className="mt-4 inline-flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 text-sm font-semibold text-slate-500"
+            >
+              Coming soon
+            </span>
+          ) : (
+            <a
+              href={oauthHref}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+            >
+              Continue to {connector.title}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
+              </svg>
+            </a>
+          )
         )}
       </div>
 
-      {/* ── Body ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-7 pt-6">
-
-        {/* Manual credentials form */}
-        {!isOAuth && connector.fields && (
-          <form onSubmit={(e) => void onManualSubmit(e, connector)}>
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              Credentials
-            </p>
-
-            {error && (
-              <p className="mb-4 border border-slate-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {error}
+      {(!isOAuth || showManualFallback) && connector.fields && (
+        <div>
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">
+                {isOAuth ? `Or connect with an API key instead` : "Connection details"}
               </p>
-            )}
-
-            <div className="flex flex-col gap-3">
-              {connector.fields.map((field) => (
-                <label key={field.name} className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-black/60">{field.label}</span>
-                  <input
-                    name={field.name}
-                    type={field.type ?? "text"}
-                    placeholder={field.placeholder}
-                    required
-                    className="h-11 border border-slate-200 bg-white px-4 text-sm text-black outline-none placeholder:text-slate-400 transition focus:border-[#FE7F2D]"
-                  />
-                </label>
-              ))}
+              <p className="mt-1 text-xs text-slate-500">
+                {isOAuth ? "Optional — skip this if you used the button above." : "All fields are required."}
+              </p>
             </div>
+            <span className="text-xs font-medium text-slate-400">Private</span>
+          </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 bg-black text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99] disabled:opacity-50 disabled:shadow-none"
-            >
-              {submitting ? (
-                "Saving…"
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-                  </svg>
-                  Connect {connector.title}
-                </>
-              )}
-            </button>
-          </form>
-        )}
+          {error && (
+            <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-medium leading-5 text-red-700">
+              <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="M12 16h.01" />
+              </svg>
+              {error}
+            </div>
+          )}
 
-        {/* Example prompts */}
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
-            Example prompts
-          </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {connector.prompts.map((prompt) => (
-              <div
-                key={prompt}
-                className="group flex items-start gap-3 border border-slate-200 bg-white p-3.5 transition-colors hover:bg-[#FE7F2D]/5"
-              >
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center border border-slate-200 bg-white">
-                  <PromptIcon />
-                </span>
-                <p className="text-[12.5px] leading-5 text-black/60 group-hover:text-black">
-                  {prompt}
-                </p>
-              </div>
+          <div className="flex flex-col gap-4">
+            {connector.fields.map((field) => (
+              <label key={field.name} className="flex flex-col gap-2 text-sm">
+                <span className="font-medium text-slate-700">{field.label}</span>
+                <input
+                  name={field.name}
+                  type={field.type ?? "text"}
+                  placeholder={field.placeholder}
+                  required={field.required !== false}
+                  autoComplete="off"
+                  className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#FE7F2D] focus:ring-4 focus:ring-[#FE7F2D]/10"
+                />
+              </label>
             ))}
           </div>
         </div>
+      )}
 
-        {/* Details pills */}
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/40">
-            Details
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
-              <span className="size-1.5 bg-emerald-500" />
-              {isOAuth
-                ? "OAuth app"
-                : connector.category === "Databases"
-                  ? "Read-only verified"
-                  : "API key"}
-            </span>
-            <span className="flex items-center gap-1.5 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70">
-              By rizly
-            </span>
-            {connector.website && (
-              <a
-                href={connector.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70 transition-colors hover:bg-[#FE7F2D] hover:text-white"
-              >
-                Website <ExternalIcon />
-              </a>
-            )}
-            {connector.privacy && (
-              <a
-                href={connector.privacy}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-black/70 transition-colors hover:bg-[#FE7F2D] hover:text-white"
-              >
-                Privacy <ExternalIcon />
-              </a>
-            )}
-          </div>
+      <div>
+        <p className="text-sm font-semibold text-slate-950">What you can do after connecting</p>
+        <ul className="mt-3 space-y-2.5">
+          {connector.prompts.slice(0, 3).map((prompt) => (
+            <li key={prompt} className="flex items-start gap-2.5 text-[13px] leading-5 text-slate-600">
+              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D]/10 text-[#D96420]">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m2.5 6 2.2 2.2 4.8-4.8" />
+                </svg>
+              </span>
+              {prompt}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+
+  const dialogFooter = (
+    <div className="border-t border-slate-200 bg-slate-50/70 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:py-4">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-center gap-3 sm:justify-start">
+          {connector.website && (
+            <a href={connector.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-950 hover:underline">
+              Provider website <ExternalIcon />
+            </a>
+          )}
+          {connector.privacy && (
+            <a href={connector.privacy} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-950 hover:underline">
+              Privacy <ExternalIcon />
+            </a>
+          )}
+        </div>
+        <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:w-auto">
+          <button type="button" onClick={onClose} className="h-11 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40">
+            Cancel
+          </button>
+          {(!isOAuth || showManualFallback) && (
+            <button type="submit" disabled={submitting} className="inline-flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50 sm:px-5">
+              {submitting ? (
+                <>
+                  <span className="sm:hidden">Checking…</span>
+                  <span className="hidden sm:inline">Checking connection…</span>
+                </>
+              ) : (
+                <>
+                  <span className="sm:hidden">Connect</span>
+                  <span className="hidden sm:inline">{isOAuth ? `Connect with API key` : `Connect ${connector.title}`}</span>
+                </>
+              )}
+              {!submitting && (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 
+  const dialogBody = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      className="relative mb-0 mt-auto flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-b-0 border-slate-200 bg-white shadow-[0_-20px_60px_-24px_rgba(15,23,42,0.5)] sm:m-auto sm:max-h-[calc(100dvh-4rem)] sm:w-[620px] sm:rounded-[28px] sm:border-b sm:shadow-[0_28px_80px_-20px_rgba(15,23,42,0.45)]"
+    >
+      <div className="relative border-b border-slate-200 px-5 pb-5 pt-7 sm:px-6 sm:pb-6 sm:pt-6">
+        <span className="absolute left-1/2 top-2.5 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
+        <button
+          ref={closeButtonRef}
+          type="button"
+          onClick={onClose}
+          aria-label={`Close ${connector.title} connection dialog`}
+          className="absolute right-4 top-4 flex size-9 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+          </svg>
+        </button>
+
+        <p className="pr-12 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D96420]">Connect an integration</p>
+        <div className="mt-4 flex items-start gap-4 pr-10">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <Icon className="size-7" />
+          </span>
+          <div>
+            <h2 id={titleId} className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-slate-950">
+              Connect {connector.title}
+            </h2>
+            <p id={descriptionId} className="mt-1.5 max-w-[29rem] text-[13px] leading-5 text-slate-500">
+            {connector.description}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <form className="flex min-h-0 flex-1 flex-col" onSubmit={(e) => void onManualSubmit(e, connector)}>
+        <div className="flex flex-col gap-6 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{connectionDetails}</div>
+        {dialogFooter}
+      </form>
+    </div>
+  );
+
   return (
     <div
-      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/50 px-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-slate-950/55 p-0 backdrop-blur-[6px] sm:px-4 sm:py-8"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -437,12 +550,92 @@ function ConnectorDialog({
   );
 }
 
+// ── Lightweight dialog for surface extras (Telegram QR, Slack link command) ──
+function SurfaceDialog({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[6px]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_28px_80px_-20px_rgba(15,23,42,0.45)]">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-950"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Phone country codes (About-you step) ─────────────────────────────────────
+const PHONE_COUNTRIES = [
+  { code: "IN", name: "India", dial: "+91", flag: "🇮🇳" },
+  { code: "US", name: "United States", dial: "+1", flag: "🇺🇸" },
+  { code: "GB", name: "United Kingdom", dial: "+44", flag: "🇬🇧" },
+  { code: "AE", name: "UAE", dial: "+971", flag: "🇦🇪" },
+  { code: "SG", name: "Singapore", dial: "+65", flag: "🇸🇬" },
+  { code: "AU", name: "Australia", dial: "+61", flag: "🇦🇺" },
+  { code: "CA", name: "Canada", dial: "+1", flag: "🇨🇦" },
+  { code: "DE", name: "Germany", dial: "+49", flag: "🇩🇪" },
+  { code: "FR", name: "France", dial: "+33", flag: "🇫🇷" },
+  { code: "NL", name: "Netherlands", dial: "+31", flag: "🇳🇱" },
+  { code: "ES", name: "Spain", dial: "+34", flag: "🇪🇸" },
+  { code: "IT", name: "Italy", dial: "+39", flag: "🇮🇹" },
+  { code: "BR", name: "Brazil", dial: "+55", flag: "🇧🇷" },
+  { code: "MX", name: "Mexico", dial: "+52", flag: "🇲🇽" },
+  { code: "JP", name: "Japan", dial: "+81", flag: "🇯🇵" },
+  { code: "KR", name: "South Korea", dial: "+82", flag: "🇰🇷" },
+  { code: "CN", name: "China", dial: "+86", flag: "🇨🇳" },
+  { code: "ID", name: "Indonesia", dial: "+62", flag: "🇮🇩" },
+  { code: "PH", name: "Philippines", dial: "+63", flag: "🇵🇭" },
+  { code: "PK", name: "Pakistan", dial: "+92", flag: "🇵🇰" },
+  { code: "BD", name: "Bangladesh", dial: "+880", flag: "🇧🇩" },
+  { code: "NG", name: "Nigeria", dial: "+234", flag: "🇳🇬" },
+  { code: "KE", name: "Kenya", dial: "+254", flag: "🇰🇪" },
+  { code: "ZA", name: "South Africa", dial: "+27", flag: "🇿🇦" },
+  { code: "SA", name: "Saudi Arabia", dial: "+966", flag: "🇸🇦" },
+  { code: "IL", name: "Israel", dial: "+972", flag: "🇮🇱" },
+  { code: "SE", name: "Sweden", dial: "+46", flag: "🇸🇪" },
+  { code: "CH", name: "Switzerland", dial: "+41", flag: "🇨🇭" },
+  { code: "PL", name: "Poland", dial: "+48", flag: "🇵🇱" },
+  { code: "NZ", name: "New Zealand", dial: "+64", flag: "🇳🇿" },
+] as const;
+
 // ── Step metadata (drives the progress stepper + eyebrows) ──────────────────
 const STEP_META = [
+  { eyebrow: "About you" },
   { eyebrow: "Welcome" },
   { eyebrow: "Preferences" },
   { eyebrow: "Integrations" },
-  { eyebrow: "Daily briefing" },
+  { eyebrow: "Your channel" },
 ] as const;
 
 function BackIcon() {
@@ -484,16 +677,6 @@ function ProgressHeader({ step, onBack }: { step: number; onBack: () => void }) 
           Step {step} <span className="text-slate-300">/ {total}</span>
         </span>
       </div>
-      <div className="mt-3.5 flex gap-2" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`Step ${step} of ${total}`}>
-        {Array.from({ length: total }).map((_, i) => (
-          <span
-            key={i}
-            className={`h-2.5 flex-1 border border-slate-200 transition-colors duration-300 ${
-              i < step - 1 ? "bg-black" : i === step - 1 ? "bg-[#FE7F2D]" : "bg-white"
-            }`}
-          />
-        ))}
-      </div>
     </div>
   );
 }
@@ -503,6 +686,14 @@ function SearchIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-500">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
@@ -572,7 +763,7 @@ function TimezoneCombobox({
 
   return (
     <div ref={wrapRef} className="relative mt-6">
-      <div className="flex h-[52px] items-center gap-2 border border-slate-200 bg-white px-4 transition focus-within:border-[#FE7F2D]">
+      <div className="flex h-[52px] items-center gap-2 rounded-full border border-black/70 bg-white px-5 transition focus-within:border-[#FE7F2D]">
         <SearchIcon />
         <input
           value={open ? query : value}
@@ -585,14 +776,14 @@ function TimezoneCombobox({
             setOpen(true);
           }}
           placeholder={open ? `Search — current: ${value}` : "Search your timezone…"}
-          className="h-full w-full bg-transparent text-base text-black outline-none placeholder:text-slate-400"
+          className="h-full w-full cursor-text bg-transparent text-base font-normal text-black outline-none placeholder:text-slate-400"
           aria-label="Timezone"
           autoComplete="off"
         />
       </div>
 
       {open && (
-        <ul className="absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto border border-slate-200 bg-white shadow-xl">
+        <ul className="absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl border border-black/70 bg-white shadow-xl">
           {filtered.length === 0 ? (
             <li className="px-4 py-3 text-sm text-slate-500">No timezone matches “{query}”.</li>
           ) : (
@@ -603,8 +794,8 @@ function TimezoneCombobox({
                   <button
                     type="button"
                     onClick={() => pick(tz)}
-                    className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                      selected ? "bg-black text-white" : "text-black hover:bg-[#FE7F2D]/10"
+                    className={`flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                      selected ? "bg-slate-950 text-white" : "text-black hover:bg-[#FE7F2D]/10"
                     }`}
                   >
                     <span>{tz.replace(/_/g, " ")}</span>
@@ -623,20 +814,29 @@ function TimezoneCombobox({
 // ── Main component ────────────────────────────────────────────────────────────
 export function OnboardingClient() {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [source, setSource] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState("IN");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [timezone, setTimezone] = useState<string>("UTC");
   const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set());
   const [telegram, setTelegram] = useState<{ deepLink: string; qrCode: string } | null>(null);
   const [telegramError, setTelegramError] = useState<string | null>(null);
   const [telegramLoading, setTelegramLoading] = useState(false);
+  const [slack, setSlack] = useState<{ installUrl: string | null; linkCommand: string } | null>(null);
+  const [slackCopied, setSlackCopied] = useState(false);
+  const [surface, setSurface] = useState<"slack" | "telegram" | null>(null);
+  const [telegramDialogOpen, setTelegramDialogOpen] = useState(false);
+  const [slackLinkDialogOpen, setSlackLinkDialogOpen] = useState(false);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [activeConnector, setActiveConnector] = useState<ConnectorItem | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSubmitting, setSetupSubmitting] = useState(false);
   const [skipLoading, setSkipLoading] = useState(false);
-  const [confirmSkipTelegram, setConfirmSkipTelegram] = useState(false);
   const [connectorQuery, setConnectorQuery] = useState("");
   const [connectorCategory, setConnectorCategory] = useState<"All" | (typeof CATEGORIES)[number]>("All");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -654,20 +854,43 @@ export function OnboardingClient() {
   useEffect(() => {
     fetch("/api/onboarding/status")
       .then((r) => r.json())
-      .then((data: { onboarding: OnboardingState }) => {
+      .then((data: { onboarding: OnboardingState; name?: string; phone?: string; email?: string }) => {
         if (data.onboarding.completedAt) {
           router.replace("/dashboard");
           return;
         }
+
+        // Prefill the About-you fields from what's already saved. OAuth signups
+        // have a real name; email signups carry a placeholder derived from the
+        // address, which we leave blank so the principal types their own.
+        const placeholder = data.email?.split("@")[0];
+        if (data.name && data.name !== placeholder) {
+          setProfileName((current) => current || data.name || "");
+        }
+        if (data.phone) {
+          const match = [...PHONE_COUNTRIES]
+            .sort((a, b) => b.dial.length - a.dial.length)
+            .find((c) => data.phone?.startsWith(c.dial));
+          if (match) {
+            setPhoneCountry(match.code);
+            setProfilePhone(data.phone.slice(match.dial.length).trim());
+          } else {
+            setProfilePhone(data.phone);
+          }
+        }
+
         if (data.onboarding.source) setSource(data.onboarding.source);
         if (data.onboarding.googleConnected) setConnectedProviders(new Set(["gmail", "calendar"]));
         if (data.onboarding.source) {
-          setStep(data.onboarding.telegramLinked ? 4 : 3);
+          setStep(data.onboarding.telegramLinked ? 5 : 4);
           void fetch("/api/onboarding/timezone", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
           }).catch(() => null);
+        } else if (data.onboarding.profileCompleted) {
+          // Name/phone already saved — resume at the source step after refresh.
+          setStep(2);
         }
       })
       .catch(() => null);
@@ -685,18 +908,113 @@ export function OnboardingClient() {
       c.provider.toLowerCase().includes(connectorQ);
     return categoryOk && queryOk;
   });
+  const showConnectorGroups = connectorCategory === "All" && !connectorQ;
+  const recommendedConnectors = visibleConnectors.filter((connector) =>
+    RECOMMENDED_CONNECTOR_PROVIDERS.has(connector.provider),
+  );
+  const moreConnectors = showConnectorGroups
+    ? visibleConnectors.filter(
+        (connector) => !RECOMMENDED_CONNECTOR_PROVIDERS.has(connector.provider),
+      )
+    : visibleConnectors;
 
   function goBack() {
-    setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
+    setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4 | 5) : s));
   }
 
   function isConnected(provider: string) {
     return connectedProviders.has(provider) || connectedProviders.has("google");
   }
 
-  // Poll for any newly connected connector while on step 3.
+  function renderConnectorCard(item: ConnectorItem, recommended = false) {
+    const connected = isConnected(item.provider);
+    const Icon = item.icon;
+    const accessType =
+      item.authType === "oauth"
+        ? "OAuth"
+        : item.category === "Databases"
+          ? "Read-only"
+          : "API credentials";
+
+    return (
+      <article
+        key={item.provider}
+        className={`group flex min-w-0 flex-col rounded-2xl border bg-white p-3.5 transition duration-200 sm:p-4 ${
+          connected
+            ? "border-emerald-200 bg-emerald-50/30"
+            : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_30px_-20px_rgba(15,23,42,0.45)]"
+        }`}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+            <Icon className="size-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <h3 className="truncate text-base font-semibold leading-5 text-black">{item.title}</h3>
+              {recommended && (
+                <span className="rounded-md bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#C95618]">
+                  Recommended
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs font-medium text-black/70">
+              {item.category} · {accessType}
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-black/70 sm:min-h-12">
+          {item.description}
+        </p>
+
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          {connected ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-emerald-700">
+                <span className="flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
+                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m2.5 6 2.2 2.2 4.8-4.8" />
+                  </svg>
+                </span>
+                Connected
+              </span>
+              <button
+                type="button"
+                onClick={() => void unlinkConnector(item.provider)}
+                className="cursor-pointer rounded-full px-3 py-1 text-[13px] font-normal text-black/70 transition hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+              >
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-black/70">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Secure connection
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveConnector(item);
+                  setSetupError(null);
+                }}
+                className="inline-flex h-10 min-w-24 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+              >
+                {item.authType === "oauth" ? "Connect" : "Set up"}
+              </button>
+            </>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  // Poll for any newly connected connector while on step 4 (connectors).
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 4) return;
     const check = async () => {
       const res = await fetch("/api/connectors");
       if (!res.ok) return;
@@ -797,16 +1115,25 @@ export function OnboardingClient() {
     }
   }, []);
 
-  // Step 4: request Telegram link and poll for it.
+  // Step 5: prepare both channel links and poll until either one connects.
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 5) return;
     void loadTelegramLink();
+
+    fetch("/api/onboarding/slack/token", { method: "POST" })
+      .then((r) => r.json())
+      .then((data: { installUrl?: string | null; linkCommand?: string }) => {
+        if (data.linkCommand) {
+          setSlack({ installUrl: data.installUrl ?? null, linkCommand: data.linkCommand });
+        }
+      })
+      .catch(() => null);
 
     pollRef.current = setInterval(async () => {
       const res = await fetch("/api/onboarding/status");
       if (!res.ok) return;
       const data = (await res.json()) as { onboarding: OnboardingState };
-      if (data.onboarding.telegramLinked) {
+      if (data.onboarding.telegramLinked || data.onboarding.slackLinked) {
         if (pollRef.current) clearInterval(pollRef.current);
         router.push("/dashboard");
       }
@@ -816,6 +1143,30 @@ export function OnboardingClient() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [step, router, loadTelegramLink]);
+
+  async function submitProfile() {
+    if (!profileName.trim()) return;
+    setProfileError(null);
+    setProfileLoading(true);
+    try {
+      const dial = PHONE_COUNTRIES.find((c) => c.code === phoneCountry)?.dial ?? "";
+      const digits = profilePhone.replace(/[^\d]/g, "");
+      const res = await fetch("/api/onboarding/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: profileName.trim(),
+          phone: digits ? `${dial} ${digits}` : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("save_failed");
+      setStep(2);
+    } catch {
+      setProfileError("Something went wrong saving your details. Please try again.");
+    } finally {
+      setProfileLoading(false);
+    }
+  }
 
   async function submitSource() {
     if (!source) return;
@@ -828,7 +1179,7 @@ export function OnboardingClient() {
         body: JSON.stringify({ source }),
       });
       if (!res.ok) throw new Error("save_failed");
-      setStep(2);
+      setStep(3);
     } catch {
       setSourceError("Something went wrong saving your answer. Please try again.");
     } finally {
@@ -858,21 +1209,21 @@ export function OnboardingClient() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ timezone }),
     });
-    setStep(3);
+    setStep(4);
   }
 
   return (
     <main
-      className={`relative flex justify-center bg-white px-6 text-black ${
-        step === 3
-          ? "h-[100dvh] items-stretch overflow-hidden pt-16 pb-6"
-          : "min-h-screen items-start pt-16 pb-10"
+      className={`relative flex justify-center bg-white text-black ${
+        step === 4
+          ? "min-h-[100dvh] items-start overflow-x-clip px-4 pb-24 pt-14 sm:px-6 sm:pb-28 sm:pt-16"
+          : "min-h-screen items-start px-6 pb-10 pt-16"
       }`}
     >
       {/* Floating brand mark — matches the login page */}
       <Link
         href="/"
-        className="fixed left-5 top-5 z-20 flex h-9 items-center sm:left-8 sm:top-7"
+        className="fixed left-5 top-5 z-30 flex h-9 items-center sm:left-8 sm:top-7"
         aria-label="rizly home"
       >
         <Image
@@ -885,18 +1236,84 @@ export function OnboardingClient() {
         />
       </Link>
 
-      <div className={`flex w-full flex-col ${step === 3 ? "max-w-[1200px]" : "max-w-[600px]"}`}>
+      <div className={`flex w-full flex-col ${step === 4 ? "max-w-[1200px]" : step === 1 ? "max-w-md" : "max-w-xl"}`}>
         <ProgressHeader step={step} onBack={goBack} />
 
         <div
           key={step}
-          className={`onb-enter ${step === 3 ? "mt-7 flex min-h-0 flex-1 flex-col" : "mt-11"}`}
+          className={`onb-enter ${step === 4 ? "mt-4 flex flex-col sm:mt-7" : "mt-11"}`}
         >
-        {/* Step 1 — source */}
+        {/* Step 1 — about you (name + optional phone) */}
         {step === 1 && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
               {STEP_META[0].eyebrow}
+            </p>
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+              Tell us about you
+            </h1>
+
+            <div className="mt-7">
+              <label className="block text-base font-normal text-slate-900">Full name</label>
+              <input
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="Enter your full name"
+                type="text"
+                autoComplete="name"
+                autoFocus
+                required
+                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
+              />
+            </div>
+
+            <div className="mt-5">
+              <label className="block text-base font-normal text-slate-900">
+                Phone <span className="text-slate-400">(optional)</span>
+              </label>
+              <div className="mt-2 flex gap-2">
+                <select
+                  value={phoneCountry}
+                  onChange={(e) => setPhoneCountry(e.target.value)}
+                  aria-label="Country code"
+                  className="h-[52px] shrink-0 rounded-full border border-black/70 bg-white px-3 text-base font-normal text-slate-950 outline-none transition focus:border-[#FE7F2D]"
+                >
+                  {PHONE_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.dial}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value.replace(/[^\d\s-]/g, ""))}
+                  placeholder="Phone number"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="tel"
+                  className="h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
+                />
+              </div>
+            </div>
+
+            {profileError && <p className="mt-4 text-sm text-red-600">{profileError}</p>}
+
+            <button
+              type="button"
+              disabled={!profileName.trim() || profileLoading}
+              onClick={() => void submitProfile()}
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {profileLoading ? "Saving…" : "Continue"}
+            </button>
+          </section>
+        )}
+
+        {/* Step 2 — source */}
+        {step === 2 && (
+          <section>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
+              {STEP_META[1].eyebrow}
             </p>
             <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
               Where did you hear about rizly?
@@ -912,10 +1329,10 @@ export function OnboardingClient() {
                     key={option}
                     type="button"
                     onClick={() => setSource(option)}
-                    className={`flex items-center justify-between gap-3 border-2 border-black px-4 py-3.5 text-left text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 px-5 py-3.5 text-left text-base font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
                       selected
-                        ? "bg-black text-white shadow-[4px_4px_0px_0px_#000]"
-                        : "bg-white text-black hover:bg-[#FE7F2D]/5 hover:shadow-[4px_4px_0px_0px_#000]"
+                        ? "bg-slate-950 text-white"
+                        : "bg-white text-slate-950 hover:border-black hover:bg-slate-50"
                     }`}
                   >
                     {option}
@@ -931,18 +1348,18 @@ export function OnboardingClient() {
               type="button"
               disabled={!source || sourceLoading}
               onClick={() => void submitSource()}
-              className="mt-8 inline-flex h-[52px] w-full items-center justify-center border-2 border-black bg-black text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-[4px_4px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:cursor-not-allowed disabled:border-black/20 disabled:bg-black/20 disabled:text-white disabled:shadow-none"
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sourceLoading ? "Saving…" : "Continue"}
             </button>
           </section>
         )}
 
-        {/* Step 2 — timezone */}
-        {step === 2 && (
+        {/* Step 3 — timezone */}
+        {step === 3 && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
-              {STEP_META[1].eyebrow}
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
+              {STEP_META[2].eyebrow}
             </p>
             <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
               What&rsquo;s your timezone?
@@ -968,300 +1385,365 @@ export function OnboardingClient() {
             <button
               type="button"
               onClick={() => void submitTimezone()}
-              className="mt-8 inline-flex h-[52px] w-full items-center justify-center bg-black text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
             >
               Continue
             </button>
           </section>
         )}
 
-        {/* Step 3 — connectors */}
-        {step === 3 && (
-          <section className="flex min-h-0 flex-1 flex-col">
-            {/* Fixed header: title + search + category tabs */}
-            <div className="shrink-0">
-              <div className="flex items-baseline justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
-                    {STEP_META[2].eyebrow}
+        {/* Step 4 — connectors */}
+        {step === 4 && (
+          <section className="flex flex-col">
+            <header className="shrink-0 bg-white">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
+                    {STEP_META[3].eyebrow}
                   </p>
-                  <h1 className="mt-2 text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-slate-950">
-                    Connect your tools
+                  <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-black text-balance">
+                    Connect your workspace
                   </h1>
+                  <p className="mt-3 max-w-2xl text-[15px] leading-6 text-black/70">
+                    Start with the tools you use most. You can add or remove integrations anytime.
+                  </p>
                 </div>
-                <span className="shrink-0 border border-slate-200 px-2.5 py-1 text-[11px] font-bold uppercase tracking-tight text-black tabular-nums">
-                  {connectedProviders.size} connected
+                <span className={`mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold tabular-nums ${
+                  anyConnected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-black/70"
+                }`}>
+                  <span className={`size-1.5 rounded-full ${anyConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                  {connectedProviders.size}
+                  <span className="hidden sm:inline">connected</span>
                 </span>
               </div>
-              <p className="mt-2 text-[14px] leading-6 text-slate-500">
-                The more rizly can see, the more it can handle. Add more anytime from the dashboard.
-              </p>
+            </header>
 
-              {/* Toolbar: category tabs + a search icon that opens the field on click */}
-              <div className="mt-4 flex items-center gap-2">
-                <div className="flex flex-1 flex-wrap gap-2">
-                  {(["All", ...CATEGORIES] as const).map((cat) => {
-                    const active = connectorCategory === cat;
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setConnectorCategory(cat)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
-                          active
-                            ? "bg-black text-white"
-                            : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="sticky top-14 z-20 -mx-4 mt-4 border-y border-slate-200 bg-white/95 px-4 py-2 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.6)] backdrop-blur-md sm:top-16 sm:mx-0 sm:rounded-xl sm:border sm:px-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <nav aria-label="Integration categories" className="min-w-0 flex-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="flex w-max gap-1.5">
+                    {(["All", ...CATEGORIES] as const).map((cat) => {
+                      const active = connectorCategory === cat;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setConnectorCategory(cat)}
+                          className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                            active
+                              ? "bg-slate-950 text-white"
+                              : "text-black/70 hover:bg-slate-100 hover:text-black"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </nav>
                 <button
                   type="button"
                   onClick={() => {
-                    setSearchOpen((o) => {
-                      if (o) setConnectorQuery("");
-                      return !o;
+                    setSearchOpen((open) => {
+                      if (open) setConnectorQuery("");
+                      return !open;
                     });
                   }}
-                  aria-label={searchOpen ? "Close search" : "Search integrations"}
+                  aria-label={searchOpen ? "Close integration search" : "Search integrations"}
                   aria-expanded={searchOpen}
-                  className={`flex size-9 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                  className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
                     searchOpen
-                      ? "bg-black text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white text-black/70 hover:border-slate-300 hover:text-black"
                   }`}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.3-4.3" />
-                  </svg>
+                  {searchOpen ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                    </svg>
+                  ) : (
+                    <SearchIcon />
+                  )}
                 </button>
               </div>
 
-              {/* Search field — revealed when the icon is tapped */}
               {searchOpen && (
-                <div className="mt-2.5 flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-[#FE7F2D]">
+                <div className="mt-2 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#FE7F2D] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#FE7F2D]/10">
                   <SearchIcon />
                   <input
                     value={connectorQuery}
                     onChange={(e) => setConnectorQuery(e.target.value)}
-                    placeholder="Search integrations…"
-                    className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
+                    placeholder="Search Gmail, Stripe, Postgres…"
+                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none placeholder:text-black/70"
                     aria-label="Search integrations"
                     autoComplete="off"
                     autoFocus
                   />
+                  {connectorQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setConnectorQuery("")}
+                      aria-label="Clear integration search"
+                      className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-black/70 transition hover:bg-slate-200/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                        <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="-mx-1 mt-3 px-1 pb-5 pt-1">
+              {visibleConnectors.length === 0 ? (
+                <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 px-6 text-center">
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-black/70">
+                    <SearchIcon />
+                  </span>
+                  <p className="mt-3 text-sm font-semibold text-black">No integrations found</p>
+                  <p className="mt-1 text-xs leading-5 text-black/70">
+                    Try another search or choose a different category.
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
                       setConnectorQuery("");
-                      setSearchOpen(false);
+                      setConnectorCategory("All");
                     }}
-                    aria-label="Close search"
-                    className="text-black/40 transition-colors hover:text-black"
+                    className="mt-3 cursor-pointer text-xs font-semibold text-[#C95618] underline-offset-4 hover:underline"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-                    </svg>
+                    Clear filters
                   </button>
                 </div>
-              )}
-            </div>
-
-            {/* Scrollable grid */}
-            <div className="mt-4 flex-1 overflow-y-auto border-t border-slate-200 pt-4">
-              {visibleConnectors.length === 0 ? (
-                <p className="py-12 text-center text-sm text-slate-500">
-                  No integrations match “{connectorQuery}”.
-                </p>
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleConnectors.map((item) => {
-                    const connected = isConnected(item.provider);
-                    const Icon = item.icon;
-                    return (
-                      <div
-                        key={item.provider}
-                        className="flex flex-col justify-between border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-slate-300 hover:bg-[#FE7F2D]/5 hover:shadow-md"
-                      >
+                <div className="space-y-6">
+                  {showConnectorGroups && recommendedConnectors.length > 0 && (
+                    <section aria-labelledby="recommended-connectors-title">
+                      <div className="mb-3 flex items-end justify-between gap-4">
                         <div>
-                          <div className="flex items-center gap-2.5">
-                            <span className="flex size-9 shrink-0 items-center justify-center border border-slate-200 bg-white">
-                              <Icon className="size-5" />
-                            </span>
-                            <p className="text-sm font-semibold text-black">{item.title}</p>
-                          </div>
-                          <p className="mt-2.5 text-xs leading-5 text-slate-500 line-clamp-3">
-                            {item.description}
-                          </p>
+                          <h2 id="recommended-connectors-title" className="text-base font-semibold text-black">
+                            Recommended for you
+                          </h2>
+                          <p className="mt-1 text-[13px] text-black/70">The best place to start with Rizly.</p>
                         </div>
-
-                        <div className="mt-4">
-                          {connected ? (
-                            <div className="flex items-center justify-between">
-                              <span className="border border-slate-200 bg-emerald-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-tight text-white">
-                                Connected
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => void unlinkConnector(item.provider)}
-                                className="text-xs font-semibold text-black/40 underline-offset-2 hover:text-black hover:underline"
-                              >
-                                Unlink
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => { setActiveConnector(item); setSetupError(null); }}
-                              className="w-full bg-black px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
-                            >
-                              {item.authType === "oauth" ? "Connect" : "Setup"}
-                            </button>
-                          )}
-                        </div>
+                        <span className="text-[11px] font-medium text-black/70">{recommendedConnectors.length} tools</span>
                       </div>
-                    );
-                  })}
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                        {recommendedConnectors.map((item) => renderConnectorCard(item, true))}
+                      </div>
+                    </section>
+                  )}
+
+                  <section aria-labelledby="all-connectors-title">
+                    <div className="mb-3 flex items-end justify-between gap-4 border-t border-slate-200 pt-5">
+                      <div>
+                        <h2 id="all-connectors-title" className="text-base font-semibold text-black">
+                          {showConnectorGroups ? "More integrations" : "Integrations"}
+                        </h2>
+                        <p className="mt-1 text-[13px] text-black/70">
+                          {showConnectorGroups
+                            ? "Connect revenue, scheduling, databases, and team tools."
+                            : `${moreConnectors.length} matching ${moreConnectors.length === 1 ? "tool" : "tools"}.`}
+                        </p>
+                      </div>
+                      {showConnectorGroups && <span className="text-[11px] font-medium text-black/70">{moreConnectors.length} tools</span>}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {moreConnectors.map((item) => renderConnectorCard(item))}
+                    </div>
+                  </section>
                 </div>
               )}
             </div>
 
-            {/* Pinned footer: Continue + Skip */}
-            <div className="shrink-0 border-t border-slate-200 bg-white pt-4">
-              <div className="flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => setStep(4)}
-                  className="shrink-0 text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-                >
-                  Skip for now
-                </button>
-                <button
-                  type="button"
-                  disabled={!anyConnected}
-                  onClick={() => setStep(4)}
-                  className="inline-flex h-[52px] items-center justify-center gap-2 bg-black px-10 text-base font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-white disabled:shadow-none"
-                >
-                  Continue
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
           </section>
         )}
 
-        {/* Step 4 — Telegram */}
-        {step === 4 && (
+        {/* Step 5 — choose where Riz lives (Slack / Telegram / dashboard only) */}
+        {step === 5 && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FE7F2D]">
-              {STEP_META[3].eyebrow}
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
+              {STEP_META[4].eyebrow}
             </p>
             <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
-              Your briefing, in your pocket
+              Where should Riz live?
             </h1>
             <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
-              Link Telegram and Riz texts you every morning — what needs action, who to follow up
-              with, what your numbers look like. Reply to act. No app to open.
+              Riz sends your morning brief, drafts, and approvals wherever you already are. Pick a
+              channel — you can add the other one later from the dashboard.
             </p>
-            {telegram ? (
-              <>
-                <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                  <img
-                    src={telegram.qrCode}
-                    alt="Telegram link QR code"
-                    className="h-[200px] w-[200px] shrink-0 border border-slate-200 bg-white p-2"
-                  />
-                  <div className="flex flex-col gap-3">
-                    <p className="text-sm text-slate-600">
-                      Scan the QR code from your phone, or tap the button below to open the bot.
-                      Start the bot to complete the link.
-                    </p>
-                    <a
-                      href={telegram.deepLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-[44px] items-center justify-center bg-black px-6 text-sm font-semibold text-white transition-all hover:bg-[#FE7F2D] hover:shadow-md active:scale-[0.99]"
-                    >
-                      Open Telegram bot
-                    </a>
+
+            <div className="mt-7 flex flex-col gap-3">
+              {/* Slack row */}
+              <div className="rounded-2xl border border-black/70 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                    <SlackIcon className="size-5" />
+                  </span>
+                  <div>
+                    <span className="block text-sm font-semibold text-black">Slack</span>
+                    <span className="mt-0.5 block text-sm leading-6 text-slate-500">
+                      Riz DMs you inside your workspace — briefs, drafts, and one-click approve
+                      buttons where your work already happens.
+                    </span>
                   </div>
                 </div>
-                <p className="mt-6 inline-flex items-center gap-2 text-sm text-slate-500">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FE7F2D] opacity-60" />
-                    <span className="relative inline-flex size-2 rounded-full bg-[#FE7F2D]" />
+                <div className="mt-4 flex items-center gap-3 border-t border-slate-200 pt-4">
+                  {slack ? (
+                    slack.installUrl ? (
+                      <>
+                        <a
+                          href={slack.installUrl}
+                          onClick={() => setSurface("slack")}
+                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                        >
+                          <SlackIcon className="size-4" />
+                          Add to Slack
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setSlackLinkDialogOpen(true)}
+                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-black/70 bg-white px-5 text-sm font-normal text-black transition hover:border-black hover:bg-slate-50"
+                        >
+                          Already have the app?
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSurface("slack");
+                          setSlackLinkDialogOpen(true);
+                        }}
+                        className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                      >
+                        <SlackIcon className="size-4" />
+                        Link Slack
+                      </button>
+                    )
+                  ) : (
+                    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+                      <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
+                      Generating your secure link…
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Telegram row */}
+              <div className="rounded-2xl border border-black/70 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                    <TelegramIcon className="size-5" />
                   </span>
-                  Waiting for you to start the bot…
-                </p>
-              </>
-            ) : telegramError ? (
-              <div className="mt-8">
-                <div className="border border-slate-200 bg-slate-50 p-5">
-                  <p className="text-sm font-semibold text-black">Couldn&rsquo;t generate your link</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">{telegramError}</p>
+                  <div>
+                    <span className="block text-sm font-semibold text-black">Telegram</span>
+                    <span className="mt-0.5 block text-sm leading-6 text-slate-500">
+                      Riz texts you on your phone — scan a QR once and every brief, reminder, and
+                      approval lands in one chat.
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void loadTelegramLink()}
-                  disabled={telegramLoading}
-                  className="mt-4 inline-flex h-11 items-center justify-center bg-black px-6 text-sm font-semibold text-white transition-colors hover:bg-[#FE7F2D] active:scale-[0.99] disabled:opacity-50"
-                >
-                  {telegramLoading ? "Retrying…" : "Try again"}
-                </button>
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  {telegram ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSurface("telegram");
+                        setTelegramDialogOpen(true);
+                      }}
+                      className="inline-flex h-[44px] cursor-pointer items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                    >
+                      Connect Telegram
+                    </button>
+                  ) : telegramError ? (
+                    <div>
+                      <p className="text-sm leading-6 text-slate-500">{telegramError}</p>
+                      <button
+                        type="button"
+                        onClick={() => void loadTelegramLink()}
+                        disabled={telegramLoading}
+                        className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {telegramLoading ? "Retrying…" : "Try again"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+                      <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
+                      Generating your link…
+                    </p>
+                  )}
+                </div>
               </div>
-            ) : (
-              <p className="mt-8 inline-flex items-center gap-2 text-base text-slate-500">
-                <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
-                Generating your link…
+
+              {/* Dashboard-only row */}
+              <div className="rounded-2xl border border-black/70 bg-white p-4 transition-all hover:border-black">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                    <ChatBubbleIcon />
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-black">Just the dashboard</p>
+                    <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                      Use Riz from the web only. Briefs and approvals wait for you here — you can
+                      connect Slack or Telegram anytime.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={skipLoading}
+                      onClick={() => void skipTelegram()}
+                      className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full border border-black/70 bg-white px-5 text-sm font-normal text-black transition hover:border-black hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {skipLoading ? "Saving…" : "Continue to dashboard"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {surface !== null && (
+              <p className="mt-6 inline-flex items-center gap-2 text-sm text-slate-500">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FE7F2D] opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-[#FE7F2D]" />
+                </span>
+                Waiting for the link to complete — this page moves on automatically.
               </p>
-            )}
-            {confirmSkipTelegram ? (
-              <div className="mt-8 border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Sure? Riz mostly lives on Telegram.</p>
-                <p className="mt-1 text-sm leading-6 text-slate-500">
-                  Reminders, morning briefs, and approvals won&apos;t reach you until you link it.
-                  You can do it later from the dashboard.
-                </p>
-                <div className="mt-3 flex items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmSkipTelegram(false)}
-                    className="inline-flex h-9 items-center justify-center bg-black px-4 text-xs font-semibold text-white transition-colors hover:bg-[#FE7F2D]"
-                  >
-                    Keep linking
-                  </button>
-                  <button
-                    type="button"
-                    disabled={skipLoading}
-                    onClick={() => void skipTelegram()}
-                    className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline disabled:opacity-50"
-                  >
-                    {skipLoading ? "Saving…" : "Skip anyway"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmSkipTelegram(true)}
-                className="mt-8 text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
-              >
-                I&apos;ll set up Telegram later
-              </button>
             )}
           </section>
         )}
         </div>
 
+        {step === 4 && (
+          <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_32px_-24px_rgba(15,23,42,0.45)] backdrop-blur-md sm:px-6 sm:pb-4">
+            <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => setStep(5)}
+                className="shrink-0 cursor-pointer rounded-full px-3 py-2 text-sm font-normal text-black/70 transition hover:bg-slate-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                disabled={!anyConnected}
+                onClick={() => setStep(5)}
+                className="inline-flex h-[52px] min-w-36 cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-8 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-black/70"
+              >
+                Continue
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </footer>
+        )}
+
         {/* Step 3 fills the viewport with its own pinned footer, so the trust line
             would overflow the page there — show it on the shorter steps only. */}
-        {step !== 3 && (
+        {step !== 4 && (
           <p className="mt-14 flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
             <LockIcon />
             Encrypted end to end. Nothing sends without your approval.
@@ -1277,6 +1759,56 @@ export function OnboardingClient() {
           onClose={() => { setActiveConnector(null); setSetupError(null); }}
           onManualSubmit={saveManualConnector}
         />
+      )}
+
+      {telegramDialogOpen && telegram && (
+        <SurfaceDialog title="Connect Telegram" onClose={() => setTelegramDialogOpen(false)}>
+          <div className="flex flex-col items-center gap-4 text-center">
+            <img
+              src={telegram.qrCode}
+              alt="Telegram link QR code"
+              className="h-[200px] w-[200px] rounded-2xl border border-black/70 bg-white p-2"
+            />
+            <p className="text-sm leading-6 text-slate-600">
+              Scan from your phone, or tap the button to open the bot. Start the bot to
+              complete the link.
+            </p>
+            <a
+              href={telegram.deepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-[44px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+            >
+              Open Telegram bot
+            </a>
+          </div>
+        </SurfaceDialog>
+      )}
+
+      {slackLinkDialogOpen && slack && (
+        <SurfaceDialog
+          title={slack.installUrl ? "Already have the Rizly app?" : "Link Slack"}
+          onClose={() => setSlackLinkDialogOpen(false)}
+        >
+          <p className="text-sm leading-6 text-slate-500">
+            DM the Rizly app in Slack this command to link your account:
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(slack.linkCommand).then(() => {
+                setSlackCopied(true);
+                setTimeout(() => setSlackCopied(false), 2000);
+              });
+            }}
+            className="mt-3 flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 bg-slate-50 px-4 py-2 text-left font-mono text-xs text-slate-700 transition hover:border-black"
+          >
+            <span className="truncate">{slack.linkCommand}</span>
+            <span className="shrink-0 font-sans text-[11px] font-semibold text-slate-500">
+              {slackCopied ? "Copied ✓" : "Copy"}
+            </span>
+          </button>
+        </SurfaceDialog>
       )}
     </main>
   );

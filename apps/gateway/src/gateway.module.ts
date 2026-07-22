@@ -18,6 +18,9 @@ import { BillingGatewayService } from "./billing/billing.service";
 import { GatewayController } from "./gateway.controller";
 import { GatewayService } from "./gateway.service";
 import { RedisThrottlerStorage } from "./throttler-redis.storage";
+import { SlackSocketService } from "./slack-socket.service";
+import { SlackSurfaceController } from "./slack-surface.controller";
+import { SlackSurfaceService } from "./slack-surface.service";
 import { TelegramPollerService } from "./telegram-poller.service";
 import { TelegramService } from "./telegram.service";
 
@@ -28,7 +31,13 @@ import { TelegramService } from "./telegram.service";
       storage: new RedisThrottlerStorage(),
     }),
   ],
-  controllers: [GatewayController, AuthController, BillingController, ApprovalsController],
+  controllers: [
+    GatewayController,
+    AuthController,
+    BillingController,
+    ApprovalsController,
+    SlackSurfaceController,
+  ],
   providers: [
     AuthRepository,
     AuthService,
@@ -38,6 +47,8 @@ import { TelegramService } from "./telegram.service";
     RedisThrottlerStorage,
     TelegramService,
     TelegramPollerService,
+    SlackSurfaceService,
+    SlackSocketService,
     { provide: APPROVAL_STORE, useClass: RedisApprovalStore },
     { provide: CONVERSATION_STORE, useClass: RedisConversationStore },
   ],

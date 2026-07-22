@@ -1,34 +1,66 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TelegramIcon } from "../../components/ConnectorIcons";
+import {
+  CalComIcon,
+  GitHubIcon,
+  GmailIcon,
+  MongoDbIcon,
+  MpesaIcon,
+  NotionIcon,
+  PostgresIcon,
+  RazorpayIcon,
+  SlackIcon,
+  StripeIcon,
+  TelegramIcon,
+} from "../../components/ConnectorIcons";
 import {
   BellIcon,
+  BoltIcon,
   CalendarIcon,
   ChatIcon,
-  CheckCircleIcon,
   ClockIcon,
   GearIcon,
-  LogoutIcon,
+  LayersIcon,
   MailIcon,
+  PanelToggleIcon,
   PlugIcon,
   PlusIcon,
   UsersIcon,
   VideoIcon,
 } from "./icons";
-import { type ChatSession, subscribeToOpenSearch } from "../lib/chat-store";
-import { isSidebarOpen, setSidebarOpen, subscribeToSidebar } from "../lib/sidebar-store";
 
-export function ChatSidebar({
-  name,
-  email,
-}: {
-  name?: string;
-  email: string;
-}) {
-  const router = useRouter();
+// Icons for the "Connected apps" strip — keyed by connector provider id.
+const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  gmail: GmailIcon,
+  calendar: CalendarIcon,
+  google: GmailIcon,
+  calcom: CalComIcon,
+  github: GitHubIcon,
+  notion: NotionIcon,
+  slack: SlackIcon,
+  telegram: TelegramIcon,
+  stripe: StripeIcon,
+  razorpay: RazorpayIcon,
+  postgres: PostgresIcon,
+  mongodb: MongoDbIcon,
+  mpesa: MpesaIcon,
+};
+import { type ChatSession, subscribeToOpenSearch } from "../lib/chat-store";
+import {
+  initSidebarCollapsed,
+  isSidebarCollapsed,
+  isSidebarOpen,
+  setSidebarOpen,
+  subscribeToSidebar,
+  subscribeToSidebarCollapsed,
+  toggleSidebarCollapsed,
+} from "../lib/sidebar-store";
+
+export function ChatSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeId = pathname === "/dashboard" ? searchParams.get("session") : null;
@@ -36,17 +68,24 @@ export function ChatSidebar({
   const [history, setHistory] = useState<ChatSession[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [approvalCount, setApprovalCount] = useState(0);
   const [telegramLinked, setTelegramLinked] = useState(true);
-  const [signingOut, setSigningOut] = useState(false);
+  const [slackLinked, setSlackLinked] = useState(true);
   const [emailBadge, setEmailBadge] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const sync = () => setMobileOpen(isSidebarOpen());
     sync();
     return subscribeToSidebar(sync);
+  }, []);
+
+  useEffect(() => {
+    initSidebarCollapsed();
+    setCollapsed(isSidebarCollapsed());
+    return subscribeToSidebarCollapsed(() => setCollapsed(isSidebarCollapsed()));
   }, []);
 
   // Close the mobile drawer whenever navigation happens.
@@ -70,20 +109,6 @@ export function ChatSidebar({
     return () => { cancelled = true; clearInterval(t); unsubSearch(); };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch("/api/approvals");
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { approvals?: unknown[] };
-        if (!cancelled) setApprovalCount(data.approvals?.length ?? 0);
-      } catch { /* best-effort */ }
-    };
-    void load();
-    const t = setInterval(load, 30_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, []);
 
   useEffect(() => {
     const lastSeen = Number(localStorage.getItem("emails_last_seen") ?? 0);
@@ -108,10 +133,26 @@ export function ChatSidebar({
   useEffect(() => {
     fetch("/api/onboarding/status")
       .then((r) => r.json())
-      .then((d: { onboarding?: { telegramLinked?: boolean } }) => {
+      .then((d: { onboarding?: { telegramLinked?: boolean; slackLinked?: boolean } }) => {
         setTelegramLinked(Boolean(d.onboarding?.telegramLinked));
+        setSlackLinked(Boolean(d.onboarding?.slackLinked));
       })
       .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/connectors");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { provider: string }[];
+        if (!cancelled) setConnectedApps(data.map((c) => c.provider));
+      } catch { /* best-effort */ }
+    };
+    void load();
+    const t = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
   }, []);
 
   useEffect(() => {
@@ -123,52 +164,28 @@ export function ChatSidebar({
     : history;
   const recents = filtered.slice(0, 15);
 
-  const displayName = name || email.split("@")[0];
-  const initial = displayName.charAt(0).toUpperCase();
-
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  useEffect(() => {
-    fetch("/api/preferences")
-      .then((r) => r.json())
-      .then((d: { avatarUrl?: string }) => { if (d.avatarUrl) setAvatarUrl(d.avatarUrl); })
-      .catch(() => null);
-  }, []);
-
-  function handleNewChat() {
-    setQuery("");
-    setSearchOpen(false);
-    router.push("/dashboard");
-  }
-
-  async function handleSignOut() {
-    if (signingOut) return;
-    setSigningOut(true);
-    try { await fetch("/api/auth/logout", { method: "POST" }); }
-    finally { router.push("/login"); router.refresh(); }
-  }
-
+  // Flat groups separated by a divider, no text section labels — keeps the
+  // list scannable instead of stacking category headers over a handful of items.
+  const iconCls = "h-[18px] w-[18px]";
   const navSections = [
-    {
-      label: "Main",
-      items: [
-        { href: "/dashboard", icon: <ChatIcon className="h-4 w-4" />, label: "Chat" },
-        { href: "/dashboard/approvals", icon: <CheckCircleIcon className="h-4 w-4" />, label: "Approvals", badge: approvalCount > 0 ? String(approvalCount) : undefined },
-        { href: "/dashboard/emails", icon: <MailIcon className="h-4 w-4" />, label: "Emails", badge: emailBadge > 0 ? String(emailBadge) : undefined },
-        { href: "/dashboard/people", icon: <UsersIcon className="h-4 w-4" />, label: "People" },
-        { href: "/dashboard/calendar", icon: <CalendarIcon className="h-4 w-4" />, label: "Calendar" },
-        { href: "/dashboard/meetings", icon: <VideoIcon className="h-4 w-4" />, label: "Meetings" },
-        { href: "/dashboard/connectors", icon: <PlugIcon className="h-4 w-4" />, label: "Connectors" },
-      ],
-    },
-    {
-      label: "Settings",
-      items: [
-        { href: "/dashboard/scheduled", icon: <ClockIcon className="h-4 w-4" />, label: "Scheduled" },
-        { href: "/dashboard/notifications", icon: <BellIcon className="h-4 w-4" />, label: "Notifications" },
-        { href: "/dashboard/telegram", icon: <TelegramIcon className="h-4 w-4" />, label: "Telegram", badge: !telegramLinked ? "!" : undefined },
-        { href: "/dashboard/settings", icon: <GearIcon className="h-4 w-4" />, label: "Settings" },
-      ],
-    },
+    [
+      { href: "/dashboard", icon: <ChatIcon className={iconCls} />, label: "Chat" },
+      { href: "/dashboard/emails", icon: <MailIcon className={iconCls} />, label: "Emails", badge: emailBadge > 0 ? String(emailBadge) : undefined },
+      { href: "/dashboard/calendar", icon: <CalendarIcon className={iconCls} />, label: "Calendar" },
+      { href: "/dashboard/meetings", icon: <VideoIcon className={iconCls} />, label: "Meetings" },
+      { href: "/dashboard/people", icon: <UsersIcon className={iconCls} />, label: "People" },
+      { href: "/dashboard/scheduled", icon: <ClockIcon className={iconCls} />, label: "Scheduled" },
+      { href: "/dashboard/automations", icon: <BoltIcon className={iconCls} />, label: "Automations" },
+      { href: "/dashboard/connectors", icon: <PlugIcon className={iconCls} />, label: "Connectors" },
+    ],
+    [
+      {
+        href: "/dashboard/channels",
+        icon: <LayersIcon className={iconCls} />,
+        label: "Channels",
+        badge: !telegramLinked && !slackLinked ? "!" : undefined,
+      },
+    ],
   ];
 
   return (
@@ -182,60 +199,38 @@ export function ChatSidebar({
         />
       )}
       <aside
-        className={`fixed bottom-0 left-0 top-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:top-14 lg:z-auto lg:w-64 lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed bottom-0 left-0 top-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-[#f0f0f0] transition-transform duration-200 lg:z-auto lg:translate-x-0 ${
+          collapsed ? "lg:w-16" : "lg:w-64"
+        } ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
 
-      {/* Header */}
+      {/* Logo + collapse toggle */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[13px] font-semibold text-white">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-            ) : initial}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-slate-900 leading-none">
-              {displayName}
-            </p>
-            <p className="truncate text-[11px] text-slate-400 leading-none mt-0.5">
-              rizly workspace
-            </p>
-          </div>
-        </div>
+        {!collapsed && (
+          <Link href="/dashboard" aria-label="rizly home">
+            <Image src="/rizly_white.png" alt="rizly" width={65} height={22} className="w-[65px] h-auto object-contain" priority />
+          </Link>
+        )}
         <button
           type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          title="Sign out"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
+          onClick={toggleSidebarCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-200/70 lg:flex"
         >
-          <LogoutIcon className="h-3.5 w-3.5" />
+          <PanelToggleIcon className="h-[18px] w-[18px]" />
         </button>
       </div>
 
-      {/* New chat button — prominent orange CTA */}
-      <div className="shrink-0 px-3 pb-3">
-        <button
-          type="button"
-          onClick={handleNewChat}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#FE7F2D] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.99]"
-        >
-          <PlusIcon className="h-4 w-4" />
-          New chat
-        </button>
-      </div>
 
       {/* Search */}
-      {searchOpen && (
+      {searchOpen && !collapsed && (
         <div className="shrink-0 px-3 pb-3">
           <input
             ref={searchInputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search chats…"
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FE7F2D]/30"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-black placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FE7F2D]/30"
           />
         </div>
       )}
@@ -243,32 +238,36 @@ export function ChatSidebar({
       {/* Scrollable nav */}
       <div className="min-h-0 flex-1 overflow-y-auto px-2">
 
-        {/* Static nav sections */}
-        {navSections.map((section) => (
-          <div key={section.label} className="mb-4">
-            <SectionLabel>{section.label}</SectionLabel>
-            {section.items.map((item) => {
+        {/* Flat nav groups, divided by a thin rule instead of text labels */}
+        {navSections.map((items, i) => (
+          <div key={i} className={`flex flex-col gap-px ${i === 0 ? "mb-2" : "mb-3 border-t border-slate-200/70 pt-2"}`}>
+            {items.map((item) => {
               const isActive = item.href === "/dashboard"
                 ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
+                : pathname.startsWith(item.href) ||
+                  (item.href === "/dashboard/channels" &&
+                    (pathname.startsWith("/dashboard/telegram") || pathname.startsWith("/dashboard/slack")));
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group flex items-center justify-between rounded-md px-2.5 py-1.5 text-[15px] transition-colors ${
+                  title={collapsed ? item.label : undefined}
+                  className={`group flex h-9 items-center rounded-lg px-2.5 text-sm transition-colors ${
+                    collapsed ? "justify-center" : "gap-2"
+                  } ${
                     isActive
-                      ? "bg-[#FE7F2D]/10 font-medium text-slate-900"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      ? "bg-black/5 font-medium text-black"
+                      : "text-black hover:bg-slate-200/50"
                   }`}
                 >
-                  <span className="flex items-center gap-2.5">
-                    <span className={isActive ? "text-[#FE7F2D]" : "text-slate-400 group-hover:text-slate-600"}>
-                      {item.icon}
-                    </span>
-                    {item.label}
+                  <span className={isActive ? "shrink-0 text-black" : "shrink-0 text-slate-500"}>
+                    {item.icon}
                   </span>
-                  {item.badge && (
-                    <span className="rounded-sm bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#FE7F2D]">
+                  {!collapsed && (
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  )}
+                  {item.badge && !collapsed && (
+                    <span className="shrink-0 rounded-sm bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FE7F2D]">
                       {item.badge}
                     </span>
                   )}
@@ -278,28 +277,73 @@ export function ChatSidebar({
           </div>
         ))}
 
+        {/* Apps — quick-glance grid of connected integrations, links to full connectors page */}
+        {!collapsed && (
+          <div className="mb-3 border-t border-slate-200/70 pt-3">
+            <div className="px-2.5">
+              <SectionLabel>Apps</SectionLabel>
+            </div>
+            <div className="flex flex-wrap gap-1.5 px-2.5 pt-1.5">
+              {connectedApps.map((provider) => {
+                const Icon = APP_ICONS[provider];
+                return (
+                  <Link
+                    key={provider}
+                    href="/dashboard/connectors"
+                    title={provider}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200 transition-transform hover:-translate-y-0.5 hover:ring-slate-300 hover:shadow"
+                  >
+                    {Icon ? <Icon className="h-full w-full" /> : <PlugIcon className="h-3.5 w-3.5 text-slate-400" />}
+                  </Link>
+                );
+              })}
+              <Link
+                href="/dashboard/connectors"
+                title="Add an app"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400 transition-colors hover:border-slate-400 hover:text-slate-600"
+              >
+                <PlusIcon className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Chat history (from database, not localStorage) */}
-        <div className="mb-4">
-          <SectionLabel>Recent</SectionLabel>
-          {recents.length ? (
-            recents.map((s) => (
-              <SessionRow key={s.id} session={s} active={s.id === activeId} />
-            ))
-          ) : (
-            <p className="px-2.5 py-1 text-[13px] text-slate-400">
-              {query.trim() ? "No results" : "No chats yet"}
-            </p>
-          )}
-        </div>
+        {!collapsed && (
+          <div className="mb-3 border-t border-slate-200/70 pt-3">
+            <div className="flex h-7 items-center px-2.5">
+              <SectionLabel>Recent</SectionLabel>
+            </div>
+            {recents.length ? (
+              recents.map((s) => (
+                <SessionRow key={s.id} session={s} active={s.id === activeId} />
+              ))
+            ) : (
+              <p className="px-2.5 py-1 text-sm text-slate-400">
+                {query.trim() ? "No results" : "No chats yet"}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 border-t border-slate-200 px-3 py-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-medium text-slate-600">
-            {initial}
-          </span>
-          <span className="truncate text-[13px] text-slate-400">{email}</span>
+      <div className={`shrink-0 border-t border-slate-200 px-2 py-2 ${collapsed ? "flex flex-col items-center gap-1" : ""}`}>
+        <div className={`flex items-center gap-1 ${collapsed ? "flex-col" : "justify-end"}`}>
+          <Link
+            href="/dashboard/notifications"
+            title="Notifications"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-200/70"
+          >
+            <BellIcon className="h-[18px] w-[18px]" />
+          </Link>
+          <Link
+            href="/dashboard/settings"
+            title="Settings"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-200/70"
+          >
+            <GearIcon className="h-[18px] w-[18px]" />
+          </Link>
         </div>
       </div>
       </aside>
@@ -309,7 +353,7 @@ export function ChatSidebar({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-0.5 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+    <p className="text-[13px] font-medium text-black">
       {children}
     </p>
   );
@@ -319,12 +363,12 @@ function SessionRow({ session, active }: { session: ChatSession; active: boolean
   return (
     <Link
       href={`/dashboard?session=${session.id}`}
-      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] transition-colors ${
-        active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+      className={`flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm transition-colors ${
+        active ? "bg-black/5 text-black" : "text-black hover:bg-slate-200/50"
       }`}
     >
-      <ChatIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-      <span className="truncate">{session.title}</span>
+      <ChatIcon className="h-[18px] w-[18px] shrink-0 text-slate-500" />
+      <span className="min-w-0 flex-1 truncate">{session.title}</span>
     </Link>
   );
 }

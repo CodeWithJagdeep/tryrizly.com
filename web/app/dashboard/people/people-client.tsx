@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CreditsBadge } from "../components/CreditsBadge";
 
 type Person = {
   id: string;
@@ -122,48 +123,54 @@ export function PeopleClient() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="min-h-screen bg-[#f8f8f7] text-slate-900">
+      {/* Top bar — matches the chat page's sticky chrome */}
+      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
+        <div className="flex h-8 items-center rounded-lg px-2 text-base font-normal text-slate-900 md:text-lg">
+          People
+        </div>
+        <CreditsBadge />
+      </div>
+
       {/* Header */}
-      <header className="px-6 pt-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">People</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Everyone Riz has seen in your emails</p>
-          </div>
+      <header className="border-b border-slate-200 px-4 pt-1 sm:px-6">
+        <div className="flex items-center justify-between pb-4">
+          <p className="text-[15px] text-slate-500">Everyone Riz has seen in your emails</p>
           {!loading && (
-            <span className="border border-slate-200 px-3 py-1 text-sm text-slate-500">
+            <span className="rounded-full border border-black/20 bg-white px-3 py-1 text-sm text-slate-500">
               {displayPeople.length} contact{displayPeople.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
 
         {/* Search */}
-        <div className="relative mt-4 mb-3">
+        <div className="relative mb-3">
           <SearchIcon />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name or email…"
-            className="w-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#FE7F2D] focus:outline-none"
           />
         </div>
 
-        <div className="flex gap-0 overflow-x-auto">
+        {/* Tabs — pure bordered pills, matching emails/meetings */}
+        <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-normal transition ${
                 activeTab === tab.key
-                  ? "bg-slate-50 text-slate-900"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-600"
+                  ? "border-black/20 bg-slate-100 text-black/80"
+                  : "border-transparent bg-white text-black/80 hover:border-black/20 hover:bg-slate-50"
               }`}
             >
               {tab.label}
               {!loading && counts[tab.key] > 0 && (
-                <span className={`px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === tab.key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] leading-none ${
+                  activeTab === tab.key ? "bg-white text-black/80" : "bg-slate-100 text-slate-500"
                 }`}>
                   {counts[tab.key]}
                 </span>
@@ -173,7 +180,7 @@ export function PeopleClient() {
         </div>
       </header>
 
-      <div className="w-full px-6 py-6 space-y-6">
+      <div className="w-full px-4 py-6 sm:px-6 space-y-6">
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
@@ -364,7 +371,7 @@ function formatContactDate(iso: string) {
 function SearchIcon() {
   return (
     <svg
-      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+      className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
       viewBox="0 0 16 16" fill="none" aria-hidden="true"
     >
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />

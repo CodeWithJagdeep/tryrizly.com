@@ -2,10 +2,8 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireSession } from "../api/onboarding/_lib/require-user";
 import { ChatSidebar } from "./components/ChatSidebar";
-import { DashboardHeader } from "./components/DashboardHeader";
+import { DashboardContentShell } from "./components/DashboardContentShell";
 import { MobileNav } from "./components/MobileNav";
-import { TelegramBanner } from "./components/TelegramBanner";
-import { TrialBar } from "./components/TrialBar";
 import { WelcomeTour } from "./components/WelcomeTour";
 
 // Auth-gated app surface — keep the whole tree out of search indexes
@@ -20,16 +18,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900">
-      <TrialBar />
       <div className="relative flex min-h-0 flex-1">
         <Suspense fallback={null}>
-          <ChatSidebar name={session.name} email={session.email} />
+          <ChatSidebar />
         </Suspense>
-        <div className="flex min-h-0 flex-1 flex-col pb-16 lg:pb-0 lg:pl-64">
-          <DashboardHeader />
-          <TelegramBanner />
+        <DashboardContentShell>
           {children}
-        </div>
+        </DashboardContentShell>
       </div>
       <MobileNav />
       <WelcomeTour />

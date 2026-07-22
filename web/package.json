@@ -16,6 +16,7 @@
     "@microsoft/clarity": "^1.0.2",
     "@sentry/browser": "^10.63.0",
     "@sentry/node": "^10.63.0",
+    "@xyflow/react": "^12.11.2",
     "archiver": "^8.0.0",
     "framer-motion": "^12.41.0",
     "next": "16.2.10",

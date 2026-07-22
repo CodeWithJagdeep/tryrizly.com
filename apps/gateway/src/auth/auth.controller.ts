@@ -205,9 +205,9 @@ export class AuthController {
   ) {
     this.requireInternal(secret);
     if (!email) return { error: "email is required" };
-    const onboarding = await this.auth.getOnboardingStatus(email);
-    if (!onboarding) return { error: "not_found" };
-    return { onboarding };
+    const status = await this.auth.getOnboardingStatusWithProfile(email);
+    if (!status) return { error: "not_found" };
+    return status;
   }
 
   @Post("onboarding/progress")
@@ -230,6 +230,21 @@ export class AuthController {
       completedAt: body.completedAt,
       dashboardTourSeenAt: body.dashboardTourSeenAt,
     });
+    return { ok: true };
+  }
+
+  @Post("onboarding/profile")
+  async onboardingProfile(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string; name?: string; phone?: string },
+  ) {
+    this.requireInternal(secret);
+    const email = body.email?.trim();
+    const name = body.name?.trim();
+    const phone = body.phone?.trim();
+    if (!email) return { error: "email is required" };
+    if (!name) return { error: "name is required" };
+    await this.auth.saveProfile(email, name, phone || undefined);
     return { ok: true };
   }
 
@@ -256,6 +271,17 @@ export class AuthController {
     this.requireInternal(secret);
     if (!body.email) return { error: "email is required" };
     const token = await this.auth.createTelegramLinkToken(body.email);
+    return { token };
+  }
+
+  @Post("onboarding/slack-token")
+  async slackToken(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.email) return { error: "email is required" };
+    const token = await this.auth.createSlackLinkToken(body.email);
     return { token };
   }
 

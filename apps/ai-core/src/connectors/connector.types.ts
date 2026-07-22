@@ -11,6 +11,10 @@ export type ConnectorProvider =
   | "notion"
   | "custom_api"
   | "telegram"
+  // The Slack chat *surface* (DM with the Rizly bot) — kept distinct from
+  // "slack", the per-user workspace read connector, so linking the surface
+  // can never clobber that token (both upsert by userId+provider).
+  | "slack_surface"
   | "paypal"
   | "github"
   | "mpesa"
@@ -74,7 +78,7 @@ export type DeleteConnectorInput = {
 };
 
 export type GoogleOAuthProvider = "gmail" | "calendar";
-export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion" | "github";
+export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion" | "github" | "stripe";
 
 export type StartOAuthInput = {
   userId?: string;
@@ -125,7 +129,14 @@ export type DataSourceProvider = "postgres" | "mongodb" | "razorpay" | "stripe";
 export type PostgresConnectorSecret = { connectionUrl: string };
 export type MongoConnectorSecret = { connectionUrl: string };
 export type RazorpayConnectorSecret = { keyId: string; keySecret: string };
-export type StripeConnectorSecret = { secretKey: string };
+export type StripeConnectorSecret = {
+  /** Manual secret key or the current Stripe Apps OAuth access token. */
+  secretKey: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  stripeAccountId?: string;
+  livemode?: boolean;
+};
 export type CalComConnectorSecret = { apiKey: string };
 export type PayPalConnectorSecret = { clientId: string; clientSecret: string };
 export type GitHubConnectorSecret = { token: string };

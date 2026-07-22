@@ -1,0 +1,41 @@
+{
+  "id": "com.getrizly.revenue-briefs",
+  "version": "0.0.1",
+  "name": "Rizly Revenue Briefs",
+  "icon": "./rizly-icon.png",
+  "distribution_type": "public",
+  "sandbox_install_compatible": true,
+  "stripe_api_access_type": "oauth",
+  "allowed_redirect_uris": [
+    "https://api.getrizly.com/api/connectors/stripe/callback"
+  ],
+  "permissions": [
+    {
+      "permission": "balance_transaction_source_read",
+      "purpose": "Read balance transactions and their sources to summarize collected revenue and settlements. Rizly never creates or changes transactions."
+    },
+    {
+      "permission": "charge_read",
+      "purpose": "Read charges and refunds to report successful, failed, and refunded payments. Rizly never creates charges or refunds."
+    },
+    {
+      "permission": "customer_read",
+      "purpose": "Read customer records to attribute payment and subscription insights to the correct customer. Rizly never changes customer data."
+    },
+    {
+      "permission": "invoice_read",
+      "purpose": "Read invoices to identify paid, open, overdue, and failed billing activity. Rizly never creates or changes invoices."
+    },
+    {
+      "permission": "payment_intent_read",
+      "purpose": "Read payment intents to summarize payment status and failures. Rizly never confirms or changes payment intents."
+    },
+    {
+      "permission": "subscription_read",
+      "purpose": "Read subscriptions to calculate recurring revenue, new subscriptions, cancellations, and churn. Rizly never creates or changes subscriptions."
+    }
+  ],
+  "ui_extension": {
+    "views": []
+  }
+}

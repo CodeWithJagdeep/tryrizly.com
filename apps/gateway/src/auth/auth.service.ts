@@ -333,6 +333,27 @@ export class AuthService {
   async createTelegramLinkToken(email: string): Promise<string> {
     return this.repo.createTelegramLinkToken(normalizeEmail(email), 15 * 60 * 1000);
   }
+
+  async createSlackLinkToken(email: string): Promise<string> {
+    return this.repo.createSlackLinkToken(normalizeEmail(email), 15 * 60 * 1000);
+  }
+
+  /** Onboarding "about you" step — the real display name (signup no longer asks) and optional phone. */
+  async saveProfile(email: string, name: string, phone?: string): Promise<void> {
+    const normalized = normalizeEmail(email);
+    await this.repo.upsertUser(normalized, phone ? { name, phone } : { name });
+    await this.repo.setOnboarding(normalized, { profileCompleted: true });
+    await this.syncDisplayName(normalized, name);
+  }
+
+  /** Onboarding status plus the saved profile fields, so the client can prefill after a refresh. */
+  async getOnboardingStatusWithProfile(
+    email: string,
+  ): Promise<{ onboarding: StoredUser["onboarding"]; name?: string; phone?: string } | null> {
+    const user = await this.repo.getUser(normalizeEmail(email));
+    if (!user) return null;
+    return { onboarding: user.onboarding, name: user.name, phone: user.phone };
+  }
 }
 
 function normalizeEmail(email: string) {

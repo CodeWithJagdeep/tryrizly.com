@@ -39,10 +39,10 @@ function AuthOption({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-12 w-full grid-cols-[56px_1fr_56px] items-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`grid h-[52px] w-full grid-cols-[56px_1fr_56px] items-center rounded-full border border-black/70 bg-white text-slate-950 transition hover:border-black hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       <span className="flex items-center justify-center">{icon}</span>
-      <span className="text-center text-sm font-semibold leading-none text-slate-950">
+      <span className="text-center text-base font-normal leading-none text-slate-950">
         {label}
       </span>
       <span aria-hidden="true" />
@@ -57,7 +57,6 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
 
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(params.get("error"));
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -131,7 +130,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
     setLoading("email");
     try {
       if (mode === "signup") {
-        const { data } = await api.post<AuthResponse>("/auth/password/register", { name, email, password });
+        const { data } = await api.post<AuthResponse>("/auth/password/register", { name: email.split("@")[0], email, password });
         setPendingVerifyEmail(data.email ?? email);
         return;
       }
@@ -210,13 +209,13 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
         className="fixed left-5 top-5 z-20 flex h-9 items-center sm:left-8 sm:top-7"
         aria-label="rizly home"
       >
-        <Image src="/rizly_white.png" alt="rizly" width={112} height={26} className="h-8 w-auto object-contain" priority />
+        <Image src="/rizly_white.png" alt="rizly" width={140} height={33} className="h-10 w-auto object-contain" priority />
       </Link>
 
       <button
         type="button"
         aria-label="Help"
-        className="fixed right-5 bottom-5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-500 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
+        className="fixed right-5 bottom-5 z-10 flex h-8 w-8 items-center justify-center border border-slate-300 bg-white text-sm font-normal text-slate-500 transition hover:border-slate-300 hover:text-slate-950"
       >
         ?
       </button>
@@ -225,10 +224,10 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
         <div className="w-full">
           <section className="p-6 sm:p-8">
             <div className="mb-8 text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              <p className="text-xs font-normal uppercase tracking-[0.14em] text-slate-400">
                 {mode === "login" ? "Welcome back" : "Start with rizly"}
               </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-3xl">
+              <h1 className="mt-2 text-2xl font-normal tracking-[-0.01em] text-slate-950 sm:text-3xl">
                 {mode === "login" ? "Sign in to your workspace" : "Create your workspace"}
               </h1>
               <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -255,12 +254,12 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
 
             <div className="mt-6 flex items-center gap-4">
               <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">or</span>
+              <span className="text-xs font-normal uppercase tracking-[0.12em] text-slate-400">or</span>
               <div className="h-px flex-1 bg-slate-200" />
             </div>
 
             {error && (
-              <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              <div className="mt-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-normal text-rose-700">
                 {error}
               </div>
             )}
@@ -268,7 +267,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
         {pendingVerifyEmail ? (
           <>
             <form onSubmit={handleVerifyOtp} className="mt-6">
-              <label className="block text-sm font-medium text-slate-600">
+              <label className="block text-base font-normal text-slate-900">
                 6-digit code sent to {pendingVerifyEmail}
               </label>
               <input
@@ -280,25 +279,25 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                 maxLength={6}
                 required
                 autoFocus
-                className="mt-2 h-14 w-full rounded-lg border border-slate-200 bg-white px-5 text-center text-base font-medium tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
+                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-center text-base font-normal tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
               />
 
               <button
                 type="submit"
                 disabled={Boolean(loading) || otp.length !== 6}
-                className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading === "email" && <Spinner />}
                 Verify and continue
               </button>
             </form>
 
-            <p className="mt-5 text-center text-sm font-medium text-slate-500">
+            <p className="mt-5 text-center text-sm font-normal text-slate-500">
               <button
                 type="button"
                 onClick={handleResendOtp}
                 disabled={resending}
-                className="font-semibold text-slate-950 underline-offset-2 hover:underline disabled:opacity-50"
+                className="font-normal text-slate-950 underline-offset-2 hover:underline disabled:opacity-50"
               >
                 {resent ? "Code resent - check your inbox" : resending ? "Sending..." : "Resend code"}
               </button>
@@ -307,22 +306,8 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
         ) : (
           <>
             <form onSubmit={handleEmailLogin} className="mt-6">
-              {mode === "signup" && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-600">Full name</label>
-                  <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Enter your full name"
-                    type="text"
-                    autoComplete="name"
-                    required
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
-                  />
-                </div>
-              )}
               <div>
-                <label className="block text-sm font-medium text-slate-600">Email address</label>
+                <label className="block text-base font-normal text-slate-900">Email address</label>
                 <input
                   value={email}
                   onChange={(event) => {
@@ -333,18 +318,18 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                   type="email"
                   autoComplete="username"
                   required
-                  className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
+                  className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
                 />
               </div>
 
               {showPassword && (
                 <div className="mt-4">
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-slate-600">Password</label>
+                    <label className="block text-base font-normal text-slate-900">Password</label>
                     {mode === "login" && (
                       <Link
                         href="/forgot-password"
-                        className="text-xs font-semibold text-slate-500 underline-offset-2 hover:underline"
+                        className="text-xs font-normal text-slate-500 underline-offset-2 hover:underline"
                       >
                         Forgot password?
                       </Link>
@@ -359,7 +344,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                     minLength={8}
                     required
                     autoFocus
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
+                    className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
                   />
                 </div>
               )}
@@ -367,21 +352,21 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
               <button
                 type="submit"
                 disabled={Boolean(loading)}
-                className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-6 flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading === "email" && <Spinner />}
                 {showPassword ? (mode === "signup" ? "Create account" : "Sign in") : "Continue"}
               </button>
             </form>
 
-            <p className="mt-5 text-center text-sm font-medium text-slate-500">
+            <p className="mt-5 text-center text-sm font-normal text-slate-500">
               {mode === "login" ? (
                 <>
                   Don&apos;t have an account?{" "}
                   <button
                     type="button"
                     onClick={() => navigateToMode("signup")}
-                    className="font-semibold text-slate-950 underline-offset-2 hover:underline"
+                    className="font-normal text-slate-950 underline-offset-2 hover:underline"
                   >
                     Create one
                   </button>
@@ -392,7 +377,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                   <button
                     type="button"
                     onClick={() => navigateToMode("login")}
-                    className="font-semibold text-slate-950 underline-offset-2 hover:underline"
+                    className="font-normal text-slate-950 underline-offset-2 hover:underline"
                   >
                     Log in
                   </button>
@@ -400,7 +385,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
               )}
             </p>
 
-            <p className="mx-auto mt-7 max-w-[420px] text-center text-xs font-medium leading-5 text-slate-400">
+            <p className="mx-auto mt-7 max-w-[420px] text-center text-xs font-normal leading-5 text-slate-400">
               By continuing, you acknowledge that you understand and agree to the{" "}
               <Link href="/terms" className="text-slate-600 underline underline-offset-2 hover:text-slate-950">
                 Terms & Conditions

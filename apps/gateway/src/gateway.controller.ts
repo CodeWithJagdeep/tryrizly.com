@@ -792,10 +792,41 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/stripe/callback")
+  async completeStripeConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
+      );
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Stripe OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "stripe"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   private requireConnectorOAuthProvider(
     provider: string,
-  ): "gmail" | "calendar" | "calcom" | "notion" | "github" {
-    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion" || provider === "github") {
+  ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" {
+    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion" || provider === "github" || provider === "stripe") {
       return provider;
     }
     throw new BadRequestException(`Unsupported OAuth provider: ${provider}`);

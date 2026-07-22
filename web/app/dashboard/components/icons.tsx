@@ -229,6 +229,15 @@ export function MailIcon({ className }: IconProps) {
   );
 }
 
+export function PanelToggleIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">
+      <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6 2.8v10.4" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
 export function BellIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">

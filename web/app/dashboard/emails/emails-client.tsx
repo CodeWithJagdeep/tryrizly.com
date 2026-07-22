@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CreditsBadge } from "../components/CreditsBadge";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -187,21 +188,26 @@ export function EmailsClient() {
     : sentEmails;
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="min-h-screen bg-[#f8f8f7] text-slate-900">
+      {/* Top bar — matches the chat page's sticky chrome */}
+      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
+        <div className="flex h-8 items-center rounded-lg px-2 text-base font-normal text-slate-900 md:text-lg">
+          Emails
+        </div>
+        <CreditsBadge />
+      </div>
+
       {/* Header */}
-      <header className="border-b border-slate-200 px-4 pt-5 sm:px-6">
+      <header className="border-b border-slate-200 px-4 pt-1 sm:px-6">
         <div className="flex items-center justify-between gap-3 pb-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight">Emails</h1>
-            <p className="mt-0.5 truncate text-sm text-slate-500">
-              Analysed by Riz as they arrive via webhook
-            </p>
-          </div>
+          <p className="min-w-0 truncate text-[15px] text-slate-500">
+            Every important email from your inbox, all in one place
+          </p>
           <button
             type="button"
             onClick={() => void load(true)}
             disabled={refreshing || loading}
-            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing} />
             <span className="hidden sm:inline">Refresh</span>
@@ -210,7 +216,7 @@ export function EmailsClient() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
             <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
@@ -218,27 +224,27 @@ export function EmailsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search emails…"
-            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#FE7F2D] focus:outline-none"
           />
         </div>
 
-        {/* Tabs — horizontally scrollable so they never overflow the viewport on phones */}
-        <div className="-mx-4 flex gap-0 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
+        {/* Tabs — pure bordered pills, matching onboarding's selection style */}
+        <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
           {TABS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => setActiveTab(key)}
-              className={`-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition sm:px-4 ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[15px] font-normal transition ${
                 activeTab === key
-                  ? "border-slate-900 text-slate-900"
-                  : "border-transparent text-slate-500 hover:text-slate-600"
+                  ? "border-black/20 bg-slate-100 text-black/80"
+                  : "border-black/20 bg-white text-black/80 hover:border-black/40 hover:bg-slate-50"
               }`}
             >
               {label}
               {!loading && counts[key] > 0 && (
-                <span className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] leading-none ${
+                  activeTab === key ? "bg-white text-black/80" : "bg-slate-100 text-slate-500"
                 }`}>
                   {counts[key]}
                 </span>

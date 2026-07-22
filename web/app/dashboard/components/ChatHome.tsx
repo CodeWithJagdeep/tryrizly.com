@@ -3,13 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpIcon, LibraryIcon } from "./icons";
+import { ArrowUpIcon, ChatIcon, LibraryIcon, PlugIcon } from "./icons";
+import { CreditsBadge } from "./CreditsBadge";
 import { MarkdownMessage } from "./MarkdownMessage";
+import { TelegramBanner } from "./TelegramBanner";
 import {
   CalendarIcon,
+  GitHubIcon,
   GmailIcon,
-  MongoDbIcon,
+  NotionIcon,
   PostgresIcon,
+  SlackIcon,
   StripeIcon,
   TelegramIcon,
 } from "../../components/ConnectorIcons";
@@ -30,9 +34,49 @@ const suggestions = [
   "Summarize unread emails from this morning.",
 ];
 
+// Starter prompts, not personalized recommendations — each one just fills
+// the composer via sendMessage, same as the suggestion chips above.
+const automationIdeas: { title: string; apps: { label: string; Icon: React.ComponentType<{ className?: string }> }[] }[] = [
+  {
+    title: "Draft replies for every unread email that needs a response",
+    apps: [{ label: "Gmail", Icon: GmailIcon }],
+  },
+  {
+    title: "Summarize today's calendar and flag any conflicts",
+    apps: [{ label: "Google Calendar", Icon: CalendarIcon }],
+  },
+  {
+    title: "Post a daily standup summary to Slack every morning",
+    apps: [{ label: "Slack", Icon: SlackIcon }],
+  },
+  {
+    title: "Notify me on Telegram whenever a PR needs my review",
+    apps: [{ label: "GitHub", Icon: GitHubIcon }, { label: "Telegram", Icon: TelegramIcon }],
+  },
+  {
+    title: "Log new Stripe payments into a Notion database",
+    apps: [{ label: "Stripe", Icon: StripeIcon }, { label: "Notion", Icon: NotionIcon }],
+  },
+  {
+    title: "Query new signups from Postgres and summarize the week",
+    apps: [{ label: "Postgres", Icon: PostgresIcon }],
+  },
+];
+
 type AccessState = "loading" | "active" | "blocked";
 
-export function ChatHome({ name }: { name?: string }) {
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+export function ChatHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session");
@@ -42,10 +86,8 @@ export function ChatHome({ name }: { name?: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
-  const [onboarding, setOnboarding] = useState<{ googleConnected?: boolean; telegramLinked?: boolean } | null>(null);
-  const [connectorProviders, setConnectorProviders] = useState<Set<string>>(new Set());
   const [accessState, setAccessState] = useState<AccessState>("loading");
+  const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
 
   useEffect(() => {
     setError(null);
@@ -88,24 +130,9 @@ export function ChatHome({ name }: { name?: string }) {
       })
       .then((billing) => setAccessState(billing.access?.active ? "active" : "blocked"))
       .catch(() => setAccessState("blocked"));
-    fetch("/api/telegram")
+    fetch("/api/chat/history")
       .then((r) => r.json())
-      .then((d: { linked?: boolean }) => setTelegramLinked(Boolean(d.linked)))
-      .catch(() => null);
-    fetch("/api/onboarding/status")
-      .then((r) => r.json())
-      .then((d: { onboarding?: { googleConnected?: boolean; telegramLinked?: boolean } }) =>
-        setOnboarding(d.onboarding ?? {}),
-      )
-      .catch(() => null);
-    fetch("/api/connectors")
-      .then((r) => r.json())
-      .then((d: { connectors?: { provider?: string }[] }) => {
-        const providers = (d.connectors ?? [])
-          .map((c) => c.provider)
-          .filter((p): p is string => Boolean(p));
-        setConnectorProviders(new Set(providers));
-      })
+      .then((d: { sessions?: ChatSession[] }) => setRecentSessions((d.sessions ?? []).slice(0, 4)))
       .catch(() => null);
   }, []);
 
@@ -115,18 +142,7 @@ export function ChatHome({ name }: { name?: string }) {
     scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [session?.messages.length, sending]);
 
-  const firstName = name?.split(" ")[0];
   const hasMessages = (session?.messages.length ?? 0) > 0;
-
-  const googleConnected = Boolean(onboarding?.googleConnected);
-  const connectTiles = [
-    { title: "Telegram", subtitle: "Reminders & briefs on your phone", href: "/dashboard/telegram", Icon: TelegramIcon, connected: Boolean(telegramLinked) },
-    { title: "Gmail", subtitle: "Triage inbox & draft replies", href: "/dashboard/connectors", Icon: GmailIcon, connected: googleConnected || connectorProviders.has("gmail") || connectorProviders.has("google") },
-    { title: "Google Calendar", subtitle: "Meetings & scheduling", href: "/dashboard/connectors", Icon: CalendarIcon, connected: googleConnected || connectorProviders.has("calendar") || connectorProviders.has("google") },
-    { title: "Postgres", subtitle: "Query your database", href: "/dashboard/connectors", Icon: PostgresIcon, connected: connectorProviders.has("postgres") },
-    { title: "Stripe", subtitle: "Revenue & subscriptions", href: "/dashboard/connectors", Icon: StripeIcon, connected: connectorProviders.has("stripe") },
-    { title: "MongoDB", subtitle: "Query your collections", href: "/dashboard/connectors", Icon: MongoDbIcon, connected: connectorProviders.has("mongodb") },
-  ];
 
   async function runTurn(
     displayContent: string,
@@ -240,7 +256,13 @@ export function ChatHome({ name }: { name?: string }) {
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-white">
+    <main className="flex min-h-0 flex-1 flex-col bg-[#f8f8f7]">
+      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
+        <div className="flex h-8 items-center rounded-lg px-2 text-base font-medium text-slate-900 md:text-lg">
+          Agent v1
+        </div>
+        <CreditsBadge />
+      </div>
       {hasMessages ? (
         <>
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-36 lg:pb-8">
@@ -267,7 +289,7 @@ export function ChatHome({ name }: { name?: string }) {
                             type="button"
                             disabled={sending || accessState !== "active"}
                             onClick={() => void handleApprove(approval)}
-                            className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+                            className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-normal text-white transition hover:brightness-105 disabled:opacity-50"
                           >
                             Approve
                           </button>
@@ -275,7 +297,7 @@ export function ChatHome({ name }: { name?: string }) {
                             type="button"
                             disabled={sending}
                             onClick={() => handleReject(approval)}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-normal text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
                           >
                             Reject
                           </button>
@@ -293,8 +315,9 @@ export function ChatHome({ name }: { name?: string }) {
             </div>
           </div>
 
-          <div className="sticky bottom-0 bg-white px-6 pb-24 pt-3 lg:pb-8">
+          <div className="sticky bottom-0 bg-[#f8f8f7] px-6 pb-24 pt-3 lg:pb-8">
             <div className="mx-auto w-full max-w-2xl">
+              <TelegramBanner />
               {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
               <ChatInputForm
                 accessState={accessState}
@@ -307,25 +330,23 @@ export function ChatHome({ name }: { name?: string }) {
           </div>
         </>
       ) : (
-        <div
-          className="relative flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pb-24 lg:pb-16"
-          style={{
-            background:
-              "radial-gradient(60% 45% at 50% 0%, rgba(254,127,45,0.08), transparent 62%), radial-gradient(42% 34% at 88% 6%, rgba(96,165,250,0.06), transparent 60%), radial-gradient(42% 34% at 10% 12%, rgba(244,114,182,0.06), transparent 60%), #fbfbfa",
-          }}
-        >
+        <div className="relative flex min-h-0 flex-1 flex-col items-center overflow-y-auto bg-[#f8f8f7] px-6 pb-24 lg:pb-16">
           {/* Ambient dotted texture */}
           <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:18px_18px]" />
 
           <div className="relative z-10 flex w-full flex-col items-center">
             {/* Search section — 80vh tall, input bar centered */}
             <div className="flex h-[80vh] w-full max-w-2xl flex-col items-center justify-center">
-              <h1 className="text-center text-[26px] font-bold tracking-tight text-slate-900 sm:text-[32px]">
-                {firstName ? `What's on your mind today, ${firstName}?` : "What's on your mind today?"}
+              <p className="mb-2 text-center text-xs font-medium uppercase tracking-[0.14em] text-[#FE7F2D]">
+                Chat. Automate.
+              </p>
+              <h1 className="text-center text-[26px] font-normal tracking-tight text-slate-900 sm:text-[32px]">
+                What do you want to automate?
               </h1>
 
               {/* Copilot-style input card */}
               <div className="mt-8 w-full">
+                <TelegramBanner />
                 {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
                 <ChatInputForm
                   accessState={accessState}
@@ -363,45 +384,53 @@ export function ChatHome({ name }: { name?: string }) {
               </div>
             </div>
 
-            {/* Connect your tools — the "Start from scratch" section */}
-            <div className="w-full max-w-6xl">
-              <div className="mb-3 flex items-baseline justify-between">
-                <p className="text-base font-bold text-slate-900">Connect your tools</p>
-                <span className="text-xs font-medium text-slate-400 tabular-nums">
-                  {connectTiles.filter((t) => t.connected).length} of {connectTiles.length} connected
-                </span>
-              </div>
+            {/* Ideas to automate — curated starter prompts, not personalized recommendations */}
+            <div className="mt-8 w-full max-w-6xl">
+              <p className="mb-3 text-base font-normal text-slate-900">Ideas to automate</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {connectTiles.map((t) => {
-                  const Icon = t.Icon;
-                  return (
-                    <Link
-                      key={t.title}
-                      href={t.href}
-                      className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white/70 px-4 py-3 backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{t.title}</p>
-                        <p className="mt-0.5 truncate text-xs text-slate-500">{t.subtitle}</p>
-                      </div>
-                      {t.connected ? (
-                        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Connected
+                {automationIdeas.map((idea) => (
+                  <button
+                    key={idea.title}
+                    type="button"
+                    disabled={accessState !== "active"}
+                    onClick={() => sendMessage(idea.title)}
+                    className="flex flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white/70 px-4 py-3 text-left backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <p className="text-sm font-normal text-slate-900">{idea.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-400">Works with:</span>
+                      {idea.apps.map(({ label, Icon }) => (
+                        <span key={label} title={label} className="flex h-5 w-5 items-center justify-center rounded bg-white ring-1 ring-slate-200">
+                          <Icon className="h-full w-full" />
                         </span>
-                      ) : (
-                        <span className="shrink-0 text-[11px] font-semibold text-[#FE7F2D] transition-transform group-hover:translate-x-0.5">
-                          Connect →
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+                      ))}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Jump back in — your own recent chats, not fake data */}
+            {recentSessions.length > 0 && (
+              <div className="mt-8 w-full max-w-6xl">
+                <p className="mb-3 text-base font-normal text-slate-900">Jump back in</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {recentSessions.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/dashboard?session=${s.id}`}
+                      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white/70 p-4 backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#FE7F2D]/10 text-[#FE7F2D]">
+                        <ChatIcon className="h-4 w-4" />
+                      </span>
+                      <p className="truncate text-sm font-normal text-slate-900">{s.title}</p>
+                      <p className="text-xs text-slate-400">Edited {timeAgo(s.updatedAt)}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -424,12 +453,12 @@ function ChatInputForm({
 }) {
   if (accessState === "blocked") {
     return (
-      <div className="flex min-h-32 flex-col items-center justify-center border-2 border-black bg-white px-5 py-5 text-center">
-        <p className="text-sm font-bold text-slate-900">Your free trial has ended</p>
+      <div className="flex min-h-32 flex-col items-center justify-center rounded-[22px] border border-black/10 bg-white px-5 py-5 text-center shadow-[0px_12px_32px_0px_rgba(0,0,0,0.03)]">
+        <p className="text-sm font-normal text-slate-900">Your free trial has ended</p>
         <p className="mt-1 text-sm text-slate-500">Choose a paid plan to continue using Riz.</p>
         <Link
           href="/dashboard/upgrade"
-          className="mt-4 bg-[#FE7F2D] px-5 py-2 text-sm font-bold text-white transition hover:brightness-105"
+          className="mt-4 rounded-full bg-[#FE7F2D] px-5 py-2 text-sm font-normal text-white transition hover:brightness-105"
         >
           View plans
         </Link>
@@ -441,51 +470,43 @@ function ChatInputForm({
 
   return (
     <form
-      className="border-2 border-black bg-white transition"
+      className="rounded-[22px] border border-black/10 bg-white py-3 shadow-[0px_12px_32px_0px_rgba(0,0,0,0.03)] transition focus-within:border-black/20"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(message);
       }}
     >
-      <div className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
-        <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D]">
-          <SparkIcon className="h-3.5 w-3.5" />
-        </span>
-        <span className="text-sm font-bold text-slate-900">Ask Riz</span>
-      </div>
-      <div className="p-3">
-        <textarea
-          value={message}
-          onChange={(event) => onMessageChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              onSubmit(message);
-            }
-          }}
-          placeholder={accessLoading ? "Checking plan access…" : "Ask anything, or tell me what to handle…"}
-          rows={3}
-          disabled={sending || accessLoading}
-          className="w-full resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
-        />
-        <div className="mt-2 flex items-center justify-end">
-          <button
-            type="submit"
-            disabled={!message.trim() || sending || accessLoading}
-            className="flex h-8 w-8 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white transition hover:brightness-105 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-400"
-          >
-            <ArrowUpIcon className="h-4 w-4" />
-          </button>
-        </div>
+      <textarea
+        value={message}
+        onChange={(event) => onMessageChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            onSubmit(message);
+          }
+        }}
+        placeholder={accessLoading ? "Checking plan access…" : "Ask anything, or tell me what to handle…"}
+        rows={1}
+        disabled={sending || accessLoading}
+        className="min-h-[50px] max-h-[216px] w-full resize-none bg-transparent px-4 text-[15px] leading-6 text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+      />
+      <div className="mt-2 flex items-center justify-between gap-2 px-3">
+        <Link
+          href="/dashboard/connectors"
+          title="Connectors"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+        >
+          <PlugIcon className="h-4 w-4" />
+          Connectors
+        </Link>
+        <button
+          type="submit"
+          disabled={!message.trim() || sending || accessLoading}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+        >
+          <ArrowUpIcon className="h-4 w-4" />
+        </button>
       </div>
     </form>
-  );
-}
-
-function SparkIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2l1.9 5.6a4 4 0 0 0 2.5 2.5L22 12l-5.6 1.9a4 4 0 0 0-2.5 2.5L12 22l-1.9-5.6a4 4 0 0 0-2.5-2.5L2 12l5.6-1.9a4 4 0 0 0 2.5-2.5L12 2z" />
-    </svg>
   );
 }

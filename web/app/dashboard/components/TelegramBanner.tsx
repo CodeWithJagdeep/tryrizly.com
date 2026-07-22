@@ -3,41 +3,59 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { SlackIcon, TelegramIcon } from "../../components/ConnectorIcons";
 
 const DISMISS_KEY = "rizly-telegram-banner-dismissed";
 
 /**
- * Slim persistent nudge for users who haven't linked Telegram — reminders,
+ * Persistent nudge for users who haven't linked any chat channel — reminders,
  * briefs, and approvals are delivered there, so an unlinked user is missing
  * most of the product. Dismissal lasts for the browser session only.
  */
 export function TelegramBanner() {
   const pathname = usePathname();
-  const [linked, setLinked] = useState<boolean | null>(null);
+  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
+  const [slackLinked, setSlackLinked] = useState<boolean | null>(null);
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
     setDismissed(sessionStorage.getItem(DISMISS_KEY) === "1");
     fetch("/api/telegram")
       .then((r) => r.json())
-      .then((data: { linked?: boolean }) => setLinked(Boolean(data.linked)))
-      .catch(() => setLinked(null));
+      .then((d: { linked?: boolean }) => setTelegramLinked(Boolean(d.linked)))
+      .catch(() => setTelegramLinked(null));
+    fetch("/api/slack")
+      .then((r) => r.json())
+      .then((d: { linked?: boolean }) => setSlackLinked(Boolean(d.linked)))
+      .catch(() => setSlackLinked(null));
   }, []);
 
-  if (linked !== false || dismissed || pathname?.startsWith("/dashboard/telegram")) return null;
+  const anyLinked = telegramLinked === true || slackLinked === true;
+  const statusKnown = telegramLinked !== null && slackLinked !== null;
+
+  if (!statusKnown || anyLinked || dismissed || pathname?.startsWith("/dashboard/channels")) return null;
 
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[#FE7F2D]/30 bg-[#FE7F2D]/5 px-5 py-2.5">
-      <p className="text-sm text-slate-700">
-        <span className="font-semibold text-slate-900">Riz delivers on Telegram.</span>{" "}
-        Reminders, morning briefs, and approvals can&apos;t reach you until you link it.
-      </p>
+    <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex shrink-0 -space-x-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white ring-2 ring-white">
+            <TelegramIcon className="h-full w-full" />
+          </span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white ring-2 ring-white">
+            <SlackIcon className="h-full w-full" />
+          </span>
+        </span>
+        <p className="min-w-0 truncate text-sm text-black">
+          Channels disconnected. Link Telegram or Slack to chat with Rizly anytime.
+        </p>
+      </div>
       <div className="flex shrink-0 items-center gap-3">
         <Link
-          href="/dashboard/telegram"
-          className="inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#e96f24]"
+          href="/dashboard/channels"
+          className="inline-flex h-8 items-center justify-center rounded-lg bg-black px-4 text-sm font-medium text-white transition hover:opacity-90"
         >
-          Link Telegram
+          Connect
         </Link>
         <button
           type="button"

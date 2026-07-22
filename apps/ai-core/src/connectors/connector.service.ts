@@ -19,6 +19,7 @@ import type {
   GoogleOAuthProvider,
   SaveConnectorInput,
   StartOAuthInput,
+  StripeConnectorSecret,
 } from "./connector.types";
 import type { CalComAuth } from "./calcom.service";
 
@@ -44,6 +45,18 @@ const calComOAuthScopes = [
   "BOOKING_WRITE",
   "EVENT_TYPE_READ",
   "PROFILE_READ",
+];
+
+// Stripe Apps permissions are granted through stripe-app.json rather than an
+// OAuth `scope` query parameter. Keep them here as connection metadata so the
+// dashboard can accurately show what Rizly requested.
+const STRIPE_APP_PERMISSIONS = [
+  "balance_transaction_source_read",
+  "charge_read",
+  "customer_read",
+  "invoice_read",
+  "payment_intent_read",
+  "subscription_read",
 ];
 
 type CalComOAuthClient = {
@@ -399,7 +412,7 @@ export class ConnectorService {
       || account.status !== "connected"
     ) return { connected: false };
 
-    const payload = this.vault.decrypt(account.encryptedPayload);
+    let payload = this.vault.decrypt(account.encryptedPayload);
 
     if (provider === "postgres") {
       const connectionUrl = payload.connectionUrl;
@@ -418,11 +431,31 @@ export class ConnectorService {
     }
 
     if (provider === "stripe") {
+      const expiresAt = numberSecret(payload.expiresAt);
+      const refreshToken = stringSecret(payload.refreshToken);
+      if (
+        account.authType === "oauth" &&
+        expiresAt &&
+        refreshToken &&
+        expiresAt <= Date.now() + 60_000
+      ) {
+        payload = await this.refreshStripeOAuth(account, refreshToken);
+      }
       const secretKey = payload.secretKey;
       if (typeof secretKey !== "string" || !secretKey) {
         throw new Error(`invalid_connector_payload:${provider}`);
       }
-      return { connected: true, provider: "stripe", secret: { secretKey } };
+      return {
+        connected: true,
+        provider: "stripe",
+        secret: {
+          secretKey,
+          refreshToken: stringSecret(payload.refreshToken),
+          expiresAt: numberSecret(payload.expiresAt),
+          stripeAccountId: stringSecret(payload.stripeAccountId),
+          livemode: typeof payload.livemode === "boolean" ? payload.livemode : undefined,
+        },
+      };
     }
 
     const keyId = payload.keyId;
@@ -560,6 +593,15 @@ export class ConnectorService {
 
     if (provider === "notion") {
       return this.completeNotionOAuth({
+        code: input.code,
+        userId,
+        returnTo: storedState.returnTo,
+        scopes,
+      });
+    }
+
+    if (provider === "stripe") {
+      return this.completeStripeOAuth({
         code: input.code,
         userId,
         returnTo: storedState.returnTo,
@@ -765,6 +807,61 @@ export class ConnectorService {
     return { ...this.toSummary(account), returnTo: input.returnTo };
   }
 
+  private async completeStripeOAuth(input: {
+    code: string;
+    userId: string;
+    returnTo?: string;
+    scopes: string[];
+  }): Promise<CompleteOAuthResult> {
+    const tokenJson = await exchangeStripeOAuthToken({
+      grantType: "authorization_code",
+      code: input.code,
+    });
+    const secret = stripeOAuthSecretFromToken(tokenJson);
+    const accountId = secret.stripeAccountId;
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: "stripe",
+      authType: "oauth",
+      label: accountId ? `Stripe (${accountId})` : providerLabel("stripe"),
+      status: "connected",
+      encryptedPayload: this.vault.encrypt(secret),
+      scopes: input.scopes,
+      metadata: {
+        setup: "oauth",
+        hasRefreshToken: Boolean(secret.refreshToken),
+        tokenExpiresAt: secret.expiresAt ?? null,
+        ...(accountId ? { stripeAccountId: accountId } : {}),
+        ...(typeof secret.livemode === "boolean" ? { livemode: secret.livemode } : {}),
+      },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
+  private async refreshStripeOAuth(
+    account: ConnectedAccount,
+    refreshToken: string,
+  ): Promise<StripeConnectorSecret> {
+    const tokenJson = await exchangeStripeOAuthToken({
+      grantType: "refresh_token",
+      refreshToken,
+    });
+    const secret = stripeOAuthSecretFromToken(tokenJson);
+    await this.repository.updateById(account.id, {
+      encryptedPayload: this.vault.encrypt(secret),
+      metadata: {
+        ...account.metadata,
+        hasRefreshToken: Boolean(secret.refreshToken),
+        tokenExpiresAt: secret.expiresAt ?? null,
+        ...(secret.stripeAccountId ? { stripeAccountId: secret.stripeAccountId } : {}),
+        ...(typeof secret.livemode === "boolean" ? { livemode: secret.livemode } : {}),
+      },
+    });
+    return secret;
+  }
+
   private async refreshCalComOAuth(
     account: ConnectedAccount,
     refreshToken: string,
@@ -874,11 +971,12 @@ function oauthStateSecret(): string {
 }
 
 function isConnectorOAuthProvider(value: unknown): value is ConnectorOAuthProvider {
-  return value === "gmail" || value === "calendar" || value === "calcom" || value === "notion" || value === "github";
+  return value === "gmail" || value === "calendar" || value === "calcom" || value === "notion" || value === "github" || value === "stripe";
 }
 
 function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
   if (provider === "notion") return [];
+  if (provider === "stripe") return STRIPE_APP_PERMISSIONS;
   // "repo" is required to see private-repo issues/PRs; classic OAuth apps
   // have no read-only variant of it. The GitHubService still only GETs.
   if (provider === "github") return ["repo", "read:user"];
@@ -907,6 +1005,13 @@ function missingOAuthConfig(provider: ConnectorOAuthProvider) {
     };
   }
 
+  if (provider === "stripe" && (!env.STRIPE_APP_CLIENT_ID || !env.STRIPE_APP_SECRET_KEY)) {
+    return {
+      status: "missing_config" as const,
+      message: "STRIPE_APP_CLIENT_ID and STRIPE_APP_SECRET_KEY are missing",
+    };
+  }
+
   if ((provider === "gmail" || provider === "calendar") && !env.GOOGLE_CLIENT_ID) {
     return {
       status: "missing_config" as const,
@@ -924,6 +1029,14 @@ function authorizationUrlForProvider(
   calComOAuthClient?: CalComOAuthClient,
   codeChallenge?: string,
 ): string {
+  if (provider === "stripe") {
+    const url = new URL(env.STRIPE_APP_AUTHORIZE_URL);
+    url.searchParams.set("client_id", env.STRIPE_APP_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.STRIPE_APP_REDIRECT_URI);
+    url.searchParams.set("state", state);
+    return url.toString();
+  }
+
   if (provider === "notion") {
     const url = new URL("https://api.notion.com/v1/oauth/authorize");
     url.searchParams.set("owner", "user");
@@ -1115,6 +1228,57 @@ async function fetchGoogleProfile(accessToken: string): Promise<{ email?: string
   return payload ?? null;
 }
 
+type StripeOAuthTokenJson = Record<string, string | number | boolean | null>;
+
+async function exchangeStripeOAuthToken(
+  input:
+    | { grantType: "authorization_code"; code: string }
+    | { grantType: "refresh_token"; refreshToken: string },
+): Promise<StripeOAuthTokenJson> {
+  if (!env.STRIPE_APP_SECRET_KEY) {
+    throw new Error("STRIPE_APP_SECRET_KEY is missing");
+  }
+
+  const body = new URLSearchParams({ grant_type: input.grantType });
+  if (input.grantType === "authorization_code") body.set("code", input.code);
+  else body.set("refresh_token", input.refreshToken);
+
+  const credentials = Buffer.from(`${env.STRIPE_APP_SECRET_KEY}:`).toString("base64");
+  const response = await fetch("https://api.stripe.com/v1/oauth/token", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: `Basic ${credentials}`,
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Stripe OAuth token exchange failed: ${errorText}`);
+  }
+  return (await response.json()) as StripeOAuthTokenJson;
+}
+
+function stripeOAuthSecretFromToken(tokenJson: StripeOAuthTokenJson): StripeConnectorSecret {
+  const accessToken = stringSecret(tokenJson.access_token);
+  const refreshToken = stringSecret(tokenJson.refresh_token);
+  const stripeAccountId =
+    stringSecret(tokenJson.stripe_user_id) ?? stringSecret(tokenJson.account_id);
+  if (!accessToken || !refreshToken) {
+    throw new Error("Stripe OAuth token exchange did not return access and refresh tokens");
+  }
+  const expiresIn = numberSecret(tokenJson.expires_in) ?? 3600;
+  return {
+    secretKey: accessToken,
+    refreshToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+    ...(stripeAccountId ? { stripeAccountId } : {}),
+    ...(typeof tokenJson.livemode === "boolean" ? { livemode: tokenJson.livemode } : {}),
+  };
+}
+
 type NotionTokenJson = ConnectorSecretPayload;
 
 async function exchangeNotionToken(input: {
@@ -1262,6 +1426,7 @@ function providerLabel(provider: ConnectorProvider) {
     postgres: "Postgres",
     mongodb: "MongoDB",
     slack: "Slack",
+    slack_surface: "Slack DM",
     notion: "Notion",
     custom_api: "Custom API",
     telegram: "Telegram",

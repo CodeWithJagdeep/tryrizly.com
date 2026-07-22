@@ -22,6 +22,10 @@
       "types": "./dist/telegram.d.ts",
       "default": "./dist/telegram.js"
     },
+    "./slack-surface": {
+      "types": "./dist/slack-surface.d.ts",
+      "default": "./dist/slack-surface.js"
+    },
     "./email": {
       "types": "./dist/email.d.ts",
       "default": "./dist/email.js"

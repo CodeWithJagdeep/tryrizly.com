@@ -6,6 +6,9 @@ export type OnboardingState = {
   source?: string;
   googleConnected: boolean;
   telegramLinked: boolean;
+  slackLinked?: boolean;
+  /** Set once the About-you onboarding step (name + optional phone) is saved. */
+  profileCompleted?: boolean;
   completedAt?: string;
   /** Set once the dashboard's first-run welcome tour has been shown/dismissed. */
   dashboardTourSeenAt?: string;
@@ -14,6 +17,8 @@ export type OnboardingState = {
 export type StoredUser = {
   email: string;
   name?: string;
+  /** E.164-ish, dial code included (e.g. "+91 9876543210"). Optional — collected in onboarding. */
+  phone?: string;
   passwordHash?: string;
   passwordSalt?: string;
   provider?: string;
@@ -55,6 +60,9 @@ export class AuthRepository {
         .collection("telegram_link_tokens")
         .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
       await db
+        .collection("slack_link_tokens")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      await db
         .collection("password_reset_tokens")
         .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
       // Best-effort: if legacy duplicate links exist, index creation fails —
@@ -63,6 +71,9 @@ export class AuthRepository {
       await Promise.all([
         db.collection("telegram_links").createIndex({ chatId: 1 }, { unique: true }),
         db.collection("telegram_links").createIndex({ userId: 1 }, { unique: true }),
+        db.collection("slack_links").createIndex({ slackKey: 1 }, { unique: true }),
+        db.collection("slack_links").createIndex({ userId: 1 }, { unique: true }),
+        db.collection("slack_workspaces").createIndex({ teamId: 1 }, { unique: true }),
       ]).catch(() => undefined);
     })();
     return this.indexesReady;
@@ -344,6 +355,176 @@ export class AuthRepository {
   async countTelegramLinks(): Promise<number> {
     const db = await getDb();
     return db.collection("telegram_links").countDocuments();
+  }
+
+  /**
+   * Slack surface linking, mirroring the Telegram flow. A Slack identity is
+   * keyed `teamId:slackUserId` (Slack user ids are only unique per workspace).
+   * Same idempotent-token semantics as createTelegramLinkToken — see that
+   * method's comment for why we reuse a still-valid token.
+   */
+  async createSlackLinkToken(email: string, ttlMs: number): Promise<string> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    const collection = db.collection<{ token: string; email: string; expiresAt: Date }>(
+      "slack_link_tokens",
+    );
+
+    const existing = await collection.findOne({ email, expiresAt: { $gt: new Date() } });
+    if (existing) return existing.token;
+
+    const token = randomBytes(16).toString("base64url");
+    await collection.deleteMany({ email });
+    await collection.insertOne({
+      token,
+      email,
+      expiresAt: new Date(Date.now() + ttlMs),
+    });
+    return token;
+  }
+
+  async consumeSlackLinkToken(
+    token: string,
+    slackKey?: string,
+  ): Promise<{ email: string } | null> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    const now = new Date();
+    const collection = db.collection<{
+      token: string;
+      email: string;
+      expiresAt: Date;
+      claimedBySlackKey?: string;
+      claimedAt?: Date;
+    }>("slack_link_tokens");
+
+    if (slackKey) {
+      const record = await collection.findOneAndUpdate(
+        {
+          token,
+          expiresAt: { $gt: now },
+          $or: [{ claimedBySlackKey: { $exists: false } }, { claimedBySlackKey: slackKey }],
+        },
+        { $set: { claimedBySlackKey: slackKey, claimedAt: now } },
+        { returnDocument: "after" },
+      );
+      return record ? { email: record.email } : null;
+    }
+
+    const record = await collection.findOneAndDelete({ token });
+    if (!record || record.expiresAt.getTime() < Date.now()) {
+      return null;
+    }
+    return { email: record.email };
+  }
+
+  /**
+   * Links a Slack identity to an account with the same one-to-one contract as
+   * linkTelegramChat: an identity already owned by a *different* account is
+   * refused, not stolen. `dmChannelId` is the bot↔user DM channel, stored so
+   * proactive sends don't need a conversations.open round-trip.
+   */
+  async linkSlackUser(
+    slackKey: string,
+    email: string,
+    userId: string,
+    dmChannelId?: string,
+  ): Promise<{ ok: true } | { ok: false; linkedEmail: string }> {
+    const db = await getDb();
+    const links = db.collection<{
+      slackKey: string;
+      userId: string;
+      email?: string;
+      dmChannelId?: string;
+    }>("slack_links");
+
+    const existing = await links.findOne({ slackKey });
+    if (existing && existing.userId !== userId) {
+      return { ok: false, linkedEmail: existing.email ?? existing.userId };
+    }
+
+    await links.deleteMany({ $or: [{ slackKey }, { userId }] });
+    await links.insertOne({
+      slackKey,
+      email,
+      userId,
+      dmChannelId,
+      linkedAt: new Date(),
+    } as never);
+    await this.setOnboarding(email, { slackLinked: true, completedAt: new Date().toISOString() });
+    return { ok: true };
+  }
+
+  /** Unlink this user's Slack identity. Returns true if a link was removed. */
+  async unlinkSlackUser(userId: string): Promise<boolean> {
+    const db = await getDb();
+    const result = await db.collection("slack_links").deleteMany({ userId });
+    return result.deletedCount > 0;
+  }
+
+  async findUserIdBySlackKey(slackKey: string): Promise<string | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ slackKey: string; userId: string }>("slack_links")
+      .findOne({ slackKey });
+    return record?.userId ?? null;
+  }
+
+  async findSlackLinkByKey(
+    slackKey: string,
+  ): Promise<{ userId: string; email?: string } | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ slackKey: string; userId: string; email?: string }>("slack_links")
+      .findOne({ slackKey });
+    return record ? { userId: record.userId, email: record.email } : null;
+  }
+
+  /**
+   * Workspace bot tokens from "Add to Slack" OAuth installs. The home
+   * workspace (where the app was manually installed) keeps using the env
+   * token; every other workspace's token lives here, keyed by team.
+   */
+  async saveSlackWorkspace(teamId: string, botToken: string, teamName?: string): Promise<void> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    await db.collection("slack_workspaces").updateOne(
+      { teamId },
+      { $set: { teamId, botToken, teamName, updatedAt: new Date() } },
+      { upsert: true },
+    );
+  }
+
+  async findSlackBotTokenByTeam(teamId: string): Promise<string | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ teamId: string; botToken: string }>("slack_workspaces")
+      .findOne({ teamId });
+    return record?.botToken ?? null;
+  }
+
+  /** Reverse lookup for proactive sends — a user's Slack DM channel, if linked. */
+  async findSlackDmChannelByUserId(userId: string): Promise<string | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ userId: string; dmChannelId?: string }>("slack_links")
+      .findOne({ userId });
+    return record?.dmChannelId ?? null;
+  }
+
+  /**
+   * Every linked Slack DM, for replaying messages missed during a Socket Mode
+   * outage. `slackKey` is `teamId:slackUserId` (see SlackSurfaceService.slackKey).
+   */
+  async listSlackLinks(): Promise<
+    Array<{ slackKey: string; userId: string; dmChannelId?: string }>
+  > {
+    const db = await getDb();
+    const records = await db
+      .collection<{ slackKey: string; userId: string; dmChannelId?: string }>("slack_links")
+      .find({ dmChannelId: { $exists: true } })
+      .toArray();
+    return records.map((r) => ({ slackKey: r.slackKey, userId: r.userId, dmChannelId: r.dmChannelId }));
   }
 
   /** Web Push subscriptions — fallback notification channel for users without Telegram. */

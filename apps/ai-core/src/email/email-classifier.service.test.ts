@@ -60,4 +60,34 @@ describe("EmailClassifierService fallback rules", () => {
       riskLevel: "high",
     });
   });
+
+  it.each([
+    {
+      from: "Quora Digest <digest@quora.example>",
+      subject: "Your Quora digest",
+      body: "Recommended stories and answers for you.",
+    },
+    {
+      from: "Indeed <no-reply@indeed.example>",
+      subject: "Updates to our Terms of Service",
+      body: "Our terms are changing next month.",
+    },
+    {
+      from: "Neha from ClearTax <neha@updates.cleartax.example>",
+      subject: "ITR filing deadline is approaching",
+      body: "File today with ClearTax. Unsubscribe or manage email preferences.",
+    },
+  ])("silently filters reported inbox noise: $subject", async (message) => {
+    const result = await classifier.classify(message);
+
+    expect(result).toMatchObject({
+      requiresReply: false,
+      urgency: "low",
+      suggestedAction: "ignore",
+      riskLevel: "low",
+      replyIntent: "ignore",
+      confidence: "high",
+    });
+    expect(["newsletter", "general_low"]).toContain(result.category);
+  });
 });

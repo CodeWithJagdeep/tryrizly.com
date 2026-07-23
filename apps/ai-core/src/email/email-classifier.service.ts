@@ -1,7 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { LlmRouterService } from "../llm/llm-router.service";
 import { extractJson } from "../llm/llm-router.service";
-import { describeNow, localDateTimeToUtc, parseNaiveDateTime } from "../lib/timezone";
+import {
+  describeNow,
+  localDateTimeToUtc,
+  parseNaiveDateTime,
+} from "../lib/timezone";
 import { logger } from "@heyriz/shared/logger";
 import type {
   EmailCategory,
@@ -13,6 +17,10 @@ import type {
   ExtractedContactCandidate,
   ExtractedEmailFacts,
 } from "./email.types";
+import {
+  assessEmailImportance,
+  type EmailImportanceAssessment,
+} from "./email-importance";
 
 const OTP_PATTERNS = [
   /\botp\b/i,
@@ -63,6 +71,11 @@ export class EmailClassifierService {
       };
     }
 
+    const importance = assessEmailImportance(input);
+    if (importance.decisivePriority === "LOW") {
+      return this.lowImportanceFacts(input, importance);
+    }
+
     if (!this.llm.hasProvider("extract")) {
       return this.rulesClassify(input);
     }
@@ -91,6 +104,8 @@ export class EmailClassifierService {
               "  general_high - urgent message from a real person that doesn't fit above",
               "  general_medium - normal reply or update from a known contact",
               "  general_low  - misc low-importance email",
+              "Precision rule: a human display name does not make a bulk campaign personal. Generic deadlines, registration links, webinars/live sessions, market updates, TOS changes, and social digests are newsletter/general_low unless the body contains a concrete user-specific request.",
+              "Use general_medium only when the message contains actual personal value or action. Do not use it as the fallback for automated mail.",
               "",
               "Extract these facts (omit fields you can't confidently extract):",
               "  person       - real human sender/contact name only; omit for no-reply/system/company mail",
@@ -129,7 +144,9 @@ export class EmailClassifierService {
         temperature: 0,
       });
 
-      const parsed = extractJson<Partial<ExtractedEmailFacts> & { category?: string }>(raw ?? "");
+      const parsed = extractJson<
+        Partial<ExtractedEmailFacts> & { category?: string }
+      >(raw ?? "");
       const category = normalizeCategory(parsed?.category);
       const senderType = normalizeSenderType(parsed?.senderType);
       const isAutomated = normalizeBoolean(parsed?.isAutomated);
@@ -140,20 +157,28 @@ export class EmailClassifierService {
         // this is the silent path that used to leave the user-facing
         // notification with zero body context. Log it so a spike is visible
         // instead of only showing up as vague user reports.
-        logger.warn("email classifier: model omitted summary, using body snippet", {
-          category,
-          hadRawResponse: Boolean(raw),
-        });
+        logger.warn(
+          "email classifier: model omitted summary, using body snippet",
+          {
+            category,
+            hadRawResponse: Boolean(raw),
+          },
+        );
       }
 
-      return {
+      const facts: ExtractedEmailFacts = {
         category,
         person: parsed?.person?.trim() || undefined,
-        contactCandidate: normalizeContactCandidate(parsed?.contactCandidate, input.from, input.body, {
-          senderType,
-          isAutomated,
-          isMarketing,
-        }),
+        contactCandidate: normalizeContactCandidate(
+          parsed?.contactCandidate,
+          input.from,
+          input.body,
+          {
+            senderType,
+            isAutomated,
+            isMarketing,
+          },
+        ),
         entities: normalizeEntities(parsed?.entities),
         serviceName: parsed?.serviceName?.trim() || undefined,
         amount: parsed?.amount?.trim() || undefined,
@@ -179,9 +204,12 @@ export class EmailClassifierService {
         isAutomated,
         isMarketing,
         replyIntent: normalizeReplyIntent(parsed?.replyIntent),
-        summary: parsed?.summary?.trim() || this.bodySnippetSummary(input.from, truncatedBody),
+        summary:
+          parsed?.summary?.trim() ||
+          this.bodySnippetSummary(input.from, truncatedBody),
         confidence: normalizeConfidence(parsed?.confidence),
       };
+      return this.enforceImportancePolicy(facts, importance);
     } catch (error) {
       logger.warn("email classifier llm failed; using rules", {
         error: error instanceof Error ? error.message : String(error),
@@ -195,7 +223,10 @@ export class EmailClassifierService {
    * instant. Tolerates the model ignoring instructions and emitting a value
    * with its own (often wrong) offset/Z by just re-parsing it as a fallback.
    */
-  private toUtcIso(value: string | undefined, timezone: string): string | undefined {
+  private toUtcIso(
+    value: string | undefined,
+    timezone: string,
+  ): string | undefined {
     const trimmed = value?.trim();
     if (!trimmed) return undefined;
 
@@ -215,18 +246,80 @@ export class EmailClassifierService {
     const fallbackMs = Date.parse(trimmed);
     if (!Number.isNaN(fallbackMs)) return new Date(fallbackMs).toISOString();
 
-    logger.warn("email classifier: unparseable datetime, dropping", { value: trimmed });
+    logger.warn("email classifier: unparseable datetime, dropping", {
+      value: trimmed,
+    });
     return undefined;
   }
 
   /** First real sentence/line of the body, so a degraded classification still carries actual content instead of just the sender. */
   private bodySnippetSummary(from: string, body: string): string {
-    const snippet = body
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 140);
+    const snippet = body.replace(/\s+/g, " ").trim().slice(0, 140);
     if (!snippet) return `Email from ${from}`;
     return `${shortFrom(from)}: ${snippet}${body.length > 140 ? "…" : ""}`;
+  }
+
+  private lowImportanceFacts(
+    input: { from: string; subject: string; body: string },
+    importance: EmailImportanceAssessment,
+  ): ExtractedEmailFacts {
+    const category: EmailCategory = importance.isBulk
+      ? "newsletter"
+      : "general_low";
+    return {
+      category,
+      summary: this.bodySnippetSummary(input.from, input.body || input.subject),
+      contactCandidate: rejectContactCandidate(
+        importance.isBulk
+          ? "Bulk, promotional, digest, or notification email"
+          : "Passive automated or transactional email",
+      ),
+      requiresReply: false,
+      urgency: "low",
+      senderType: "automated",
+      suggestedAction: "ignore",
+      reason: importance.reason,
+      riskLevel: "low",
+      isAutomated: importance.isLikelyAutomated || importance.isBulk,
+      isMarketing: importance.isBulk,
+      replyIntent: "ignore",
+      confidence: "high",
+    };
+  }
+
+  private enforceImportancePolicy(
+    facts: ExtractedEmailFacts,
+    importance: EmailImportanceAssessment,
+  ): ExtractedEmailFacts {
+    if (
+      !importance.hasCriticalSignal &&
+      (facts.isMarketing === true ||
+        (importance.isLikelyAutomated &&
+          facts.requiresReply !== true &&
+          (facts.category === "general_medium" ||
+            facts.category === "general_high")))
+    ) {
+      return {
+        ...facts,
+        category: facts.isMarketing ? "newsletter" : "general_low",
+        contactCandidate: rejectContactCandidate(
+          facts.isMarketing
+            ? "Model identified marketing or bulk mail"
+            : "Automated mail without a concrete personal action",
+        ),
+        requiresReply: false,
+        urgency: "low",
+        senderType: "automated",
+        suggestedAction: "ignore",
+        reason: facts.isMarketing
+          ? "Bulk or marketing email with no concrete personal action."
+          : "Automated email with no concrete personal action.",
+        riskLevel: "low",
+        isAutomated: true,
+        replyIntent: "ignore",
+      };
+    }
+    return facts;
   }
 
   private rulesClassify(input: {
@@ -250,12 +343,15 @@ export class EmailClassifierService {
         person: shortFrom(input.from),
         summary: `Account/service alert from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
-        contactCandidate: rejectContactCandidate("Automated account/service alert"),
+        contactCandidate: rejectContactCandidate(
+          "Automated account/service alert",
+        ),
         requiresReply: false,
         urgency: "urgent",
         senderType: "automated",
         suggestedAction: "review_manually",
-        reason: "Automated service or security warning with possible account impact.",
+        reason:
+          "Automated service or security warning with possible account impact.",
         riskLevel: "high",
         isAutomated: true,
         isMarketing: false,
@@ -265,14 +361,18 @@ export class EmailClassifierService {
     }
 
     if (
-      /invoice|payment due|subscription|renew|billing|amount due|receipt/i.test(text)
+      /invoice|payment due|subscription|renew|billing|amount due|receipt/i.test(
+        text,
+      )
     ) {
       return {
         category: "payment_due",
         person: shortFrom(input.from),
         summary: `Payment or invoice from ${shortFrom(input.from)}`,
         entities: [shortFrom(input.from)],
-        contactCandidate: rejectContactCandidate("Automated billing or receipt email"),
+        contactCandidate: rejectContactCandidate(
+          "Automated billing or receipt email",
+        ),
         requiresReply: false,
         urgency: "soon",
         senderType: "automated",
@@ -293,7 +393,9 @@ export class EmailClassifierService {
       return {
         category: "newsletter",
         summary: "Bulk career or community update",
-        contactCandidate: rejectContactCandidate("Bulk career or community email"),
+        contactCandidate: rejectContactCandidate(
+          "Bulk career or community email",
+        ),
         requiresReply: false,
         urgency: "low",
         senderType: "automated",
@@ -308,7 +410,9 @@ export class EmailClassifierService {
     }
 
     if (
-      /interview|meeting|calendar invite|schedule a call|let'?s connect|availability/i.test(text)
+      /interview|meeting|calendar invite|schedule a call|let'?s connect|availability/i.test(
+        text,
+      )
     ) {
       return {
         category: "meeting_request",
@@ -324,7 +428,8 @@ export class EmailClassifierService {
         urgency: "soon",
         senderType: "human",
         suggestedAction: "schedule",
-        reason: "Mentions a meeting, interview, call, schedule, or availability.",
+        reason:
+          "Mentions a meeting, interview, call, schedule, or availability.",
         riskLevel: "medium",
         isAutomated: false,
         isMarketing: false,
@@ -334,7 +439,9 @@ export class EmailClassifierService {
     }
 
     if (
-      /investor|term sheet|cap table|due diligence|update on|portfolio/i.test(text)
+      /investor|term sheet|cap table|due diligence|update on|portfolio/i.test(
+        text,
+      )
     ) {
       return {
         category: "investor_update",
@@ -350,7 +457,8 @@ export class EmailClassifierService {
         urgency: "soon",
         senderType: "investor",
         suggestedAction: "draft_reply",
-        reason: "Mentions investor, term sheet, cap table, diligence, or portfolio update.",
+        reason:
+          "Mentions investor, term sheet, cap table, diligence, or portfolio update.",
         riskLevel: "high",
         isAutomated: false,
         isMarketing: false,
@@ -359,18 +467,19 @@ export class EmailClassifierService {
       };
     }
 
-    if (
-      /unsubscribe|newsletter|digest|announcement|marketing/i.test(text)
-    ) {
+    if (/unsubscribe|newsletter|digest|announcement|marketing/i.test(text)) {
       return {
         category: "newsletter",
         summary: "Newsletter or marketing email",
-        contactCandidate: rejectContactCandidate("Newsletter or marketing email"),
+        contactCandidate: rejectContactCandidate(
+          "Newsletter or marketing email",
+        ),
         requiresReply: false,
         urgency: "low",
         senderType: "automated",
         suggestedAction: "ignore",
-        reason: "Contains newsletter, digest, announcement, marketing, or unsubscribe signal.",
+        reason:
+          "Contains newsletter, digest, announcement, marketing, or unsubscribe signal.",
         riskLevel: "low",
         isAutomated: true,
         isMarketing: true,
@@ -417,7 +526,9 @@ function normalizeCategory(raw?: string): EmailCategory {
     "general_medium",
     "general_low",
   ];
-  return valid.includes(raw as EmailCategory) ? (raw as EmailCategory) : "general_medium";
+  return valid.includes(raw as EmailCategory)
+    ? (raw as EmailCategory)
+    : "general_medium";
 }
 
 function normalizeConfidence(raw?: string): "high" | "medium" | "low" {
@@ -427,7 +538,9 @@ function normalizeConfidence(raw?: string): "high" | "medium" | "low" {
 
 function normalizeUrgency(raw?: string): EmailUrgency | undefined {
   const valid: EmailUrgency[] = ["urgent", "soon", "normal", "low"];
-  return valid.includes(raw as EmailUrgency) ? (raw as EmailUrgency) : undefined;
+  return valid.includes(raw as EmailUrgency)
+    ? (raw as EmailUrgency)
+    : undefined;
 }
 
 function normalizeSenderType(raw?: string): EmailSenderType | undefined {
@@ -440,10 +553,14 @@ function normalizeSenderType(raw?: string): EmailSenderType | undefined {
     "internal",
     "unknown",
   ];
-  return valid.includes(raw as EmailSenderType) ? (raw as EmailSenderType) : undefined;
+  return valid.includes(raw as EmailSenderType)
+    ? (raw as EmailSenderType)
+    : undefined;
 }
 
-function normalizeSuggestedAction(raw?: string): EmailSuggestedAction | undefined {
+function normalizeSuggestedAction(
+  raw?: string,
+): EmailSuggestedAction | undefined {
   const valid: EmailSuggestedAction[] = [
     "ignore",
     "notify",
@@ -453,12 +570,16 @@ function normalizeSuggestedAction(raw?: string): EmailSuggestedAction | undefine
     "watch_thread",
     "review_manually",
   ];
-  return valid.includes(raw as EmailSuggestedAction) ? (raw as EmailSuggestedAction) : undefined;
+  return valid.includes(raw as EmailSuggestedAction)
+    ? (raw as EmailSuggestedAction)
+    : undefined;
 }
 
 function normalizeRiskLevel(raw?: string): EmailRiskLevel | undefined {
   const valid: EmailRiskLevel[] = ["high", "medium", "low"];
-  return valid.includes(raw as EmailRiskLevel) ? (raw as EmailRiskLevel) : undefined;
+  return valid.includes(raw as EmailRiskLevel)
+    ? (raw as EmailRiskLevel)
+    : undefined;
 }
 
 function normalizeReplyIntent(raw?: string): EmailReplyIntent | undefined {
@@ -473,7 +594,9 @@ function normalizeReplyIntent(raw?: string): EmailReplyIntent | undefined {
     "delegate",
     "unknown",
   ];
-  return valid.includes(raw as EmailReplyIntent) ? (raw as EmailReplyIntent) : undefined;
+  return valid.includes(raw as EmailReplyIntent)
+    ? (raw as EmailReplyIntent)
+    : undefined;
 }
 
 function normalizeBoolean(raw: unknown): boolean | undefined {
@@ -497,7 +620,10 @@ const DUE_DATE_PATTERN =
   `|\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})`;
 const DUE_PHRASE =
   "(?:due\\s*date|payment\\s+due|amount\\s+due\\s+by|pay(?:able)?\\s+by|due\\s+by|due\\s+on|autopay(?:\\s+on)?|\\bdue\\b)";
-const DUE_DATE_REGEX = new RegExp(`${DUE_PHRASE}[:\\s.-]*?(${DUE_DATE_PATTERN})`, "i");
+const DUE_DATE_REGEX = new RegExp(
+  `${DUE_PHRASE}[:\\s.-]*?(${DUE_DATE_PATTERN})`,
+  "i",
+);
 
 export function extractDueDateFallback(text: string): string | undefined {
   const match = DUE_DATE_REGEX.exec(text);
@@ -567,7 +693,15 @@ const FREE_EMAIL_DOMAINS = new Set([
   "ymail.com",
   "zoho.com",
 ]);
-const SECOND_LEVEL_TLDS = new Set(["ac", "co", "com", "edu", "gov", "net", "org"]);
+const SECOND_LEVEL_TLDS = new Set([
+  "ac",
+  "co",
+  "com",
+  "edu",
+  "gov",
+  "net",
+  "org",
+]);
 
 function normalizeContactCandidate(
   raw: unknown,
@@ -585,19 +719,21 @@ function normalizeContactCandidate(
 
   const candidate = raw as Record<string, unknown>;
   if (candidate.isRealContact !== true) {
-    return rejectContactCandidate(stringField(candidate.reason) ?? "Model rejected sender as a real contact");
+    return rejectContactCandidate(
+      stringField(candidate.reason) ??
+        "Model rejected sender as a real contact",
+    );
   }
 
   const header = parseFromHeader(from);
   const rawEmail = normalizeEmail(stringField(candidate.email));
   const email =
-    rawEmail && appearsInSource(rawEmail, from, body)
-      ? rawEmail
-      : header.email;
+    rawEmail && appearsInSource(rawEmail, from, body) ? rawEmail : header.email;
   const name =
     cleanContactName(stringField(candidate.name)) ??
     cleanContactName(header.name);
-  const company = cleanContactName(stringField(candidate.company)) ?? companyFromEmail(email);
+  const company =
+    cleanContactName(stringField(candidate.company)) ?? companyFromEmail(email);
   const confidence = normalizeConfidence(stringField(candidate.confidence));
 
   return validateContactCandidate(
@@ -607,7 +743,8 @@ function normalizeContactCandidate(
       ...(name ? { name } : {}),
       ...(email ? { email } : {}),
       ...(company ? { company } : {}),
-      reason: stringField(candidate.reason) ?? "Model identified a real contact",
+      reason:
+        stringField(candidate.reason) ?? "Model identified a real contact",
       confidence,
     },
     from,
@@ -655,13 +792,21 @@ function validateContactCandidate(
   const local = email?.split("@")[0] ?? header.email?.split("@")[0] ?? "";
   const name = candidate.name ?? header.name;
 
-  if (hints.isAutomated || hints.isMarketing || hints.senderType === "automated") {
+  if (
+    hints.isAutomated ||
+    hints.isMarketing ||
+    hints.senderType === "automated"
+  ) {
     return rejectContactCandidate("Automated or marketing sender");
   }
-  if (!email && !name) return rejectContactCandidate("No contact name or email");
-  if (local && isRoleLocalPart(local)) return rejectContactCandidate("Role or automated mailbox");
-  if (name && GENERIC_CONTACT_NAME_RE.test(name)) return rejectContactCandidate("Generic sender display name");
-  if (isLikelyAutomated(from)) return rejectContactCandidate("Automated sender header");
+  if (!email && !name)
+    return rejectContactCandidate("No contact name or email");
+  if (local && isRoleLocalPart(local))
+    return rejectContactCandidate("Role or automated mailbox");
+  if (name && GENERIC_CONTACT_NAME_RE.test(name))
+    return rejectContactCandidate("Generic sender display name");
+  if (isLikelyAutomated(from))
+    return rejectContactCandidate("Automated sender header");
 
   return {
     ...candidate,
@@ -692,7 +837,8 @@ function parseFromHeader(raw: string): { name?: string; email?: string } {
 
 function cleanContactName(value: string | undefined): string | undefined {
   const trimmed = value?.trim().replace(/\s+/g, " ");
-  if (!trimmed || trimmed.includes("@") || trimmed.length > 80) return undefined;
+  if (!trimmed || trimmed.includes("@") || trimmed.length > 80)
+    return undefined;
   return trimmed;
 }
 
@@ -707,12 +853,18 @@ function normalizeEmail(value: string | undefined): string | undefined {
 
 function appearsInSource(email: string, from: string, body: string): boolean {
   const target = email.toLowerCase();
-  return from.toLowerCase().includes(target) || body.toLowerCase().includes(target);
+  return (
+    from.toLowerCase().includes(target) || body.toLowerCase().includes(target)
+  );
 }
 
 function isRoleLocalPart(local: string): boolean {
   const normalized = local.replace(/[_.+].*$/, "").toLowerCase();
-  return ROLE_LOCAL_PARTS.has(local.toLowerCase()) || ROLE_LOCAL_PARTS.has(normalized) || AUTOMATED_LOCAL_RE.test(local);
+  return (
+    ROLE_LOCAL_PARTS.has(local.toLowerCase()) ||
+    ROLE_LOCAL_PARTS.has(normalized) ||
+    AUTOMATED_LOCAL_RE.test(local)
+  );
 }
 
 function companyFromEmail(email: string | undefined): string | undefined {
@@ -734,14 +886,21 @@ function registrableDomain(domain: string): string {
   if (labels.length <= 2) return labels.join(".");
   const tld = labels.at(-1);
   const secondLevel = labels.at(-2);
-  if (tld?.length === 2 && secondLevel && SECOND_LEVEL_TLDS.has(secondLevel) && labels.length >= 3) {
+  if (
+    tld?.length === 2 &&
+    secondLevel &&
+    SECOND_LEVEL_TLDS.has(secondLevel) &&
+    labels.length >= 3
+  ) {
     return labels.slice(-3).join(".");
   }
   return labels.slice(-2).join(".");
 }
 
 function isLikelyAutomated(from: string): boolean {
-  return /\b(no-?reply|noreply|notification|notifications|support|billing|alerts?|transactions?|newsletter|updates?)\b/i.test(from);
+  return /\b(no-?reply|noreply|notification|notifications|support|billing|alerts?|transactions?|newsletter|updates?)\b/i.test(
+    from,
+  );
 }
 
 function shortFrom(from: string): string {

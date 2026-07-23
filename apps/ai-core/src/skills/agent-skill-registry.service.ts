@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  OnModuleInit,
-  Optional,
-} from "@nestjs/common";
+import { Inject, Injectable, OnModuleInit, Optional } from "@nestjs/common";
 import { ToolRegistryService } from "../tools/tool-registry.service";
 import type {
   AgentContextScope,
@@ -82,7 +77,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "conversation",
     version: 1,
-    description: "Ordinary conversation, clarification, synthesis, and questions that need no external capability.",
+    description:
+      "Ordinary conversation, clarification, synthesis, and questions that need no external capability.",
     tools: [],
     contextScopes: [],
     instructions:
@@ -91,11 +87,15 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "email",
     version: 1,
-    description: "Inbox triage, reading mail, contacts, drafting, sending, reply tracking, and email preferences.",
+    description:
+      "Inbox triage, reading mail, contacts, drafting, sending, reply tracking, and email preferences.",
     tools: EMAIL_TOOLS,
     contextScopes: ["live_inbox"],
     instructions: [
-      "Unread subjects are an authoritative snapshot only for the inbox state shown; fetch a body with read_email_body.",
+      "Unread subjects are authoritative only for unread state and count. They are UNRANKED: unread never means important.",
+      "For any question about important, priority, urgent, actionable, noise, or triage mail, call gmail_triage even when the live unread snapshot is fresh. Never infer importance from the raw subject list.",
+      "After gmail_triage, only data.important is high-priority and data.forDigest is possibly useful. data.lessImportant is reviewed noise; do not present it as important unless the principal explicitly asks what was filtered.",
+      "Fetch a body with read_email_body when the principal asks about message contents or when a specific classification needs explanation.",
       "Find a recipient with lookup_contact before asking for their address.",
       "Draft concise human email in the principal's voice. Extract exact names, dates, times, topic, and ask into the draft instructions. Use the recipient's first name and principal's real name; never leave placeholders.",
       "A new email uses draft_email_reply without messageId. A reply uses the live messageId and stays in the same thread. Treat similar subjects in different threads as separate unless live evidence links them.",
@@ -108,7 +108,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "calendar",
     version: 1,
-    description: "Calendar lookup, availability, meeting creation or movement, attendee handling, and Cal.com bookings.",
+    description:
+      "Calendar lookup, availability, meeting creation or movement, attendee handling, and Cal.com bookings.",
     tools: CALENDAR_TOOLS,
     contextScopes: ["live_calendar"],
     instructions: [
@@ -125,7 +126,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "reminders",
     version: 1,
-    description: "One-time or recurring reminders, follow-ups, and durable tasks.",
+    description:
+      "One-time or recurring reminders, follow-ups, and durable tasks.",
     tools: ["schedule_reminder", "create_task"],
     contextScopes: [],
     instructions:
@@ -134,8 +136,14 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "memory",
     version: 1,
-    description: "Recall, explicit remembering, people/entities, decisions, and relationship context.",
-    tools: ["memory_recall", "remember_fact", "recall_decisions", "entity_brief"],
+    description:
+      "Recall, explicit remembering, people/entities, decisions, and relationship context.",
+    tools: [
+      "memory_recall",
+      "remember_fact",
+      "recall_decisions",
+      "entity_brief",
+    ],
     contextScopes: ["memory"],
     instructions: [
       "Relevant memory is fuzzy recall, not proof of current external state. State uncertainty and coverage honestly.",
@@ -147,7 +155,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "connected_sources",
     version: 1,
-    description: "Connector status and live updates from Slack, Notion, GitHub, Discord, and multiple connected sources.",
+    description:
+      "Connector status and live updates from Slack, Notion, GitHub, Discord, and multiple connected sources.",
     tools: [
       "connector_status",
       "github_briefing",
@@ -167,8 +176,14 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "business",
     version: 1,
-    description: "Revenue, payments, subscriptions, business metrics, and read-only database intelligence.",
-    tools: ["business_snapshot", "paypal_snapshot", "mpesa_status", "connector_status"],
+    description:
+      "Revenue, payments, subscriptions, business metrics, and read-only database intelligence.",
+    tools: [
+      "business_snapshot",
+      "paypal_snapshot",
+      "mpesa_status",
+      "connector_status",
+    ],
     contextScopes: ["connectors"],
     instructions: [
       "Fetch business and payment claims live. Treat 'revue' as revenue when the surrounding request concerns metrics or payments.",
@@ -179,8 +194,14 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "automations",
     version: 1,
-    description: "List, design, create, activate, or pause structured proactive automation flows.",
-    tools: ["list_automations", "create_automation", "activate_automation", "pause_automation"],
+    description:
+      "List, design, create, activate, or pause structured proactive automation flows.",
+    tools: [
+      "list_automations",
+      "create_automation",
+      "activate_automation",
+      "pause_automation",
+    ],
     contextScopes: ["connectors"],
     instructions: [
       "Build a structured trigger plus explicit action steps; do not save a free-form autonomous plan as an automation.",
@@ -191,7 +212,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "preferences",
     version: 1,
-    description: "Name, honorific, language, timezone, and away-mode preferences.",
+    description:
+      "Name, honorific, language, timezone, and away-mode preferences.",
     tools: [
       "set_honorific",
       "set_display_name",
@@ -207,7 +229,8 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "general",
     version: 1,
-    description: "Bounded recovery capability when the initial router omitted a needed domain.",
+    description:
+      "Bounded recovery capability when the initial router omitted a needed domain.",
     tools: ALL_TOOL_NAMES,
     contextScopes: ["memory", "live_calendar", "live_inbox", "connectors"],
     instructions:
@@ -298,8 +321,12 @@ export class AgentSkillRegistryService implements OnModuleInit {
     if (missing.length || unowned.length) {
       throw new Error(
         [
-          missing.length ? `skill tools missing from runtime: ${missing.join(", ")}` : "",
-          unowned.length ? `runtime tools without a domain skill: ${unowned.join(", ")}` : "",
+          missing.length
+            ? `skill tools missing from runtime: ${missing.join(", ")}`
+            : "",
+          unowned.length
+            ? `runtime tools without a domain skill: ${unowned.join(", ")}`
+            : "",
         ]
           .filter(Boolean)
           .join("; "),

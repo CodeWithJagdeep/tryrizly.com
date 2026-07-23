@@ -39,7 +39,10 @@ export class PromptAssemblerService {
       .join("\n");
     const unloaded = this.skills
       .list()
-      .filter((skill) => !selection.skillIds.includes(skill.id) && skill.id !== "conversation")
+      .filter(
+        (skill) =>
+          !selection.skillIds.includes(skill.id) && skill.id !== "conversation",
+      )
       .map((skill) => `- ${skill.id}: ${skill.description}`)
       .join("\n");
 
@@ -48,14 +51,21 @@ export class PromptAssemblerService {
       [
         "RUNTIME PRINCIPAL",
         `Honorific: ${context.honorific}`,
-        context.principalName ? `Name: ${context.principalName}` : "Name: unknown",
+        context.principalName
+          ? `Name: ${context.principalName}`
+          : "Name: unknown",
         `Timezone: ${context.timezone} (${context.timezoneConfirmed ? "confirmed" : "unconfirmed"})`,
-        context.language ? `Saved reply language: ${context.language}` : "Saved reply language: mirror the principal",
+        context.language
+          ? `Saved reply language: ${context.language}`
+          : "Saved reply language: mirror the principal",
         `Current local time: ${describeNow(new Date(), context.timezone)}`,
       ].join("\n"),
       formattingFor(input.channel),
       `ACTIVE SKILLS\n${selected
-        .map((skill) => `## ${skill?.id}@${skill?.version}\n${skill?.instructions}`)
+        .map(
+          (skill) =>
+            `## ${skill?.id}@${skill?.version}\n${skill?.instructions}`,
+        )
         .join("\n\n")}`,
       `ACTIVE TOOLS\n${toolLines || "- none; answer or clarify without external action"}`,
       unloaded
@@ -92,7 +102,8 @@ function renderCalendar(context: HeyRizRuntimeContext): string {
   const live = context.live;
   let body: string;
   if (live.calendarStatus === "unavailable") {
-    body = "- temporarily unavailable; this does not mean empty or disconnected";
+    body =
+      "- temporarily unavailable; this does not mean empty or disconnected";
   } else if (!live.calendarConnected) {
     body = "- not connected; do not guess";
   } else if (live.schedule.length === 0) {
@@ -114,7 +125,8 @@ function renderInbox(context: HeyRizRuntimeContext): string {
   const live = context.live;
   let body: string;
   if (live.inboxStatus === "unavailable") {
-    body = "- temporarily unavailable; this does not mean empty or disconnected";
+    body =
+      "- temporarily unavailable; this does not mean empty or disconnected";
   } else if (!live.inboxConnected) {
     body = "- not connected; do not guess";
   } else if (live.unread.length === 0) {
@@ -123,8 +135,9 @@ function renderInbox(context: HeyRizRuntimeContext): string {
     body = live.unread.map((mail) => `- ${mailLine(mail)}`).join("\n");
   }
   return [
-    "LIVE UNREAD INBOX (AUTHORITATIVE SUBJECT SNAPSHOT)",
+    "LIVE UNREAD INBOX (AUTHORITATIVE UNREAD STATE; UNRANKED)",
     body,
+    "Unread does NOT mean important. Use gmail_triage for importance, priority, urgency, actionability, or noise.",
     "Use read_email_body for message contents.",
     `Checked at: ${live.checkedAt}`,
   ].join("\n");
@@ -137,7 +150,9 @@ function renderMemory(context: HeyRizRuntimeContext): string {
         const confidence = String(memory.metadata?.confidence ?? "medium");
         return `- [${memory.createdAt}; provenance=${provenance}; confidence=${confidence}] ${memory.summary}`;
       })
-    : ["- no relevant memory; this means not recalled, never proof that something does not exist"];
+    : [
+        "- no relevant memory; this means not recalled, never proof that something does not exist",
+      ];
   return `RELEVANT FUZZY MEMORY\n${rows.join("\n")}`;
 }
 
@@ -150,7 +165,8 @@ function renderConnectors(context: HeyRizRuntimeContext): string {
 function scheduleLine(event: LiveScheduleEntry, timezone: string): string {
   if (event.allDay) return `all-day ${event.title}`;
   const end = Date.parse(event.end ?? event.start ?? "");
-  const completed = !Number.isNaN(end) && end < Date.now() ? " (completed)" : "";
+  const completed =
+    !Number.isNaN(end) && end < Date.now() ? " (completed)" : "";
   return `${localTime(event.start, timezone)} ${event.title}${completed}`.trim();
 }
 

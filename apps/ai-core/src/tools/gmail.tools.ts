@@ -10,14 +10,19 @@ import type { DraftCacheService } from "./draft-cache.service";
 import { enqueueOutboundEmail } from "@heyriz/shared/queue/outbound-email";
 
 const TRIAGE_LIMIT = 8;
+const MAX_TRIAGE_LIMIT = 50;
 // Wider metadata pool to rank within — cheap Gmail metadata fetches, so old
 // starred/important mail is in contention without raising the LLM budget.
 const CANDIDATE_LIMIT = 16;
+const CLASSIFY_CONCURRENCY = 4;
 
 /** Starred beats Gmail-important beats neither — used to rank the candidate pool. */
 function importanceScore(labelIds?: string[]): number {
   if (!labelIds) return 0;
-  return (labelIds.includes("STARRED") ? 2 : 0) + (labelIds.includes("IMPORTANT") ? 1 : 0);
+  return (
+    (labelIds.includes("STARRED") ? 2 : 0) +
+    (labelIds.includes("IMPORTANT") ? 1 : 0)
+  );
 }
 
 type TriagePayload = {
@@ -37,7 +42,7 @@ export function createGmailTriageTool(
     name: "gmail_triage",
     category: "gmail",
     description:
-      "Triage the inbox: fetch unread mail (or score a specific subject/sender) and classify HIGH/MEDIUM/LOW with notify/digest/silent decisions.",
+      "Triage unread mail by consequence and required action. The result separates important, digest, and lessImportant mail; never describe lessImportant entries as important.",
     approvalRequired: false,
     sensitiveDataPolicy: "live_fetch_only",
     async execute({ userId, payload, context }) {
@@ -49,11 +54,21 @@ export function createGmailTriageTool(
           snippet: payload.snippet,
           userId,
         });
-        if (payload.messageId && (cls.priority === "HIGH" || cls.priority === "MEDIUM")) {
-          cls = await refineWithLiveBody(google, llm, userId, payload.messageId, cls, {
-            subject: payload.subject ?? payload.message,
-            from: payload.from,
-          });
+        if (
+          payload.messageId &&
+          (cls.priority === "HIGH" || cls.priority === "MEDIUM")
+        ) {
+          cls = await refineWithLiveBody(
+            google,
+            llm,
+            userId,
+            payload.messageId,
+            cls,
+            {
+              subject: payload.subject ?? payload.message,
+              from: payload.from,
+            },
+          );
         }
         return {
           tool: "gmail_triage",
@@ -64,24 +79,24 @@ export function createGmailTriageTool(
         };
       }
 
-      // Otherwise sweep the live inbox. Importance beats recency: pull a wider
-      // candidate pool (recent OR starred OR Gmail-important), then rank it so
-      // starred/important mail always lands inside the classification budget —
-      // even when there's a flood of recent unread burying an older follow-up.
-      const limit = payload.maxResults ?? TRIAGE_LIMIT;
+      // Otherwise sweep the live inbox. Pull a wider candidate pool (recent OR
+      // starred OR Gmail-important); provider labels are retrieval hints only,
+      // while our own classification determines the final order.
+      const limit = normalizeTriageLimit(payload.maxResults);
       const res = await google.listThreads(userId, {
         q: primaryUpdatesInboxQuery(
           `is:unread (newer_than:${env.EMAIL_TRIAGE_WINDOW_DAYS}d OR is:starred OR is:important)`,
         ),
         maxResults: Math.max(limit, CANDIDATE_LIMIT),
       });
-      if (!res.connected) return notConnected("gmail_triage", context.honorific);
+      if (!res.connected)
+        return notConnected("gmail_triage", context.honorific);
 
       const ranked = [...res.messages].sort(
         (a, b) => importanceScore(b.labelIds) - importanceScore(a.labelIds),
       );
 
-      const items: Array<{
+      type TriageItem = {
         id: string;
         threadId: string;
         from: string;
@@ -89,45 +104,82 @@ export function createGmailTriageTool(
         priority: HeyRizPriority;
         reason: string;
         decision: string;
-      }> = [];
+        category?: PriorityClassification["category"];
+        requiresAction?: boolean;
+        confidence?: PriorityClassification["confidence"];
+      };
 
-      for (const m of ranked.slice(0, limit)) {
-        let cls = await llm.classifyPriority({
-          subject: m.subject,
-          from: m.from,
-          snippet: m.snippet,
-          userId,
-        });
-        // Worth the extra fetch: read the real body live (never stored) so the
-        // verdict/reason isn't based on a truncated snippet.
-        if (cls.priority === "HIGH" || cls.priority === "MEDIUM") {
-          cls = await refineWithLiveBody(google, llm, userId, m.id, cls, {
+      // Gmail's IMPORTANT label is only a retrieval hint, not our verdict. Score
+      // the whole small candidate pool with bounded concurrency, then apply the
+      // result limit. Otherwise eight Gmail-labelled newsletters can consume
+      // the budget and hide a genuinely critical ninth message.
+      const items = await mapWithConcurrency(
+        ranked,
+        CLASSIFY_CONCURRENCY,
+        async (m): Promise<TriageItem> => {
+          let cls = await llm.classifyPriority({
             subject: m.subject,
             from: m.from,
+            snippet: m.snippet,
+            userId,
           });
-        }
-        items.push({
-          id: m.id,
-          threadId: m.threadId,
-          from: m.from,
-          subject: m.subject,
-          priority: cls.priority,
-          reason: cls.reason,
-          decision: decisionFor(cls.priority),
-        });
-      }
+          // Worth the extra fetch: read the real body live (never stored) so the
+          // verdict/reason isn't based on a truncated snippet.
+          if (cls.priority === "HIGH" || cls.priority === "MEDIUM") {
+            cls = await refineWithLiveBody(google, llm, userId, m.id, cls, {
+              subject: m.subject,
+              from: m.from,
+            });
+          }
+          return {
+            id: m.id,
+            threadId: m.threadId,
+            from: m.from,
+            subject: m.subject,
+            priority: cls.priority,
+            reason: cls.reason,
+            decision: decisionFor(cls.priority),
+            category: cls.category,
+            requiresAction: cls.requiresAction,
+            confidence: cls.confidence,
+          };
+        },
+      );
 
       items.sort((a, b) => rank(b.priority) - rank(a.priority));
-      const high = items.filter((i) => i.priority === "HIGH");
-      const medium = items.filter((i) => i.priority === "MEDIUM");
-      const low = items.filter((i) => i.priority === "LOW");
+      const reviewedCounts = {
+        high: items.filter((i) => i.priority === "HIGH").length,
+        medium: items.filter((i) => i.priority === "MEDIUM").length,
+        low: items.filter((i) => i.priority === "LOW").length,
+      };
+      const selected = items.slice(0, limit);
+      const high = selected.filter((i) => i.priority === "HIGH");
+      const medium = selected.filter((i) => i.priority === "MEDIUM");
+      const low = selected.filter((i) => i.priority === "LOW");
 
       return {
         tool: "gmail_triage",
         status: "ok",
         priority: high.length ? "HIGH" : medium.length ? "MEDIUM" : "LOW",
-        message: inboxSummary(high, medium.length, low.length, context.honorific),
-        data: { items, counts: { high: high.length, medium: medium.length, low: low.length } },
+        message: inboxSummary(
+          high,
+          medium,
+          reviewedCounts,
+          context.honorific,
+        ),
+        data: {
+          // `items` remains the backward-compatible notable-mail collection
+          // consumed by auto-memory. Low-value mail is intentionally separate,
+          // so downstream agents cannot accidentally present every unread item
+          // as an "important emails" list.
+          items: [...high, ...medium],
+          important: high,
+          forDigest: medium,
+          lessImportant: low,
+          counts: { high: high.length, medium: medium.length, low: low.length },
+          reviewedCount: items.length,
+          reviewedCounts,
+        },
       };
     },
   };
@@ -156,13 +208,22 @@ export function createDraftEmailReplyTool(
       let original: GmailMessage | undefined;
       if (payload.messageId) {
         const m = await google.getMessage(userId, payload.messageId, "full");
-        if (!m.connected) return notConnected("draft_email_reply", context.honorific);
+        if (!m.connected)
+          return notConnected("draft_email_reply", context.honorific);
         original = m.message;
       }
 
       const to = payload.to ?? original?.from ?? "";
-      const subject = original ? ensureRe(original.subject) : payload.subject ?? "";
-      const body = await draftBody(llm, userId, original, payload.instructions, context.principalName);
+      const subject = original
+        ? ensureRe(original.subject)
+        : (payload.subject ?? "");
+      const body = await draftBody(
+        llm,
+        userId,
+        original,
+        payload.instructions,
+        context.principalName,
+      );
 
       const sendPayload = {
         to,
@@ -240,7 +301,10 @@ export function createSendEmailTool(
       // Placeholder guard: models leave template tokens like "[Your Name]" in
       // the body and still send. Fill the sign-off we know; refuse on the rest
       // rather than putting a literal placeholder in front of a real recipient.
-      const guarded = fillAndGuardPlaceholders(payload.body, context.principalName);
+      const guarded = fillAndGuardPlaceholders(
+        payload.body,
+        context.principalName,
+      );
       if (guarded.leftoverPlaceholder) {
         return {
           tool: "send_email",
@@ -318,7 +382,9 @@ export function fillAndGuardPlaceholders(
     filled = filled.replace(/\[\s*(?:your|my)?\s*name\s*\]/gi, principalName);
   }
   const leftover = filled.match(/\[[A-Za-z][^\]\n]{1,40}\]/);
-  return leftover ? { body: filled, leftoverPlaceholder: leftover[0] } : { body: filled };
+  return leftover
+    ? { body: filled, leftoverPlaceholder: leftover[0] }
+    : { body: filled };
 }
 
 export async function draftBody(
@@ -368,7 +434,9 @@ export async function draftBody(
 
   return (
     text?.trim() ||
-    (instructions ? `Hi,\n\n${instructions}\n\n${signOff}` : `Hi,\n\nThanks for the note.\n\n${signOff}`)
+    (instructions
+      ? `Hi,\n\n${instructions}\n\n${signOff}`
+      : `Hi,\n\nThanks for the note.\n\n${signOff}`)
   );
 }
 
@@ -393,32 +461,81 @@ async function refineWithLiveBody(
 }
 
 function decisionFor(priority: HeyRizPriority): string {
-  return priority === "HIGH" ? "notify" : priority === "MEDIUM" ? "digest" : "silent";
+  return priority === "HIGH"
+    ? "notify"
+    : priority === "MEDIUM"
+      ? "digest"
+      : "silent";
 }
 
 function rank(priority: HeyRizPriority): number {
   return priority === "HIGH" ? 3 : priority === "MEDIUM" ? 2 : 1;
 }
 
-function singleVerdict(priority: HeyRizPriority, reason: string, honorific: string): string {
-  if (priority === "HIGH") return `Important, ${honorific} — ${reason}. I'd surface this now.`;
-  if (priority === "MEDIUM") return `Noted, ${honorific} — ${reason}. Folding it into your digest.`;
+function normalizeTriageLimit(value?: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return TRIAGE_LIMIT;
+  return Math.min(MAX_TRIAGE_LIMIT, Math.max(1, Math.trunc(value)));
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  input: TInput[],
+  concurrency: number,
+  mapper: (item: TInput) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  if (input.length === 0) return [];
+  const output = new Array<TOutput>(input.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < input.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      output[index] = await mapper(input[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(Math.max(1, concurrency), input.length) },
+      () => worker(),
+    ),
+  );
+  return output;
+}
+
+function singleVerdict(
+  priority: HeyRizPriority,
+  reason: string,
+  honorific: string,
+): string {
+  if (priority === "HIGH")
+    return `Important, ${honorific} — ${reason}. I'd surface this now.`;
+  if (priority === "MEDIUM")
+    return `Noted, ${honorific} — ${reason}. Folding it into your digest.`;
   return `Low priority, ${honorific} — ${reason}. Logged, no action needed.`;
 }
 
 function inboxSummary(
   high: Array<{ from: string; subject: string }>,
-  medium: number,
-  low: number,
+  medium: Array<{ from: string; subject: string }>,
+  reviewed: { high: number; medium: number; low: number },
   honorific: string,
 ): string {
   if (high.length === 0) {
-    return `Nothing urgent, ${honorific} — ${medium} for your digest and ${low} low-priority, all logged.`;
+    if (medium.length === 0) {
+      return `No important mail, ${honorific} — all ${reviewed.low} reviewed messages were filtered as low-priority noise.`;
+    }
+    const digestList = medium
+      .map((item) => `${shortFrom(item.from)} (${item.subject})`)
+      .join("; ");
+    return `No high-priority mail, ${honorific}. ${reviewed.medium} possibly useful for your digest: ${digestList}. ${reviewed.low} filtered as low-priority noise.`;
   }
   const list = high
     .map((h) => `${shortFrom(h.from)} (${h.subject})`)
     .join("; ");
-  return `${high.length} need you now, ${honorific}: ${list}. ${medium} more batched, ${low} low-priority.`;
+  const shown =
+    reviewed.high > high.length ? `Showing the top ${high.length}. ` : "";
+  return `${reviewed.high} need you now, ${honorific}: ${list}. ${shown}${reviewed.medium} possibly useful for your digest; ${reviewed.low} filtered as low-priority noise.`;
 }
 
 export function ensureRe(subject: string): string {

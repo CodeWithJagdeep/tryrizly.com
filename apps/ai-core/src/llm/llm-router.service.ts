@@ -15,6 +15,10 @@ import type {
 } from "./llm.types";
 import type { HeyRizPriority } from "../context/context.types";
 import { logger } from "@heyriz/shared/logger";
+import {
+  assessEmailImportance,
+  type EmailImportanceAssessment,
+} from "../email/email-importance";
 
 type Route = { provider: string; model?: string };
 
@@ -27,9 +31,14 @@ export class LlmRouterService {
     @Inject(GrokProvider) private readonly grok: GrokProvider,
     @Inject(OpenAiProvider) private readonly openai: OpenAiProvider,
     @Inject(AnthropicProvider) private readonly anthropic: AnthropicProvider,
-    @Inject(UsageLedgerService) private readonly usageLedger: UsageLedgerService,
+    @Inject(UsageLedgerService)
+    private readonly usageLedger: UsageLedgerService,
   ) {
-    this.byName = { grok: this.grok, openai: this.openai, anthropic: this.anthropic };
+    this.byName = {
+      grok: this.grok,
+      openai: this.openai,
+      anthropic: this.anthropic,
+    };
 
     // Cost-optimized defaults: everything that doesn't need frontier reasoning
     // runs on grok-3-mini (cheap xAI tier, same key/vendor already trusted with
@@ -40,15 +49,33 @@ export class LlmRouterService {
         provider: "grok",
         model: env.LLM_CLASSIFIER_MODEL || "grok-3-mini",
       }),
-      memory: parseRoute(env.LLM_ROUTE_MEMORY, { provider: "grok", model: "grok-3-mini" }),
-      brief: parseRoute(env.LLM_ROUTE_BRIEF, { provider: "grok", model: "grok-3-mini" }),
-      draft: parseRoute(env.LLM_ROUTE_DRAFT, { provider: "anthropic", model: "claude-haiku-4-5" }),
-      extract: parseRoute(env.LLM_ROUTE_EXTRACT, { provider: "grok", model: "grok-3-mini" }),
+      memory: parseRoute(env.LLM_ROUTE_MEMORY, {
+        provider: "grok",
+        model: "grok-3-mini",
+      }),
+      brief: parseRoute(env.LLM_ROUTE_BRIEF, {
+        provider: "grok",
+        model: "grok-3-mini",
+      }),
+      draft: parseRoute(env.LLM_ROUTE_DRAFT, {
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+      }),
+      extract: parseRoute(env.LLM_ROUTE_EXTRACT, {
+        provider: "grok",
+        model: "grok-3-mini",
+      }),
       agent: parseRoute(env.LLM_ROUTE_AGENT, { provider: "grok" }),
-      query: parseRoute(env.LLM_ROUTE_QUERY, { provider: "grok", model: "grok-3-mini" }),
+      query: parseRoute(env.LLM_ROUTE_QUERY, {
+        provider: "grok",
+        model: "grok-3-mini",
+      }),
       // Conservative extraction; precision comes from the strict prompt. Bump to
       // anthropic:claude-sonnet-4-6 via LLM_ROUTE_DECIDE if false positives appear.
-      decide: parseRoute(env.LLM_ROUTE_DECIDE, { provider: "grok", model: "grok-3-mini" }),
+      decide: parseRoute(env.LLM_ROUTE_DECIDE, {
+        provider: "grok",
+        model: "grok-3-mini",
+      }),
     };
   }
 
@@ -102,7 +129,9 @@ export class LlmRouterService {
    * provider has credentials; otherwise falls back to the default AI_PROVIDER
    * so a missing OpenAI/Anthropic key never breaks a tier.
    */
-  private resolve(task?: LlmTask): { provider: LlmProvider; model?: string } | undefined {
+  private resolve(
+    task?: LlmTask,
+  ): { provider: LlmProvider; model?: string } | undefined {
     if (task) {
       const route = this.routes[task];
       const provider = this.byName[route.provider];
@@ -125,7 +154,11 @@ export class LlmRouterService {
     const resolvedModel = model ?? defaultModelNameFor(provider.name);
     const inputTokens = usage?.inputTokens ?? 0;
     const outputTokens = usage?.outputTokens ?? 0;
-    const rawCostUsd = estimateCostUsd(resolvedModel, inputTokens, outputTokens);
+    const rawCostUsd = estimateCostUsd(
+      resolvedModel,
+      inputTokens,
+      outputTokens,
+    );
     void this.usageLedger.record({
       userId: input.userId,
       task: input.task ?? "agent",
@@ -151,10 +184,21 @@ export class LlmRouterService {
     userId?: string;
   }): Promise<PriorityClassification> {
     const resolved = this.resolve("classify");
-    const preview = (input.body ?? input.snippet ?? "").slice(0, input.body ? 1500 : 200);
+    const preview = (input.body ?? input.snippet ?? "").slice(
+      0,
+      input.body ? 1500 : 200,
+    );
     const compact = `From: ${input.from ?? "unknown"}\nSubject: ${
       input.subject ?? "(none)"
     }\nPreview: ${preview}`;
+    const assessment = assessEmailImportance(input);
+
+    // These are deliberately narrow, high-confidence overrides. They both
+    // reduce classifier cost on obvious noise and prevent a small model from
+    // promoting urgency-bait newsletters or suppressing real account threats.
+    if (assessment.decisivePriority) {
+      return rulesResult(assessment);
+    }
 
     if (resolved) {
       try {
@@ -162,23 +206,31 @@ export class LlmRouterService {
           {
             role: "system",
             content: [
-              "You triage a founder's inbox. Classify importance as HIGH, MEDIUM, or LOW.",
-              "HIGH: investor/customer/founder-critical, meeting request from a real contact, payment failure, production issue, due follow-up on an active deal.",
-              "MEDIUM: normal reply from a known contact, non-urgent team update, useful-but-not-urgent news.",
-              "LOW: newsletter, automated receipt, cold outreach, social/marketing notification.",
-              'Reply with ONLY compact JSON: {"priority":"HIGH|MEDIUM|LOW","reason":"<=12 words"}',
+              "You are a precision-first inbox triage classifier for a busy founder.",
+              "Judge the consequence and user-specific action in the email, not the sender's display name or urgency-marketing language.",
+              "HIGH requires a concrete, user-specific action plus serious or immediate consequence if missed: security/account compromise, failed or overdue payment, production incident, explicit urgent customer/investor request, or a time-sensitive direct request from a real person.",
+              "MEDIUM requires a concrete personal request or useful user-specific update, but no serious immediate consequence.",
+              "LOW is the default for bulk or automated mail with no concrete personal action: newsletters, digests, webinars/live sessions, registration campaigns, job feeds, market updates, TOS/privacy updates, receipts, cold outreach, social notifications, and generic deadline marketing.",
+              "A person's name in the From header does not prove the email is personal. 'Urgent', 'deadline', 'live', and 'register now' do not prove importance.",
+              "Automated security, payment-failure, production, and account-suspension alerts are exceptions and can be HIGH.",
+              "When evidence is incomplete, choose the lower priority. Do not use MEDIUM as a catch-all.",
+              'Reply ONLY with compact JSON: {"priority":"HIGH|MEDIUM|LOW","category":"critical_action|direct_action|useful_update|bulk_noise|transactional_noise","requiresAction":true|false,"consequenceIfIgnored":"serious|moderate|none","confidence":"high|medium|low","reason":"<=12 words"}',
             ].join("\n"),
           },
-          { role: "user", content: compact },
+          {
+            role: "user",
+            content: `${compact}\nPolicy signals: ${assessment.evidence.join(", ") || "none"}`,
+          },
         ];
         const result = await resolved.provider.complete({
           messages,
           model: resolved.model,
           temperature: 0,
-          maxTokens: 128,
+          maxTokens: 160,
         });
         if (input.userId) {
-          const model = resolved.model ?? defaultModelNameFor(resolved.provider.name);
+          const model =
+            resolved.model ?? defaultModelNameFor(resolved.provider.name);
           const rawCostUsd = estimateCostUsd(
             model,
             result.usage?.inputTokens ?? 0,
@@ -194,14 +246,10 @@ export class LlmRouterService {
             costUsd: billableUsdForAiTask(rawCostUsd),
           });
         }
-        const parsed = extractJson<{ priority?: string; reason?: string }>(result.content);
+        const parsed = extractJson<ModelPriorityOutput>(result.content);
         const priority = normalizePriority(parsed?.priority);
         if (priority) {
-          return {
-            priority,
-            reason: parsed?.reason?.trim() || "classified by model",
-            source: "llm",
-          };
+          return guardModelPriority(priority, parsed ?? {}, assessment);
         }
       } catch (error) {
         logger.warn("priority classifier llm failed; using rules", {
@@ -210,7 +258,7 @@ export class LlmRouterService {
       }
     }
 
-    return rulesClassify(compact);
+    return rulesClassify(assessment);
   }
 
   /**
@@ -221,10 +269,14 @@ export class LlmRouterService {
    * that hits this fallback to the rules-only path.
    */
   private getProvider(): LlmProvider | undefined {
-    const preferred = env.AI_PROVIDER ? this.byName[env.AI_PROVIDER] : undefined;
+    const preferred = env.AI_PROVIDER
+      ? this.byName[env.AI_PROVIDER]
+      : undefined;
     if (preferred?.isConfigured()) return preferred;
 
-    return [this.anthropic, this.openai, this.grok].find((provider) => provider.isConfigured());
+    return [this.anthropic, this.openai, this.grok].find((provider) =>
+      provider.isConfigured(),
+    );
   }
 }
 
@@ -246,25 +298,150 @@ function defaultModelNameFor(providerName: string): string {
   }
 }
 
-function rulesClassify(text: string): PriorityClassification {
-  const lower = text.toLowerCase();
-  const isHigh =
-    /investor|urgent|asap|payment failed|failed payment|meeting|invoice overdue|contract|demo/.test(
-      lower,
-    );
-  const isLow = /newsletter|receipt|unsubscribe|no-reply|noreply|promotion|sale/.test(
-    lower,
-  );
-  const priority: HeyRizPriority = isHigh ? "HIGH" : isLow ? "LOW" : "MEDIUM";
+type ModelPriorityOutput = {
+  priority?: string;
+  category?: string;
+  requiresAction?: boolean;
+  consequenceIfIgnored?: string;
+  confidence?: string;
+  reason?: string;
+};
+
+function rulesClassify(
+  assessment: EmailImportanceAssessment,
+): PriorityClassification {
+  return {
+    priority: assessment.suggestedPriority,
+    reason: assessment.reason,
+    source: "rules",
+    category:
+      assessment.suggestedPriority === "LOW"
+        ? assessment.isBulk
+          ? "bulk_noise"
+          : "transactional_noise"
+        : assessment.hasDirectRequest
+          ? "direct_action"
+          : "useful_update",
+    requiresAction: assessment.hasDirectRequest || assessment.hasCriticalSignal,
+    confidence: assessment.decisivePriority ? "high" : "low",
+  };
+}
+
+function rulesResult(
+  assessment: EmailImportanceAssessment,
+): PriorityClassification {
+  const priority = assessment.decisivePriority;
+  if (!priority) return rulesClassify(assessment);
   return {
     priority,
-    reason: isHigh
-      ? "matched high-signal keyword"
-      : isLow
-        ? "matched low-signal keyword"
-        : "no strong signal",
+    reason: assessment.reason,
     source: "rules",
+    category:
+      priority === "HIGH"
+        ? "critical_action"
+        : assessment.isBulk
+          ? "bulk_noise"
+          : "transactional_noise",
+    requiresAction: priority === "HIGH",
+    confidence: "high",
   };
+}
+
+/**
+ * The model may reason about ambiguous content, but it cannot grant HIGH to an
+ * email without both action and consequence. This asymmetric threshold is what
+ * keeps a single flaky classifier call from turning inbox noise into an alert.
+ */
+function guardModelPriority(
+  priority: HeyRizPriority,
+  parsed: ModelPriorityOutput,
+  assessment: EmailImportanceAssessment,
+): PriorityClassification {
+  const category = normalizePriorityCategory(parsed.category);
+  const consequence = parsed.consequenceIfIgnored?.toLowerCase();
+  const requiresAction = parsed.requiresAction === true;
+  const modelSaysNoise =
+    category === "bulk_noise" || category === "transactional_noise";
+
+  if (!assessment.hasCriticalSignal && (assessment.isBulk || modelSaysNoise)) {
+    return {
+      priority: "LOW",
+      reason: assessment.isBulk
+        ? assessment.reason
+        : parsed.reason?.trim() ||
+          "Bulk or transactional message without action.",
+      source: "llm",
+      category:
+        category ?? (assessment.isBulk ? "bulk_noise" : "transactional_noise"),
+      requiresAction: false,
+      confidence: normalizeModelConfidence(parsed.confidence),
+    };
+  }
+
+  if (
+    priority === "HIGH" &&
+    !assessment.hasCriticalSignal &&
+    !(requiresAction && consequence === "serious")
+  ) {
+    return {
+      priority: assessment.hasDirectRequest
+        ? "MEDIUM"
+        : assessment.suggestedPriority,
+      reason: "No concrete action with serious consequence if missed.",
+      source: "llm",
+      category:
+        category ??
+        (assessment.hasDirectRequest ? "direct_action" : "useful_update"),
+      requiresAction,
+      confidence: "medium",
+    };
+  }
+
+  if (
+    priority === "MEDIUM" &&
+    assessment.isLikelyAutomated &&
+    !requiresAction
+  ) {
+    return {
+      priority: "LOW",
+      reason: "Automated message without a concrete personal action.",
+      source: "llm",
+      category: category ?? "transactional_noise",
+      requiresAction: false,
+      confidence: normalizeModelConfidence(parsed.confidence),
+    };
+  }
+
+  return {
+    priority,
+    reason: parsed.reason?.trim() || "classified by model",
+    source: "llm",
+    category,
+    requiresAction,
+    confidence: normalizeModelConfidence(parsed.confidence),
+  };
+}
+
+function normalizePriorityCategory(
+  value?: string,
+): PriorityClassification["category"] {
+  switch (value) {
+    case "critical_action":
+    case "direct_action":
+    case "useful_update":
+    case "bulk_noise":
+    case "transactional_noise":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeModelConfidence(
+  value?: string,
+): PriorityClassification["confidence"] {
+  if (value === "high" || value === "low") return value;
+  return "medium";
 }
 
 function normalizePriority(value?: string): HeyRizPriority | undefined {
@@ -281,7 +458,10 @@ function parseRoute(value: string | undefined, fallback: Route): Route {
   if (!trimmed) return fallback;
   const idx = trimmed.indexOf(":");
   if (idx === -1) return { provider: trimmed };
-  return { provider: trimmed.slice(0, idx).trim(), model: trimmed.slice(idx + 1).trim() || undefined };
+  return {
+    provider: trimmed.slice(0, idx).trim(),
+    model: trimmed.slice(idx + 1).trim() || undefined,
+  };
 }
 
 function defaultMaxTokens(task: LlmTask | undefined): number {

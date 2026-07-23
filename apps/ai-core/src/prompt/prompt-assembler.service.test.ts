@@ -23,7 +23,13 @@ const context: HeyRizRuntimeContext = {
     calendarStatus: "fresh",
     inboxStatus: "fresh",
     checkedAt: "2026-07-23T10:00:00.000Z",
-    schedule: [{ title: "Product review", start: "2026-07-23T11:00:00.000Z", allDay: false }],
+    schedule: [
+      {
+        title: "Product review",
+        start: "2026-07-23T11:00:00.000Z",
+        allDay: false,
+      },
+    ],
     unread: [{ from: "Priya <priya@example.com>", subject: "Launch plan" }],
   },
   honorific: "boss",
@@ -58,11 +64,16 @@ describe("PromptAssemblerService", () => {
       ],
     });
 
-    expect(prompt).toContain("External writes require the runtime's explicit approval gate");
+    expect(prompt).toContain(
+      "External writes require the runtime's explicit approval gate",
+    );
     expect(prompt).toContain("UNTRUSTED EXTERNAL DATA");
     expect(prompt).toContain("- send_email [approval required]: Send email");
     expect(prompt).not.toContain("- business_snapshot:");
     expect(prompt).toContain("LIVE UNREAD INBOX");
+    expect(prompt).toContain("Unread does NOT mean important");
+    expect(prompt).toContain("call gmail_triage");
+    expect(prompt).toContain("data.lessImportant is reviewed noise");
     expect(prompt).not.toContain("LIVE CALENDAR — TODAY");
     expect(prompt).not.toContain("RELEVANT FUZZY MEMORY");
     expect(prompt.length).toBeLessThan(9_000);

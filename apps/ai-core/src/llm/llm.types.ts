@@ -51,6 +51,14 @@ export type PriorityClassification = {
   priority: HeyRizPriority;
   reason: string;
   source: "llm" | "rules";
+  category?:
+    | "critical_action"
+    | "direct_action"
+    | "useful_update"
+    | "bulk_noise"
+    | "transactional_noise";
+  requiresAction?: boolean;
+  confidence?: "high" | "medium" | "low";
 };
 
 export interface LlmProvider {

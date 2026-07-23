@@ -10,7 +10,8 @@ export type ToolCategory =
   | "queue"
   | "business"
   | "database"
-  | "task";
+  | "task"
+  | "automation";
 
 export type HeyRizToolDefinition = {
   name: string;

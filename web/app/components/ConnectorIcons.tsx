@@ -19,6 +19,26 @@ export function GmailIcon({ className = base }: IconProps) {
   return <BrandLogoImg src="/logos/gmail.svg" alt="Gmail" className={className} />;
 }
 
+export function GoogleDriveIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/google-drive.svg" alt="Google Drive" className={className} />;
+}
+
+export function GoogleSheetsIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/google-sheets.svg" alt="Google Sheets" className={className} />;
+}
+
+export function GoogleDocsIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/google-docs.svg" alt="Google Docs" className={className} />;
+}
+
+export function GoogleFormsIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/google-forms.svg" alt="Google Forms" className={className} />;
+}
+
+export function GoogleMeetIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/google-meet.svg" alt="Google Meet" className={className} />;
+}
+
 export function RazorpayIcon({ className = base }: IconProps) {
   return <BrandLogoImg src="/logos/razorpay.svg" alt="Razorpay" className={className} />;
 }
@@ -103,4 +123,27 @@ export function DiscordIcon({ className = base }: IconProps) {
       />
     </svg>
   );
+}
+
+// Brand marks below fetched via the Brandfetch API and vendored locally as
+// static files (same convention as the Google/Slack/etc logos above) — see
+// web/public/logos. No runtime dependency on Brandfetch or any API key.
+export function JiraIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/jira.png" alt="Jira" className={className} />;
+}
+
+export function PagerDutyIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/pagerduty.svg" alt="PagerDuty" className={className} />;
+}
+
+export function TrelloIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/trello.svg" alt="Trello" className={className} />;
+}
+
+export function AirtableIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/airtable.svg" alt="Airtable" className={className} />;
+}
+
+export function TwilioIcon({ className = base }: IconProps) {
+  return <BrandLogoImg src="/logos/twilio.svg" alt="Twilio" className={className} />;
 }

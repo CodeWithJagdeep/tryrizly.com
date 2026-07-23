@@ -9,9 +9,17 @@ import {
   type AutomationFlow,
   listFlows,
   newFlowId,
-  newStepId,
   saveFlow,
 } from "../lib/automation-store";
+
+const NAME_ADJECTIVES = ["Swift", "Quiet", "Bright", "Sharp", "Steady", "Nimble", "Clever", "Calm", "Bold", "Tidy"];
+const NAME_NOUNS = ["Falcon", "River", "Signal", "Compass", "Ember", "Harbor", "Orbit", "Beacon", "Current", "Anchor"];
+
+function randomFlowName(): string {
+  const adjective = NAME_ADJECTIVES[Math.floor(Math.random() * NAME_ADJECTIVES.length)];
+  const noun = NAME_NOUNS[Math.floor(Math.random() * NAME_NOUNS.length)];
+  return `${adjective} ${noun} automation`;
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - Date.parse(iso);
@@ -28,20 +36,14 @@ export function AutomationsClient() {
   const [flows, setFlows] = useState<AutomationFlow[]>([]);
 
   useEffect(() => {
-    setFlows(listFlows());
+    listFlows().then(setFlows);
   }, []);
 
-  function createFlow() {
+  async function createFlow() {
     const id = newFlowId();
-    saveFlow({
-      id,
-      name: "Untitled automation",
-      steps: [
-        { id: newStepId(), kind: "trigger", title: "", subtitle: "", app: "" },
-        { id: newStepId(), kind: "action", title: "", subtitle: "", app: "" },
-      ],
-      updatedAt: new Date().toISOString(),
-    });
+    // Blank — no pre-seeded trigger/action stubs. The builder shows a single
+    // "Start trigger" button on an empty flow instead of two placeholder nodes.
+    await saveFlow({ id, name: randomFlowName(), steps: [] });
     router.push(`/dashboard/automations/${id}`);
   }
 
@@ -95,7 +97,13 @@ export function AutomationsClient() {
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FE7F2D]/10 text-[#FE7F2D]">
                     <BoltIcon className="h-4 w-4" />
                   </span>
-                  <p className="truncate text-sm font-normal text-slate-900">{flow.name || "Untitled automation"}</p>
+                  <p className="min-w-0 flex-1 truncate text-sm font-normal text-slate-900">{flow.name || "Untitled automation"}</p>
+                  {flow.status === "active" && (
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Active</span>
+                  )}
+                  {flow.status === "paused" && (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Paused</span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400">
                   {flow.steps.length} step{flow.steps.length !== 1 ? "s" : ""} · Edited {timeAgo(flow.updatedAt)}
@@ -106,7 +114,7 @@ export function AutomationsClient() {
         )}
 
         <p className="mt-8 text-xs text-slate-400">
-          Flows are saved to this browser only — running them automatically isn&apos;t wired up yet.
+          Activate a flow from the builder to have it run automatically in the background.
         </p>
       </div>
     </main>

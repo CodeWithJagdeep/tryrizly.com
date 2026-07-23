@@ -19,6 +19,11 @@ import { PayPalService } from "./connectors/paypal.service";
 import { GitHubService } from "./connectors/github.service";
 import { MpesaService } from "./connectors/mpesa.service";
 import { DiscordService } from "./connectors/discord.service";
+import { JiraService } from "./connectors/jira.service";
+import { PagerDutyService } from "./connectors/pagerduty.service";
+import { TrelloService } from "./connectors/trello.service";
+import { AirtableService } from "./connectors/airtable.service";
+import { TwilioService } from "./connectors/twilio.service";
 import { TextToQueryService } from "./connectors/text-to-query.service";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
 import { AccountDeletionService } from "./account/account-deletion.service";
@@ -94,6 +99,11 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     GitHubService,
     MpesaService,
     DiscordService,
+    JiraService,
+    PagerDutyService,
+    TrelloService,
+    AirtableService,
+    TwilioService,
     TextToQueryService,
     TaskRepository,
     ToolRegistryService,

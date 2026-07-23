@@ -47,4 +47,27 @@ export class StripeService {
     const data = (await res.json()) as { data?: unknown[] };
     return { data: data.data ?? [] };
   }
+
+  /** The automation "Create Customer" action — the one write path this service exposes. */
+  async createCustomer(
+    secret: StripeConnectorSecret,
+    input: { email?: string; name?: string },
+  ): Promise<{ id: string }> {
+    const params = new URLSearchParams();
+    if (input.email) params.set("email", input.email);
+    if (input.name) params.set("name", input.name);
+
+    const res = await fetch("https://api.stripe.com/v1/customers", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret.secretKey}`,
+        "Stripe-Version": "2024-06-20",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+    if (!res.ok) throw new Error(`stripe_api_${res.status}`);
+    const data = (await res.json()) as { id: string };
+    return { id: data.id };
+  }
 }

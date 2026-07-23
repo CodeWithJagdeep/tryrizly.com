@@ -20,29 +20,49 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  AirtableIcon,
   CalComIcon,
   CalendarIcon,
   DiscordIcon,
   GitHubIcon,
   GmailIcon,
+  GoogleDocsIcon,
+  GoogleDriveIcon,
+  GoogleFormsIcon,
+  GoogleMeetIcon,
+  GoogleSheetsIcon,
+  JiraIcon,
   MongoDbIcon,
   NotionIcon,
+  PagerDutyIcon,
   PayPalIcon,
   PostgresIcon,
   RazorpayIcon,
   SlackIcon,
   StripeIcon,
   TelegramIcon,
+  TrelloIcon,
+  TwilioIcon,
 } from "../../../components/ConnectorIcons";
-import { ClockIcon, PlugIcon } from "../../components/icons";
+import { ArrowUpIcon, ClockIcon, PlugIcon, WandIcon } from "../../components/icons";
+import { MarkdownMessage } from "../../components/MarkdownMessage";
 import {
+  activateFlow,
   type AutomationFlow,
+  type AutomationRun,
   type AutomationStep,
+  type BuilderChatOp,
+  builderChat,
+  deleteFlow,
   getFlow,
+  listRuns,
+  newFlowId,
   newStepId,
+  pauseFlow,
   saveFlow,
 } from "../../lib/automation-store";
 
@@ -61,15 +81,15 @@ type AppDef = {
   name: string;
   triggers: AppEvent[];
   actions: AppEvent[];
-  color?: string;
   category?: string;
 };
 
-// The 9 flagship apps have hand-written events and real SVG logos.
+// Apps with hand-written trigger/action copy and real SVG logos.
 const DETAILED_APPS: AppDef[] = [
   {
     id: "gmail",
     name: "Gmail",
+    category: "Email & Calendar",
     triggers: [
       { name: "New Attachment", description: "Triggers when you receive a new attachment.", kind: "Polling" },
       { name: "New Conversation", description: "Triggers when a new email conversation begins in your inbox.", kind: "Polling" },
@@ -90,6 +110,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "calendar",
     name: "Google Calendar",
+    category: "Email & Calendar",
     triggers: [
       { name: "New Event", description: "Triggers when an event is created in your calendar.", kind: "Polling" },
       { name: "Event Start", description: "Triggers a specified time before an event starts.", kind: "Polling" },
@@ -105,6 +126,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "slack",
     name: "Slack",
+    category: "Communication",
     triggers: [
       { name: "New Message Posted to Channel", description: "Triggers when a new message is posted to a channel.", kind: "Instant" },
       { name: "New Mention", description: "Triggers when your username is mentioned in a channel.", kind: "Instant" },
@@ -118,6 +140,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "telegram",
     name: "Telegram",
+    category: "Communication",
     triggers: [{ name: "New Message", description: "Triggers when a new message is received by your bot.", kind: "Instant" }],
     actions: [
       { name: "Notify Me", description: "Sends you a Telegram notification.", kind: "Action" },
@@ -127,6 +150,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "github",
     name: "GitHub",
+    category: "Developer & IT Tools",
     triggers: [
       { name: "New Pull Request", description: "Triggers when a new pull request is opened.", kind: "Instant" },
       { name: "New Issue", description: "Triggers when a new issue is created.", kind: "Instant" },
@@ -140,6 +164,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "notion",
     name: "Notion",
+    category: "Productivity & Files",
     triggers: [
       { name: "New Database Item", description: "Triggers when a new item is added to a database.", kind: "Polling" },
       { name: "Updated Database Item", description: "Triggers when an item in a database is updated.", kind: "Polling" },
@@ -152,6 +177,7 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "stripe",
     name: "Stripe",
+    category: "Payments",
     triggers: [
       { name: "New Payment", description: "Triggers when a new payment is completed.", kind: "Instant" },
       { name: "New Subscription", description: "Triggers when a customer starts a new subscription.", kind: "Instant" },
@@ -165,15 +191,17 @@ const DETAILED_APPS: AppDef[] = [
   {
     id: "postgres",
     name: "Postgres",
+    category: "Databases",
     triggers: [{ name: "New Row", description: "Triggers when a new row is added to a table.", kind: "Polling" }],
     actions: [
-      { name: "Run a Query", description: "Runs a raw SQL query.", kind: "Action" },
+      { name: "Run a Query", description: "Runs a read-only SQL query and feeds the results into later steps.", kind: "Action" },
       { name: "Insert Row", description: "Inserts a new row into a table.", kind: "Action" },
     ],
   },
   {
     id: "schedule",
     name: "Schedule",
+    category: "Scheduling",
     triggers: [
       { name: "Every Day", description: "Triggers every day at a time you choose.", kind: "Polling" },
       { name: "Every Hour", description: "Triggers once every hour.", kind: "Polling" },
@@ -183,308 +211,162 @@ const DETAILED_APPS: AppDef[] = [
   },
 ];
 
-// ── Extended app directory (Zapier-scale) ─────────────────────────────────────
-// The rest of the catalog is generated: each app is tagged with a category, and
-// the category supplies a believable set of triggers/actions. Icons fall back to
-// a colored monogram tile (see AppIcon). Descriptions are templated per app.
-
-type EventTpl = { name: string; kind: EventKind; desc: (app: string) => string };
-
-const CATEGORY_EVENTS: Record<string, { triggers: EventTpl[]; actions: EventTpl[] }> = {
-  Communication: {
+// The remaining apps Rizly actually connects to (see connector.service.ts /
+// connectors-client.tsx) but that don't yet have hand-written trigger/action
+// copy. Every app here has a real logo in APP_ICONS below — no fallback tile.
+const REMAINING_APPS: AppDef[] = [
+  {
+    id: "calcom",
+    name: "Cal.com",
+    category: "Scheduling",
+    triggers: [{ name: "New Booking", description: "Triggers when a new booking is made in Cal.com.", kind: "Instant" }],
+    actions: [{ name: "Create Booking", description: "Creates a booking in Cal.com.", kind: "Action" }],
+  },
+  {
+    id: "razorpay",
+    name: "Razorpay",
+    category: "Payments",
     triggers: [
-      { name: "New Message", kind: "Instant", desc: (a) => `Triggers when a new message is posted in ${a}.` },
-      { name: "New Mention", kind: "Instant", desc: (a) => `Triggers when you are mentioned in ${a}.` },
+      { name: "New Payment", description: "Triggers when a payment succeeds in Razorpay.", kind: "Instant" },
+      { name: "Failed Payment", description: "Triggers when a payment fails in Razorpay.", kind: "Instant" },
     ],
-    actions: [
-      { name: "Send Message", kind: "Action", desc: (a) => `Sends a message in ${a}.` },
-      { name: "Send Direct Message", kind: "Action", desc: (a) => `Sends a direct message via ${a}.` },
-    ],
+    actions: [{ name: "Create Invoice", description: "Creates an invoice in Razorpay.", kind: "Action" }],
   },
-  CRM: {
+  {
+    id: "paypal",
+    name: "PayPal",
+    category: "Payments",
     triggers: [
-      { name: "New Contact", kind: "Polling", desc: (a) => `Triggers when a new contact is created in ${a}.` },
-      { name: "New Deal", kind: "Polling", desc: (a) => `Triggers when a new deal is added in ${a}.` },
-      { name: "Updated Deal Stage", kind: "Polling", desc: (a) => `Triggers when a deal changes stage in ${a}.` },
+      { name: "New Payment", description: "Triggers when a payment succeeds in PayPal.", kind: "Instant" },
+      { name: "New Refund", description: "Triggers when a refund is issued in PayPal.", kind: "Instant" },
     ],
+    actions: [{ name: "Create Invoice", description: "Creates an invoice in PayPal.", kind: "Action" }],
+  },
+  {
+    id: "discord",
+    name: "Discord",
+    category: "Communication",
+    triggers: [{ name: "New Message", description: "Triggers when a new message is posted in Discord.", kind: "Instant" }],
+    actions: [{ name: "Send Message", description: "Sends a message in Discord.", kind: "Action" }],
+  },
+  {
+    id: "mongodb",
+    name: "MongoDB",
+    category: "Databases",
+    triggers: [{ name: "New Document", description: "Triggers when a new document is added in MongoDB.", kind: "Polling" }],
     actions: [
-      { name: "Create Contact", kind: "Action", desc: (a) => `Creates a new contact in ${a}.` },
-      { name: "Update Contact", kind: "Action", desc: (a) => `Updates an existing contact in ${a}.` },
-      { name: "Create Deal", kind: "Action", desc: (a) => `Creates a new deal in ${a}.` },
+      { name: "Insert Document", description: "Inserts a new document into a collection.", kind: "Action" },
+      { name: "Find Document", description: "Finds a document in a collection.", kind: "Action" },
     ],
   },
-  "Email Marketing": {
-    triggers: [
-      { name: "New Subscriber", kind: "Polling", desc: (a) => `Triggers when someone subscribes in ${a}.` },
-      { name: "New Campaign Sent", kind: "Polling", desc: (a) => `Triggers when a campaign is sent from ${a}.` },
-    ],
-    actions: [
-      { name: "Add Subscriber", kind: "Action", desc: (a) => `Adds a subscriber to a list in ${a}.` },
-      { name: "Send Campaign", kind: "Action", desc: (a) => `Sends a campaign via ${a}.` },
-      { name: "Add Tag", kind: "Action", desc: (a) => `Tags a subscriber in ${a}.` },
-    ],
+  // Drive/Sheets/Docs share one OAuth grant ("google_workspace" — see
+  // oauthProviderFor below); Meet reuses the existing Calendar connection and
+  // needs no grant of its own (createEvent always requests a Meet link).
+  {
+    id: "google-drive",
+    name: "Google Drive",
+    category: "Productivity & Files",
+    triggers: [{ name: "New File", description: "Triggers when a new file is added in Google Drive.", kind: "Polling" }],
+    actions: [{ name: "Upload File", description: "Uploads a file to Google Drive.", kind: "Action" }],
   },
-  Email: {
-    triggers: [{ name: "New Email", kind: "Polling", desc: (a) => `Triggers when a new email arrives in ${a}.` }],
-    actions: [
-      { name: "Send Email", kind: "Action", desc: (a) => `Sends an email from ${a}.` },
-      { name: "Create Draft", kind: "Action", desc: (a) => `Creates a draft in ${a}.` },
-    ],
+  {
+    id: "google-sheets",
+    name: "Google Sheets",
+    category: "Databases",
+    triggers: [{ name: "New Row", description: "Triggers when a new row is added in Google Sheets.", kind: "Polling" }],
+    actions: [{ name: "Create Row", description: "Creates a new row in Google Sheets.", kind: "Action" }],
   },
-  Payments: {
-    triggers: [
-      { name: "New Payment", kind: "Instant", desc: (a) => `Triggers when a payment succeeds in ${a}.` },
-      { name: "New Refund", kind: "Instant", desc: (a) => `Triggers when a refund is issued in ${a}.` },
-      { name: "Failed Payment", kind: "Instant", desc: (a) => `Triggers when a payment fails in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Customer", kind: "Action", desc: (a) => `Creates a customer in ${a}.` },
-      { name: "Create Invoice", kind: "Action", desc: (a) => `Creates an invoice in ${a}.` },
-    ],
-  },
-  "Project Management": {
-    triggers: [
-      { name: "New Task", kind: "Polling", desc: (a) => `Triggers when a new task is created in ${a}.` },
-      { name: "Task Completed", kind: "Polling", desc: (a) => `Triggers when a task is marked complete in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Task", kind: "Action", desc: (a) => `Creates a task in ${a}.` },
-      { name: "Update Task", kind: "Action", desc: (a) => `Updates a task in ${a}.` },
-      { name: "Add Comment", kind: "Action", desc: (a) => `Adds a comment to a task in ${a}.` },
-    ],
-  },
-  "Forms & Surveys": {
-    triggers: [{ name: "New Submission", kind: "Instant", desc: (a) => `Triggers on a new form submission in ${a}.` }],
-    actions: [{ name: "Create Entry", kind: "Action", desc: (a) => `Creates an entry in ${a}.` }],
-  },
-  Databases: {
-    triggers: [
-      { name: "New Row", kind: "Polling", desc: (a) => `Triggers when a new row is added in ${a}.` },
-      { name: "Updated Row", kind: "Polling", desc: (a) => `Triggers when a row is updated in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Row", kind: "Action", desc: (a) => `Creates a new row in ${a}.` },
-      { name: "Update Row", kind: "Action", desc: (a) => `Updates a row in ${a}.` },
-      { name: "Find Row", kind: "Action", desc: (a) => `Finds a row in ${a}.` },
-    ],
-  },
-  "File Storage": {
-    triggers: [{ name: "New File", kind: "Polling", desc: (a) => `Triggers when a new file is added in ${a}.` }],
-    actions: [
-      { name: "Upload File", kind: "Action", desc: (a) => `Uploads a file to ${a}.` },
-      { name: "Create Folder", kind: "Action", desc: (a) => `Creates a folder in ${a}.` },
-    ],
-  },
-  "Social Media": {
-    triggers: [
-      { name: "New Post", kind: "Polling", desc: (a) => `Triggers when a new post is published on ${a}.` },
-      { name: "New Follower", kind: "Polling", desc: (a) => `Triggers when you gain a follower on ${a}.` },
-    ],
-    actions: [{ name: "Create Post", kind: "Action", desc: (a) => `Publishes a post to ${a}.` }],
-  },
-  "Developer Tools": {
-    triggers: [
-      { name: "New Event", kind: "Instant", desc: (a) => `Triggers on a new event in ${a}.` },
-      { name: "New Deployment", kind: "Instant", desc: (a) => `Triggers when a deployment finishes in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Item", kind: "Action", desc: (a) => `Creates an item in ${a}.` },
-      { name: "Trigger Build", kind: "Action", desc: (a) => `Triggers a build in ${a}.` },
-    ],
-  },
-  Support: {
-    triggers: [
-      { name: "New Ticket", kind: "Instant", desc: (a) => `Triggers when a new ticket is created in ${a}.` },
-      { name: "Ticket Updated", kind: "Instant", desc: (a) => `Triggers when a ticket is updated in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Ticket", kind: "Action", desc: (a) => `Creates a ticket in ${a}.` },
-      { name: "Add Reply", kind: "Action", desc: (a) => `Adds a reply to a ticket in ${a}.` },
-    ],
-  },
-  Scheduling: {
-    triggers: [{ name: "New Booking", kind: "Instant", desc: (a) => `Triggers when a new booking is made in ${a}.` }],
-    actions: [{ name: "Create Booking", kind: "Action", desc: (a) => `Creates a booking in ${a}.` }],
-  },
-  eCommerce: {
-    triggers: [
-      { name: "New Order", kind: "Instant", desc: (a) => `Triggers when a new order is placed in ${a}.` },
-      { name: "New Customer", kind: "Polling", desc: (a) => `Triggers when a new customer signs up in ${a}.` },
-    ],
-    actions: [
-      { name: "Create Order", kind: "Action", desc: (a) => `Creates an order in ${a}.` },
-      { name: "Update Inventory", kind: "Action", desc: (a) => `Updates inventory in ${a}.` },
-    ],
-  },
-  AI: {
+  {
+    id: "google-docs",
+    name: "Google Docs",
+    category: "Productivity & Files",
     triggers: [],
-    actions: [
-      { name: "Generate Text", kind: "Action", desc: (a) => `Generates text with ${a}.` },
-      { name: "Summarize", kind: "Action", desc: (a) => `Summarizes content with ${a}.` },
-      { name: "Classify", kind: "Action", desc: (a) => `Classifies content with ${a}.` },
-    ],
+    actions: [{ name: "Create Document", description: "Creates a new document in Google Docs.", kind: "Action" }],
   },
-  Productivity: {
-    triggers: [{ name: "New Item", kind: "Polling", desc: (a) => `Triggers when a new item is created in ${a}.` }],
-    actions: [
-      { name: "Create Item", kind: "Action", desc: (a) => `Creates an item in ${a}.` },
-      { name: "Update Item", kind: "Action", desc: (a) => `Updates an item in ${a}.` },
-    ],
+  {
+    id: "google-forms",
+    name: "Google Forms",
+    category: "Productivity & Files",
+    triggers: [{ name: "New Submission", description: "Triggers when a new response is added to the form's response sheet.", kind: "Polling" }],
+    actions: [],
   },
-  Analytics: {
-    triggers: [{ name: "New Event Tracked", kind: "Polling", desc: (a) => `Triggers when a new event is tracked in ${a}.` }],
-    actions: [{ name: "Track Event", kind: "Action", desc: (a) => `Sends an event to ${a}.` }],
+  {
+    id: "google-meet",
+    name: "Google Meet",
+    category: "Communication",
+    triggers: [{ name: "Meeting Started", description: "Triggers when a Meet-enabled calendar event starts.", kind: "Polling" }],
+    actions: [{ name: "Create Meeting", description: "Creates a Calendar event with a Google Meet link.", kind: "Action" }],
   },
-};
-
-// [id, name, category, brand color]
-const CATALOG: [string, string, string, string][] = [
-  // Communication
-  ["msteams", "Microsoft Teams", "Communication", "#5059C9"],
-  ["discord", "Discord", "Communication", "#5865F2"],
-  ["zoom", "Zoom", "Communication", "#2D8CFF"],
-  ["google-chat", "Google Chat", "Communication", "#00897B"],
-  ["twilio", "Twilio", "Communication", "#F22F46"],
-  ["whatsapp", "WhatsApp", "Communication", "#25D366"],
-  ["intercom", "Intercom", "Communication", "#1F8DED"],
-  ["front", "Front", "Communication", "#A857F8"],
-  ["ringcentral", "RingCentral", "Communication", "#FF7A00"],
-  // CRM
-  ["salesforce", "Salesforce", "CRM", "#00A1E0"],
-  ["hubspot", "HubSpot", "CRM", "#FF7A59"],
-  ["pipedrive", "Pipedrive", "CRM", "#017737"],
-  ["zoho-crm", "Zoho CRM", "CRM", "#E42527"],
-  ["copper", "Copper", "CRM", "#FF6F61"],
-  ["close", "Close", "CRM", "#101828"],
-  ["freshsales", "Freshsales", "CRM", "#22B573"],
-  ["attio", "Attio", "CRM", "#4E5BF2"],
-  ["keap", "Keap", "CRM", "#4CAF50"],
-  // Email Marketing
-  ["mailchimp", "Mailchimp", "Email Marketing", "#FFE01B"],
-  ["sendgrid", "SendGrid", "Email Marketing", "#1A82E2"],
-  ["klaviyo", "Klaviyo", "Email Marketing", "#111827"],
-  ["activecampaign", "ActiveCampaign", "Email Marketing", "#356AE6"],
-  ["convertkit", "ConvertKit", "Email Marketing", "#FB6970"],
-  ["brevo", "Brevo", "Email Marketing", "#0B996E"],
-  ["constant-contact", "Constant Contact", "Email Marketing", "#1856ED"],
-  ["customerio", "Customer.io", "Email Marketing", "#7131FF"],
-  ["mailgun", "Mailgun", "Email Marketing", "#C02126"],
-  // Email
-  ["outlook", "Microsoft Outlook", "Email", "#0078D4"],
-  ["yahoo-mail", "Yahoo Mail", "Email", "#6001D2"],
-  ["imap", "Email by Rizly", "Email", "#6C4BF4"],
-  // Payments
-  ["paypal", "PayPal", "Payments", "#003087"],
-  ["square", "Square", "Payments", "#3E4348"],
-  ["razorpay", "Razorpay", "Payments", "#0C2451"],
-  ["chargebee", "Chargebee", "Payments", "#FF7846"],
-  ["paddle", "Paddle", "Payments", "#0B0A28"],
-  ["quickbooks", "QuickBooks", "Payments", "#2CA01C"],
-  ["xero", "Xero", "Payments", "#13B5EA"],
-  ["wise", "Wise", "Payments", "#9FE870"],
-  // Project Management
-  ["asana", "Asana", "Project Management", "#F06A6A"],
-  ["trello", "Trello", "Project Management", "#0079BF"],
-  ["jira", "Jira", "Project Management", "#0052CC"],
-  ["clickup", "ClickUp", "Project Management", "#7B68EE"],
-  ["monday", "monday.com", "Project Management", "#FF3D57"],
-  ["basecamp", "Basecamp", "Project Management", "#1D2D35"],
-  ["linear", "Linear", "Project Management", "#5E6AD2"],
-  ["todoist", "Todoist", "Project Management", "#E44332"],
-  ["wrike", "Wrike", "Project Management", "#08CF65"],
-  ["height", "Height", "Project Management", "#5C4DFF"],
-  ["shortcut", "Shortcut", "Project Management", "#5B4CFF"],
-  // Forms & Surveys
-  ["typeform", "Typeform", "Forms & Surveys", "#262627"],
-  ["google-forms", "Google Forms", "Forms & Surveys", "#7248B9"],
-  ["jotform", "Jotform", "Forms & Surveys", "#FF6100"],
-  ["gravity-forms", "Gravity Forms", "Forms & Surveys", "#134DA5"],
-  ["surveymonkey", "SurveyMonkey", "Forms & Surveys", "#00BF6F"],
-  ["tally", "Tally", "Forms & Surveys", "#101010"],
-  ["formstack", "Formstack", "Forms & Surveys", "#21B573"],
-  // Databases
-  ["airtable", "Airtable", "Databases", "#18BFFF"],
-  ["mysql", "MySQL", "Databases", "#00758F"],
-  ["mongodb", "MongoDB", "Databases", "#47A248"],
-  ["google-sheets", "Google Sheets", "Databases", "#0F9D58"],
-  ["excel", "Microsoft Excel", "Databases", "#217346"],
-  ["coda", "Coda", "Databases", "#F46A54"],
-  ["baserow", "Baserow", "Databases", "#5190EF"],
-  ["supabase", "Supabase", "Databases", "#3ECF8E"],
-  // File Storage
-  ["google-drive", "Google Drive", "File Storage", "#1FA463"],
-  ["dropbox", "Dropbox", "File Storage", "#0061FF"],
-  ["box", "Box", "File Storage", "#0061D5"],
-  ["onedrive", "OneDrive", "File Storage", "#0364B8"],
-  ["s3", "AWS S3", "File Storage", "#569A31"],
-  // Social Media
-  ["twitter", "X (Twitter)", "Social Media", "#000000"],
-  ["linkedin", "LinkedIn", "Social Media", "#0A66C2"],
-  ["facebook-pages", "Facebook Pages", "Social Media", "#1877F2"],
-  ["instagram", "Instagram", "Social Media", "#E4405F"],
-  ["youtube", "YouTube", "Social Media", "#FF0000"],
-  ["reddit", "Reddit", "Social Media", "#FF4500"],
-  ["buffer", "Buffer", "Social Media", "#231F20"],
-  ["tiktok", "TikTok", "Social Media", "#010101"],
-  ["pinterest", "Pinterest", "Social Media", "#E60023"],
-  // Developer Tools
-  ["gitlab", "GitLab", "Developer Tools", "#FC6D26"],
-  ["bitbucket", "Bitbucket", "Developer Tools", "#0052CC"],
-  ["vercel", "Vercel", "Developer Tools", "#000000"],
-  ["netlify", "Netlify", "Developer Tools", "#00C7B7"],
-  ["circleci", "CircleCI", "Developer Tools", "#343434"],
-  ["sentry", "Sentry", "Developer Tools", "#362D59"],
-  ["pagerduty", "PagerDuty", "Developer Tools", "#06AC38"],
-  ["datadog", "Datadog", "Developer Tools", "#632CA6"],
-  ["dockerhub", "Docker Hub", "Developer Tools", "#2496ED"],
-  // Support
-  ["zendesk", "Zendesk", "Support", "#03363D"],
-  ["freshdesk", "Freshdesk", "Support", "#25C16F"],
-  ["helpscout", "Help Scout", "Support", "#1292EE"],
-  ["gorgias", "Gorgias", "Support", "#2C2C2C"],
-  // Scheduling
-  ["calendly", "Calendly", "Scheduling", "#006BFF"],
-  ["calcom", "Cal.com", "Scheduling", "#111827"],
-  ["outlook-calendar", "Outlook Calendar", "Scheduling", "#0078D4"],
-  ["acuity", "Acuity Scheduling", "Scheduling", "#5B4E9E"],
-  // eCommerce
-  ["shopify", "Shopify", "eCommerce", "#95BF47"],
-  ["woocommerce", "WooCommerce", "eCommerce", "#96588A"],
-  ["bigcommerce", "BigCommerce", "eCommerce", "#121118"],
-  ["magento", "Magento", "eCommerce", "#EE672F"],
-  ["etsy", "Etsy", "eCommerce", "#F45800"],
-  ["squarespace", "Squarespace", "eCommerce", "#000000"],
-  // AI
-  ["openai", "OpenAI", "AI", "#10A37F"],
-  ["anthropic", "Anthropic Claude", "AI", "#D4A27F"],
-  ["gemini", "Google Gemini", "AI", "#1A73E8"],
-  ["huggingface", "Hugging Face", "AI", "#FFD21E"],
-  ["perplexity", "Perplexity", "AI", "#1FB8CD"],
-  // Productivity
-  ["google-docs", "Google Docs", "Productivity", "#4285F4"],
-  ["confluence", "Confluence", "Productivity", "#172B4D"],
-  ["evernote", "Evernote", "Productivity", "#00A82D"],
-  ["miro", "Miro", "Productivity", "#FFD02F"],
-  ["loom", "Loom", "Productivity", "#625DF5"],
-  ["clickup-docs", "Coda Docs", "Productivity", "#F46A54"],
-  // Analytics
-  ["google-analytics", "Google Analytics", "Analytics", "#E37400"],
-  ["mixpanel", "Mixpanel", "Analytics", "#7856FF"],
-  ["amplitude", "Amplitude", "Analytics", "#1E61F0"],
-  ["segment", "Segment", "Analytics", "#52BD94"],
+  // Manual API-key/token connectors — no OAuth app to register, connects
+  // instantly from the connectors page.
+  {
+    id: "jira",
+    name: "Jira",
+    category: "Developer & IT Tools",
+    triggers: [{ name: "New Issue", description: "Triggers when a new issue is created in a project.", kind: "Polling" }],
+    actions: [{ name: "Create Issue", description: "Creates a new issue in a Jira project.", kind: "Action" }],
+  },
+  {
+    id: "pagerduty",
+    name: "PagerDuty",
+    category: "Developer & IT Tools",
+    triggers: [{ name: "New Incident", description: "Triggers when a new incident is created on a service.", kind: "Polling" }],
+    actions: [{ name: "Create Incident", description: "Opens a new incident on a PagerDuty service.", kind: "Action" }],
+  },
+  {
+    id: "trello",
+    name: "Trello",
+    category: "Productivity & Files",
+    triggers: [{ name: "New Card", description: "Triggers when a new card is added to a list.", kind: "Polling" }],
+    actions: [{ name: "Create Card", description: "Creates a new card in a Trello list.", kind: "Action" }],
+  },
+  {
+    id: "airtable",
+    name: "Airtable",
+    category: "Databases",
+    triggers: [{ name: "New Record", description: "Triggers when a new record is added to a table.", kind: "Polling" }],
+    actions: [{ name: "Create Record", description: "Creates a new record in an Airtable table.", kind: "Action" }],
+  },
+  {
+    id: "twilio",
+    name: "Twilio",
+    category: "Communication",
+    triggers: [],
+    actions: [{ name: "Send SMS", description: "Sends a text message via your Twilio number.", kind: "Action" }],
+  },
 ];
 
-function generatedApps(): AppDef[] {
-  const taken = new Set(DETAILED_APPS.map((a) => a.id));
-  return CATALOG.filter(([id]) => !taken.has(id)).map(([id, name, category, color]) => {
-    const tpl = CATEGORY_EVENTS[category] ?? CATEGORY_EVENTS.Productivity;
-    const expand = (list: EventTpl[]): AppEvent[] =>
-      list.map((e) => ({ name: e.name, kind: e.kind, description: e.desc(name) }));
-    return { id, name, category, color, triggers: expand(tpl.triggers), actions: expand(tpl.actions) };
-  });
-}
+// No cosmetic-only Google Workspace apps remain — all five (Drive, Sheets,
+// Docs, Forms, Meet) execute for real now (see REMAINING_APPS above).
+const COSMETIC_APPS: AppDef[] = [];
 
-const APPS: AppDef[] = [...DETAILED_APPS, ...generatedApps()];
+// Flow-control steps — not third-party connectors, no account needed. Let you
+// build "trigger -> wait -> only continue if -> action" chains.
+const UTILITY_APPS: AppDef[] = [
+  {
+    id: "delay",
+    name: "Delay",
+    category: "Flow control",
+    triggers: [],
+    actions: [{ name: "Delay", description: "Pauses the automation for a set number of minutes before continuing.", kind: "Action" }],
+  },
+  {
+    id: "filter",
+    name: "Filter",
+    category: "Flow control",
+    triggers: [],
+    actions: [{ name: "Only Continue If", description: "Stops the automation here unless a field from the trigger matches a condition.", kind: "Action" }],
+  },
+  {
+    id: "ai",
+    name: "Riz Agent",
+    category: "Flow control",
+    triggers: [],
+    actions: [{ name: "Run Riz Agent", description: "Give it any prompt — summarize, extract, decide, rewrite, whatever you need — against data from the trigger. Uses AI credits.", kind: "Action" }],
+  },
+];
+
+const APPS: AppDef[] = [...DETAILED_APPS, ...REMAINING_APPS, ...COSMETIC_APPS, ...UTILITY_APPS];
 
 const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   gmail: GmailIcon,
@@ -500,32 +382,24 @@ const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   razorpay: RazorpayIcon,
   calcom: CalComIcon,
   mongodb: MongoDbIcon,
+  "google-drive": GoogleDriveIcon,
+  "google-sheets": GoogleSheetsIcon,
+  "google-docs": GoogleDocsIcon,
+  "google-forms": GoogleFormsIcon,
+  "google-meet": GoogleMeetIcon,
+  jira: JiraIcon,
+  pagerduty: PagerDutyIcon,
+  trello: TrelloIcon,
+  airtable: AirtableIcon,
+  twilio: TwilioIcon,
 };
-
-// Two-letter monogram for apps without a bundled logo: first letters of the
-// first two words, else the first two characters.
-function monogram(name: string): string {
-  const words = name.replace(/[^\p{L}\p{N} ]/gu, "").trim().split(/\s+/);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return name.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2).toUpperCase();
-}
 
 function AppIcon({ app, className }: { app: string; className?: string }) {
   const Icon = APP_ICONS[app];
   if (Icon) return <Icon className={className} />;
-  if (app === "schedule") return <ClockIcon className={className} />;
-  const def = appDef(app);
-  if (def?.color) {
-    return (
-      <span
-        className={`inline-flex items-center justify-center rounded-[5px] font-bold leading-none text-white ${className ?? ""}`}
-        style={{ backgroundColor: def.color, fontSize: "9px", letterSpacing: "-0.5px" }}
-        aria-label={def.name}
-      >
-        {monogram(def.name)}
-      </span>
-    );
-  }
+  if (app === "schedule" || app === "delay") return <ClockIcon className={className} />;
+  if (app === "filter") return <BranchGlyph className={className} />;
+  if (app === "ai") return <WandIcon className={className} />;
   return <PlugIcon className={className} />;
 }
 
@@ -539,13 +413,109 @@ type ConnectMethod = "oauth" | "bot" | "secret" | "none";
 
 function connectMethod(appId: string): ConnectMethod {
   if (appId === "telegram") return "bot"; // deep-link / QR to the Rizly bot
-  if (appId === "schedule") return "none"; // built-in, no account
-  if (appId === "stripe" || appId === "postgres") return "secret";
+  if (appId === "schedule" || appId === "delay" || appId === "filter" || appId === "ai") return "none"; // built-in, no account
+  if (
+    appId === "stripe" ||
+    appId === "postgres" ||
+    appId === "discord" ||
+    appId === "jira" ||
+    appId === "pagerduty" ||
+    appId === "trello" ||
+    appId === "twilio"
+  ) {
+    return "secret";
+  }
+  // Google Sheets is OAuth (bundled under google_workspace), despite sharing
+  // the "Databases" category label with Postgres/MongoDB below.
+  if (appId === "google-sheets" || appId === "google-drive" || appId === "google-docs" || appId === "google-meet") {
+    return "oauth";
+  }
   // Databases and AI models connect with a connection string / API key.
   const cat = appDef(appId)?.category;
   if (cat === "Databases" || cat === "AI" || cat === "Analytics") return "secret";
   // Everything else is OAuth "Sign in".
   return "oauth";
+}
+
+// Which connector a given app id's "Sign in" / connection-status check
+// actually targets — most apps connect 1:1, but Drive/Sheets/Docs share a
+// single "google_workspace" grant and Meet reuses the existing Calendar
+// connection outright (no separate grant of its own).
+function oauthProviderFor(appId: string): string {
+  if (appId === "google-drive" || appId === "google-sheets" || appId === "google-docs" || appId === "google-forms") {
+    return "google_workspace";
+  }
+  if (appId === "google-meet") return "calendar";
+  return appId;
+}
+
+// ── v1 execution scope ──────────────────────────────────────────────────────
+// Mirrors shared/src/automations/types.ts (LIVE_TRIGGER_EVENTS/LIVE_ACTION_EVENTS)
+// on the backend — web can't import the monorepo's shared package (it's a
+// separately-deployed nested repo), so this list is duplicated deliberately.
+// Everything outside it renders in the catalog but is disabled ("Coming soon"):
+// the flow builder no longer promises execution it can't deliver.
+
+const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
+  schedule: ["Every Day", "Every Hour", "Every Week"],
+  gmail: ["New Email Matching Search"],
+  calendar: ["New Event"],
+  "google-sheets": ["New Row"],
+  "google-forms": ["New Submission"],
+  "google-meet": ["Meeting Started"],
+  airtable: ["New Record"],
+};
+
+const LIVE_ACTION_EVENTS: Record<string, string[]> = {
+  slack: ["Send Channel Message", "Send Direct Message"],
+  telegram: ["Send Message", "Notify Me"],
+  calcom: ["Create Booking"],
+  discord: ["Send Message"],
+  github: ["Create Issue"],
+  notion: ["Create Page"],
+  stripe: ["Create Customer"],
+  "google-drive": ["Upload File"],
+  "google-sheets": ["Create Row"],
+  "google-docs": ["Create Document"],
+  "google-meet": ["Create Meeting"],
+  // Read-only enrich steps — Rizly can't store a write-capable Postgres/Mongo
+  // credential (rejected at connect time), so "Insert Row"/"Insert Document"
+  // stay disabled below.
+  postgres: ["Run a Query"],
+  mongodb: ["Find Document"],
+  jira: ["Create Issue"],
+  pagerduty: ["Create Incident"],
+  trello: ["Create Card"],
+  airtable: ["Create Record"],
+  twilio: ["Send SMS"],
+  delay: ["Delay"],
+  filter: ["Only Continue If"],
+  ai: ["Run Riz Agent"],
+};
+
+function isAppLive(appId: string, kind: AutomationStep["kind"]): boolean {
+  const map = kind === "trigger" ? LIVE_TRIGGER_EVENTS : LIVE_ACTION_EVENTS;
+  return (map[appId]?.length ?? 0) > 0;
+}
+
+function isEventLive(appId: string, kind: AutomationStep["kind"], eventName: string): boolean {
+  const map = kind === "trigger" ? LIVE_TRIGGER_EVENTS : LIVE_ACTION_EVENTS;
+  return Boolean(map[appId]?.includes(eventName));
+}
+
+/** When an app has exactly one live event for this step kind, skip making the user pick it — auto-select it. */
+function soleLiveEvent(appId: string, kind: AutomationStep["kind"]): string | undefined {
+  const map = kind === "trigger" ? LIVE_TRIGGER_EVENTS : LIVE_ACTION_EVENTS;
+  const events = map[appId];
+  return events?.length === 1 ? events[0] : undefined;
+}
+
+function isFlowRunnable(steps: AutomationStep[]): boolean {
+  const [trigger, ...actions] = steps;
+  if (!trigger || trigger.kind !== "trigger" || !trigger.app) return false;
+  if (!isEventLive(trigger.app, "trigger", trigger.title)) return false;
+  if (actions.length === 0) return false;
+  return actions.every((step) => step.app && isEventLive(step.app, "action", step.title));
 }
 
 // ── Demo seed ─────────────────────────────────────────────────────────────────
@@ -580,6 +550,7 @@ function buildDemoSteps(): AutomationStep[] {
     title: s.title,
     subtitle: appName(s.app),
     app: s.app,
+    config: {},
   }));
 }
 
@@ -686,6 +657,28 @@ function AdderNode({ data }: NodeProps) {
   );
 }
 
+// Shown alone on a brand-new, blank flow — one clear call to action instead of
+// a pre-seeded trigger+action stub pair with two "Select the event" nodes.
+function StartTriggerNode({ data }: NodeProps) {
+  const d = data as unknown as AdderNodeData;
+  return (
+    <button
+      type="button"
+      onClick={d.onAdd}
+      className="flex w-[352px] items-center gap-3 rounded-[10px] border-2 border-dashed border-[#6C4BF4]/40 bg-white px-4 py-4 text-left transition hover:border-[#6C4BF4] hover:bg-[#6C4BF4]/5"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6C4BF4]/10 text-[#6C4BF4]">
+        <BoltGlyph className="h-4 w-4" />
+      </span>
+      <span>
+        <span className="block text-[15px] font-semibold text-slate-900">Start trigger</span>
+        <span className="block text-[13px] text-slate-500">Choose the app and event that kicks this off.</span>
+      </span>
+      <Handle type="source" position={Position.Bottom} className="!h-0 !w-0 !border-0 !bg-transparent" />
+    </button>
+  );
+}
+
 function InsertEdge({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps) {
   const d = data as unknown as InsertEdgeData;
   const [path, labelX, labelY] = getSmoothStepPath({
@@ -719,41 +712,72 @@ function InsertEdge({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps)
   );
 }
 
-const nodeTypes = { step: StepNode, adder: AdderNode };
+const nodeTypes = { step: StepNode, adder: AdderNode, start: StartTriggerNode };
 const edgeTypes = { insert: InsertEdge };
 
 // ── Builder ────────────────────────────────────────────────────────────────────
 
 function Builder({ flowId }: { flowId: string }) {
   const rf = useReactFlow();
+  const router = useRouter();
   const [name, setName] = useState("Untitled Zap");
   const [steps, setSteps] = useState<AutomationStep[]>([]);
   const [saved, setSaved] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [status, setStatus] = useState<AutomationFlow["status"]>("draft");
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [runs, setRuns] = useState<AutomationRun[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  useEffect(() => {
-    const flow = getFlow(flowId);
-    // Seed the demo when the id isn't saved yet, OR when it's still the pristine
-    // default (every step untitled and app-less) — so a deep-linked builder URL
-    // always lands on the long pipeline instead of an empty canvas.
-    const isPristine = flow ? flow.steps.every((s) => !s.title && !s.app) : true;
-    if (flow && !isPristine) {
-      setName(flow.name);
-      setSteps(flow.steps);
-      setSelectedId(flow.steps[0]?.id ?? null);
-    } else {
-      const demo = buildDemoSteps();
-      setName(DEMO_FLOW_NAME);
-      setSteps(demo);
-      setSelectedId(demo[0]?.id ?? null);
-    }
+  const refreshRuns = useCallback(() => {
+    listRuns(flowId).then(setRuns).catch(() => setRuns([]));
   }, [flowId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getFlow(flowId).then((flow) => {
+      if (cancelled) return;
+      // Only seed the demo for an id that was never saved at all (e.g. someone
+      // typed/shared a URL with no matching flow) — a genuinely blank flow the
+      // user just created (via "New automation") loads as-is, empty, not the
+      // sample pipeline. "Load sample" in the toolbar covers wanting an example.
+      if (flow) {
+        setName(flow.name);
+        setSteps(flow.steps);
+        setStatus(flow.status);
+        setSelectedId(flow.steps[0]?.id ?? null);
+      } else {
+        const demo = buildDemoSteps();
+        setName(DEMO_FLOW_NAME);
+        setSteps(demo);
+        setStatus("draft");
+        setSelectedId(demo[0]?.id ?? null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [flowId]);
+
+  useEffect(() => {
+    refreshRuns();
+  }, [refreshRuns]);
+
   const insertStep = useCallback((index: number) => {
-    const step: AutomationStep = { id: newStepId(), kind: "action", title: "", subtitle: "", app: "" };
+    // Position 0 on a blank canvas is always the trigger; every other insert
+    // (append at the end, or between two existing steps) is an action.
+    const step: AutomationStep = {
+      id: newStepId(),
+      kind: index === 0 ? "trigger" : "action",
+      title: "",
+      subtitle: "",
+      app: "",
+      config: {},
+    };
     setSteps((prev) => {
       const next = [...prev];
       next.splice(index, 0, step);
@@ -774,7 +798,134 @@ function Builder({ flowId }: { flowId: string }) {
     setSaved(false);
   }, []);
 
+  // Latest steps/name for async flows (the chat panel applies ops over several
+  // seconds; closures captured at call time would be stale by the save).
+  const stepsRef = useRef<AutomationStep[]>(steps);
+  useEffect(() => {
+    stepsRef.current = steps;
+  }, [steps]);
+  const nameRef = useRef(name);
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
+
+  /**
+   * Applies the builder agent's edit operations to the canvas one at a time,
+   * with a beat between each so the user watches the flow assemble/change in
+   * real time, then persists the result. onProgress fires as each op lands so
+   * the chat panel can tick off what's happening.
+   */
+  const applyBuilderOps = useCallback(
+    async (
+      ops: BuilderChatOp[],
+      newName: string | undefined,
+      onProgress: (icon: "add" | "remove" | "update" | "name", label: string) => void,
+    ) => {
+      const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+      const stepLabel = (app: string, event: string) => `${appName(app) || app} — ${event}`;
+
+      if (newName?.trim()) {
+        setName(newName.trim());
+        setSaved(false);
+        onProgress("name", `Renamed the flow to “${newName.trim()}”`);
+        await sleep(500);
+      }
+
+      for (const op of ops) {
+        const current = stepsRef.current;
+        if (op.op === "add") {
+          const existingTrigger = current.find((s) => s.kind === "trigger");
+          if (op.kind === "trigger" && existingTrigger) {
+            // Single-trigger invariant: a second trigger add becomes an update.
+            setSteps((prev) =>
+              prev.map((s) =>
+                s.id === existingTrigger.id
+                  ? { ...s, app: op.app, title: op.event, subtitle: appName(op.app), config: op.config ?? {} }
+                  : s,
+              ),
+            );
+            onProgress("update", stepLabel(op.app, op.event));
+          } else {
+            const step: AutomationStep = {
+              id: newStepId(),
+              kind: op.kind,
+              title: op.event,
+              subtitle: appName(op.app),
+              app: op.app,
+              config: op.config ?? {},
+            };
+            setSteps((prev) => {
+              const next = [...prev];
+              const hasTrigger = next.some((s) => s.kind === "trigger");
+              const minPos = op.kind === "trigger" ? 0 : hasTrigger ? 1 : 0;
+              const rawPos = op.kind === "trigger" ? 0 : (op.position ?? next.length);
+              const pos = Math.max(minPos, Math.min(rawPos, next.length));
+              next.splice(pos, 0, step);
+              return next;
+            });
+            onProgress("add", stepLabel(op.app, op.event));
+          }
+          setSaved(false);
+        } else if (op.op === "update") {
+          const target = current.find((s) => s.id === op.stepId);
+          if (!target) continue;
+          const nextApp = op.app ?? target.app;
+          setSteps((prev) =>
+            prev.map((s) =>
+              s.id === op.stepId
+                ? {
+                    ...s,
+                    app: nextApp,
+                    title: op.event ?? s.title,
+                    subtitle: appName(nextApp),
+                    ...(op.config ? { config: op.config } : {}),
+                  }
+                : s,
+            ),
+          );
+          setSaved(false);
+          onProgress("update", stepLabel(nextApp, op.event ?? target.title));
+        } else if (op.op === "remove") {
+          const target = current.find((s) => s.id === op.stepId);
+          if (!target) continue;
+          setSteps((prev) => prev.filter((s) => s.id !== op.stepId));
+          setSelectedId((cur) => (cur === op.stepId ? null : cur));
+          setSaved(false);
+          onProgress("remove", stepLabel(target.app, target.title || "step"));
+        }
+        await sleep(550);
+      }
+
+      // Persist what's now on the canvas so the built flow survives navigation.
+      const flow = await saveFlow({
+        id: flowId,
+        name: nameRef.current.trim() || "Untitled Zap",
+        steps: stepsRef.current.map((s) => ({ ...s, subtitle: appName(s.app) })),
+      });
+      if (flow) {
+        setStatus(flow.status);
+        setSaved(true);
+      }
+    },
+    [flowId],
+  );
+
   const built = useMemo(() => {
+    if (steps.length === 0) {
+      return {
+        flowNodes: [
+          {
+            id: "__start",
+            type: "start",
+            position: { x: 0, y: 0 },
+            draggable: false,
+            data: { onAdd: () => insertStep(0) } satisfies AdderNodeData as unknown as Record<string, unknown>,
+          },
+        ] as Node[],
+        flowEdges: [] as Edge[],
+      };
+    }
+
     const flowNodes: Node[] = steps.map((step, i) => ({
       id: step.id,
       type: "step",
@@ -830,14 +981,13 @@ function Builder({ flowId }: { flowId: string }) {
     return () => clearTimeout(t);
   }, [steps.length, rf]);
 
-  function handleSave() {
-    const flow: AutomationFlow = {
+  async function handleSave() {
+    const flow = await saveFlow({
       id: flowId,
       name: name.trim() || "Untitled Zap",
       steps: steps.map((s) => ({ ...s, subtitle: appName(s.app) })),
-      updatedAt: new Date().toISOString(),
-    };
-    saveFlow(flow);
+    });
+    if (flow) setStatus(flow.status);
     setSaved(true);
   }
 
@@ -849,22 +999,69 @@ function Builder({ flowId }: { flowId: string }) {
     setSaved(false);
   }
 
+  async function handleDuplicate() {
+    const newId = newFlowId();
+    await saveFlow({ id: newId, name: `${name.trim() || "Untitled Zap"} (copy)`, steps });
+    router.push(`/dashboard/automations/${newId}`);
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return;
+    await deleteFlow(flowId);
+    router.push("/dashboard/automations");
+  }
+
+  const runnable = useMemo(() => isFlowRunnable(steps), [steps]);
+
+  async function handlePublish() {
+    setPublishError(null);
+    setPublishing(true);
+    try {
+      // Persist the latest edits first — activation reads the saved flow.
+      await saveFlow({ id: flowId, name: name.trim() || "Untitled Zap", steps });
+      setSaved(true);
+      const result =
+        status === "active" ? await pauseFlow(flowId) : await activateFlow(flowId);
+      if (!result.ok) {
+        setPublishError(
+          result.error === "flow_not_runnable"
+            ? "This flow needs a live trigger and at least one live action before it can run."
+            : (result.error ?? "Couldn't update this automation."),
+        );
+        return;
+      }
+      setStatus(status === "active" ? "paused" : "active");
+      refreshRuns();
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   const selectedStep = steps.find((s) => s.id === selectedId) ?? null;
   const selectedIndex = steps.findIndex((s) => s.id === selectedId);
 
   return (
     <main className="fixed inset-0 z-50 flex overflow-hidden bg-[#faf9f7] text-slate-900">
       {/* Far-left icon rail */}
-      <LeftRail />
+      <LeftRail chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)} />
 
       {/* Everything right of the rail */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top chrome row 1 */}
-        <TopBar name={name} setName={setName} setSaved={setSaved} />
-
-        {/* Top chrome row 2 */}
-        <SubBar saved={saved} onSave={handleSave} onLoadSample={loadDemo} />
-
+        <TopBar
+          name={name}
+          setName={setName}
+          setSaved={setSaved}
+          status={status}
+          saved={saved}
+          onDuplicate={() => void handleDuplicate()}
+          onDelete={() => void handleDelete()}
+          onSave={() => void handleSave()}
+          onLoadSample={loadDemo}
+          runnable={runnable}
+          publishing={publishing}
+          onPublish={() => void handlePublish()}
+        />
+        <SubBar publishError={publishError} />
         {/* Canvas area */}
         <div className="relative min-h-0 flex-1">
           <style>{`
@@ -892,48 +1089,18 @@ function Builder({ flowId }: { flowId: string }) {
             <Background gap={20} size={1.4} color="#dedcd6" />
           </ReactFlow>
 
-          {/* Copilot banner */}
-          <div className="pointer-events-auto absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <span className="flex items-center gap-2 text-[13px] text-slate-700">
-              <CopilotGlyph className="h-4 w-4 text-[#FF4F00]" />
-              Copilot can fully configure your workflow
-            </span>
-            <button
-              type="button"
-              onClick={loadDemo}
-              className="rounded-md bg-[#6C4BF4] px-2.5 py-1 text-[13px] font-medium text-white transition hover:brightness-105"
-            >
-              Build it
-            </button>
-            <button type="button" className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Bottom-left mini toolbar */}
-          <div className="absolute bottom-4 left-4 flex items-center gap-2">
-            <button type="button" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-              <LibraryGlyph className="h-4 w-4 text-slate-500" />
-              Library
-            </button>
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-1 shadow-sm">
-              {[GridGlyph, BoltGlyph, BranchGlyph, SearchGlyph].map((G, i) => (
-                <span key={i} className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
-                  <G className="h-4 w-4" />
-                </span>
-              ))}
+          {/* Chat panel (floating, overlays the left edge) */}
+          {chatOpen && (
+            <div className="absolute inset-x-2 bottom-2 top-2 sm:inset-y-3 sm:right-auto sm:left-3 sm:w-[min(380px,calc(100vw-1.5rem))]">
+              <ChatPanel
+                flowId={flowId}
+                flowName={name}
+                steps={steps}
+                onApplyOps={applyBuilderOps}
+                onClose={() => setChatOpen(false)}
+              />
             </div>
-          </div>
-
-          {/* Bottom-right chat bubble */}
-          <button type="button" className="absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#2b2440] text-white shadow-lg hover:brightness-110">
-            <ChatGlyph className="h-5 w-5" />
-          </button>
-
-          {/* Version tag */}
-          <p className="pointer-events-none absolute bottom-1 right-4 text-[10px] text-slate-400">ver. v2026-07-20t23:05-46fc7b76</p>
+          )}
 
           {/* Config panel (floating, overlays the right edge) */}
           {selectedStep && (
@@ -942,6 +1109,7 @@ function Builder({ flowId }: { flowId: string }) {
                 key={selectedStep.id}
                 step={selectedStep}
                 index={selectedIndex}
+                runs={runs}
                 onPatch={(patch) => patchStep(selectedStep.id, patch)}
                 onClose={() => setSelectedId(null)}
               />
@@ -963,18 +1131,34 @@ export function FlowBuilderClient({ flowId }: { flowId: string }) {
 
 // ── Left rail ──────────────────────────────────────────────────────────────────
 
-function LeftRail() {
+function LeftRail({ chatOpen, onToggleChat }: { chatOpen: boolean; onToggleChat: () => void }) {
+  const railIcons = [GridGlyph, DocGlyph, ChatGlyph, CalGlyph, ClockGlyph, FlowGlyph, GearGlyph, DrawerGlyph];
   return (
     <div className="flex w-14 shrink-0 flex-col items-center border-r border-slate-200 bg-[#f1f0ec] py-3">
       <Link href="/dashboard" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2b2440] text-white" title="Home">
         <HomeGlyph className="h-4 w-4" />
       </Link>
       <div className="mt-4 flex flex-col items-center gap-3">
-        {[GridGlyph, DocGlyph, ChatGlyph, CalGlyph, ClockGlyph, FlowGlyph, GearGlyph, DrawerGlyph].map((G, i) => (
-          <span key={i} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200/70 hover:text-slate-600">
-            <G className="h-[18px] w-[18px]" />
-          </span>
-        ))}
+        {railIcons.map((G, i) =>
+          G === ChatGlyph ? (
+            <button
+              key={i}
+              type="button"
+              onClick={onToggleChat}
+              title="Chat"
+              aria-pressed={chatOpen}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                chatOpen ? "bg-[#6C4BF4]/10 text-[#6C4BF4]" : "text-slate-400 hover:bg-slate-200/70 hover:text-slate-600"
+              }`}
+            >
+              <G className="h-[18px] w-[18px]" />
+            </button>
+          ) : (
+            <span key={i} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200/70 hover:text-slate-600">
+              <G className="h-[18px] w-[18px]" />
+            </span>
+          ),
+        )}
       </div>
       <span className="mt-auto flex h-8 w-8 items-center justify-center rounded-full bg-[#FF4F00]/10 text-[#FF4F00]">
         <TargetGlyph className="h-4 w-4" />
@@ -989,46 +1173,147 @@ function TopBar({
   name,
   setName,
   setSaved,
+  status,
+  saved,
+  onDuplicate,
+  onDelete,
+  onSave,
+  onLoadSample,
+  runnable,
+  publishing,
+  onPublish,
 }: {
   name: string;
   setName: (v: string) => void;
   setSaved: (v: boolean) => void;
+  status: AutomationFlow["status"];
+  saved: boolean;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onSave: () => void;
+  onLoadSample: () => void;
+  runnable: boolean;
+  publishing: boolean;
+  onPublish: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as globalThis.Node)) setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
+
+  const statusLabel = status === "active" ? "Active" : status === "paused" ? "Paused" : "Draft";
+  const statusClasses =
+    status === "active"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "paused"
+        ? "bg-slate-200 text-slate-600"
+        : "bg-[#6C4BF4]/10 text-[#6C4BF4]";
+  const isActive = status === "active";
+
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-[#faf9f7] px-3">
-      {/* Left cluster */}
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200/60">
-          <GridGlyph className="h-[18px] w-[18px]" />
-        </span>
-        <BoltGlyph className="h-5 w-5 text-[#FF4F00]" />
-        <span className="text-[15px] font-semibold text-slate-800">Zaps</span>
+    <div className="flex h-13 shrink-0 items-center gap-2 bg-black/5 px-3 text-slate-900">
+      <div className="flex flex-1 items-center gap-2">
+        <Link href="/dashboard" title="Home" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5">
+          <HomeGlyph className="h-4 w-4" />
+        </Link>
+        <div className="mx-1 h-5 w-px shrink-0 bg-black/10" />
+        <Link href="/dashboard/automations" className="flex shrink-0 items-center gap-1.5 text-[14px] font-semibold text-slate-900 hover:opacity-80">
+          <FlowGlyph className="h-4 w-4 text-[#6C4BF4]" />
+          Automations
+        </Link>
       </div>
 
-      {/* Center cluster */}
-      <div className="flex items-center gap-2 text-[13px] text-slate-600">
-        <FolderGlyph className="h-4 w-4 text-slate-400" />
-        <span className="max-w-[130px] truncate">Jagdeep Sing…</span>
-        <span className="text-slate-300">/</span>
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#6C4BF4] text-[10px] font-semibold text-white">J</span>
+      <div className="flex min-w-0 shrink-0 items-center gap-1.5 text-[14px] text-slate-500">
+        <FolderGlyph className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <span className="shrink-0 text-slate-400">/</span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#6C4BF4] text-[11px] font-semibold text-white">
+          {(name.trim()[0] ?? "Z").toUpperCase()}
+        </span>
         <input
           value={name}
           onChange={(e) => {
             setName(e.target.value);
             setSaved(false);
           }}
-          className="w-[110px] bg-transparent text-[14px] font-medium text-slate-800 outline-none focus:underline"
+          placeholder="Untitled Zap"
+          className="w-[220px] max-w-[320px] truncate bg-transparent text-center text-[14px] font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:underline"
         />
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">Draft</span>
-        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${statusClasses}`}>{statusLabel}</span>
+
+        <div className="relative shrink-0" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            title="More options"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute left-0 top-9 z-20 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-slate-900 shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDuplicate();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+              >
+                Duplicate
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-red-600 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Right cluster */}
-      <div className="flex items-center gap-4 text-[13px] text-slate-600">
-        <span className="flex items-center gap-1">82% <ChevronDown className="h-3.5 w-3.5 text-slate-400" /></span>
-        <span className="flex items-center gap-1">
-          <HelpGlyph className="h-4 w-4 text-slate-400" /> Help <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-        </span>
+      <div className="flex flex-1 items-center justify-end gap-1">
+        <span className="mr-1 shrink-0 text-[12px] text-slate-400">{saved ? "All changes saved" : "Unsaved changes"}</span>
+        <button
+          type="button"
+          onClick={onLoadSample}
+          title="Replace the canvas with a sample 15-step pipeline"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-black/5"
+        >
+          <CopilotGlyph className="h-4 w-4 text-[#FF4F00]" />
+          Load sample
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-black/5"
+        >
+          <UndoGlyph className="h-4 w-4" />
+          {saved ? "Save" : "Save changes"}
+        </button>
+        <div className="mx-1 h-5 w-px bg-black/10" />
+        <button
+          type="button"
+          onClick={onPublish}
+          disabled={publishing || (!isActive && !runnable)}
+          title={!isActive && !runnable ? "Add a live trigger and at least one live action to activate" : undefined}
+          className={`rounded-lg px-4 py-1.5 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            isActive ? "bg-emerald-600 hover:brightness-105" : "bg-[#6C4BF4] hover:brightness-105"
+          }`}
+        >
+          {publishing ? "…" : isActive ? "Active · Pause" : "Publish"}
+        </button>
       </div>
     </div>
   );
@@ -1036,55 +1321,18 @@ function TopBar({
 
 // ── Sub bar (row 2) ─────────────────────────────────────────────────────────────
 
-function SubBar({ saved, onSave, onLoadSample }: { saved: boolean; onSave: () => void; onLoadSample: () => void }) {
+function SubBar({ publishError }: { publishError: string | null }) {
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-[#faf9f7] px-3">
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[13px] text-slate-500">
-          <SearchGlyph className="h-4 w-4 text-slate-400" />
+    <div className="flex h-11 shrink-0 items-center border-b border-slate-200 bg-white px-3">
+      {publishError ? (
+        <p className="truncate text-[12px] text-red-500">{publishError}</p>
+      ) : (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1 text-[13px] text-slate-400">
+          <SearchGlyph className="h-3.5 w-3.5" />
           Search
-          <kbd className="rounded bg-slate-100 px-1 text-[11px] text-slate-400">Ctrl</kbd>
-          <kbd className="rounded bg-slate-100 px-1 text-[11px] text-slate-400">⇧</kbd>
-          <kbd className="rounded bg-slate-100 px-1 text-[11px] text-slate-400">F</kbd>
-          <span className="ml-1 flex h-4 w-7 items-center rounded-full bg-slate-200 px-0.5">
-            <span className="h-3 w-3 rounded-full bg-white shadow" />
-          </span>
+          <span className="ml-1 rounded border border-slate-200 px-1 text-[10px] text-slate-400">Ctrl F</span>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onLoadSample}
-          title="Replace the canvas with a sample 15-step pipeline"
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[13px] text-slate-600 hover:bg-slate-50"
-        >
-          <CopilotGlyph className="h-4 w-4 text-[#FF4F00]" />
-          Load sample
-        </button>
-        <button type="button" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[13px] text-slate-600 hover:bg-slate-50">
-          <UndoGlyph className="h-4 w-4 text-slate-400" />
-          Undo
-        </button>
-        <button type="button" className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50">
-          <HistoryGlyph className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[13px] font-medium text-slate-700 hover:bg-slate-100"
-        >
-          <PlayGlyph className="h-4 w-4" />
-          {saved ? "Test run" : "Save & test"}
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          className="rounded-lg bg-[#eadfc8] px-4 py-1.5 text-[13px] font-medium text-[#8a7a52] hover:brightness-105"
-        >
-          Publish
-        </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -1094,26 +1342,39 @@ function SubBar({ saved, onSave, onLoadSample }: { saved: boolean; onSave: () =>
 function ConfigPanel({
   step,
   index,
+  runs,
   onPatch,
   onClose,
 }: {
   step: AutomationStep;
   index: number;
+  runs: AutomationRun[];
   onPatch: (patch: Partial<AutomationStep>) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"setup" | "test">("setup");
   const [changingApp, setChangingApp] = useState(!step.app);
-  const [appQuery, setAppQuery] = useState("");
+  const appFieldRef = useRef<HTMLDivElement>(null);
   const isTrigger = step.kind === "trigger";
   const def = appDef(step.app);
   const events = def ? (isTrigger ? def.triggers : def.actions) : [];
   const eventLabel = isTrigger ? "Trigger event" : "Action event";
-  const aq = appQuery.trim().toLowerCase();
-  const relevantApps = APPS.filter((a) => (isTrigger ? a.triggers.length : a.actions.length))
-    .filter((a) => !aq || a.name.toLowerCase().includes(aq) || (a.category ?? "").toLowerCase().includes(aq));
+  // All apps are shown in the picker regardless of step kind — one that has
+  // no triggers (or no actions) still appears, just disabled with a tooltip
+  // explaining why, instead of silently vanishing (see AppPickerDialog).
+  const pickableApps = APPS;
+
+  // Auto-heal: a step saved before an app's sole live event was renamed (or
+  // loaded with no title yet) gets corrected the moment its panel opens,
+  // instead of showing a blank/stale event forever.
+  useEffect(() => {
+    const sole = soleLiveEvent(step.app, step.kind);
+    if (sole && step.title !== sole) onPatch({ title: sole });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.app, step.kind]);
 
   return (
+    <>
     <aside className="flex h-full w-full flex-col overflow-hidden rounded-xl border-2 border-[#6C4BF4] bg-white shadow-xl">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3">
@@ -1160,59 +1421,45 @@ function ConfigPanel({
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         {tab === "test" ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-            <p className="text-[14px] font-medium text-slate-700">Nothing to test yet</p>
-            <p className="max-w-[240px] text-[13px] text-slate-400">Finish the setup, then testing will replay this step against your connected account.</p>
-          </div>
-        ) : changingApp ? (
-          <div>
-            <p className="mb-1 text-[14px] font-semibold text-slate-800">Choose an app</p>
-            <p className="mb-3 text-[12px] text-slate-400">
-              {isTrigger ? "This app's event will start the automation." : "This app will run when the automation fires."}
-            </p>
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5">
-              <SearchGlyph className="h-4 w-4 shrink-0 text-slate-400" />
-              <input
-                value={appQuery}
-                onChange={(e) => setAppQuery(e.target.value)}
-                autoFocus
-                placeholder={`Search ${APPS.length}+ apps`}
-                className="h-9 w-full bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
-              />
+          runs.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
+              <p className="text-[14px] font-medium text-slate-700">No runs yet</p>
+              <p className="max-w-[240px] text-[13px] text-slate-400">
+                Activate this automation — once its trigger fires, runs will show up here.
+              </p>
             </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              {relevantApps.length === 0 ? (
-                <p className="py-8 text-center text-[13px] text-slate-400">No apps match &ldquo;{appQuery}&rdquo;</p>
-              ) : (
-                relevantApps.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => {
-                      if (a.id !== step.app) onPatch({ app: a.id, title: "", subtitle: a.name });
-                      setChangingApp(false);
-                    }}
-                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
-                      a.id === step.app ? "border-[#6C4BF4] bg-[#6C4BF4]/5" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-slate-200">
-                      <AppIcon app={a.id} className="h-5 w-5" />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {runs.map((run) => (
+                <div key={run.id} className="rounded-lg border border-slate-200 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-[12px] font-semibold ${
+                        run.status === "success"
+                          ? "text-emerald-600"
+                          : run.status === "failed"
+                            ? "text-red-500"
+                            : "text-slate-400"
+                      }`}
+                    >
+                      {run.status === "running" ? "Running…" : run.status === "success" ? "Success" : "Failed"}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] text-slate-900">{a.name}</span>
-                      {a.category && <span className="block truncate text-[11px] text-slate-400">{a.category}</span>}
-                    </span>
-                  </button>
-                ))
-              )}
+                    <span className="text-[11px] text-slate-400">{new Date(run.startedAt).toLocaleString()}</span>
+                  </div>
+                  {run.stepResults.some((r) => r.status === "failed") && (
+                    <p className="mt-1 text-[12px] text-red-500">
+                      {run.stepResults.find((r) => r.status === "failed")?.error ?? "A step failed"}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
+          )
         ) : (
           <div className="flex flex-col gap-5">
             {/* App */}
             <Field label="App" required>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+              <div ref={appFieldRef} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                 <span className="flex items-center gap-2">
                   <AppIcon app={step.app} className="h-[18px] w-[18px]" />
                   <span className="text-[14px] text-slate-900">{appName(step.app)}</span>
@@ -1227,17 +1474,32 @@ function ConfigPanel({
               </div>
             </Field>
 
-            {/* Event */}
-            <Field label={eventLabel} required>
-              <EventPicker
-                events={events}
-                selected={step.title}
-                onSelect={(name) => onPatch({ title: name })}
-              />
-            </Field>
+            {/* Event — skipped entirely when the app has only one possible event */}
+            {!soleLiveEvent(step.app, step.kind) && (
+              <Field label={eventLabel} required>
+                <EventPicker
+                  events={events}
+                  selected={step.title}
+                  appName={appName(step.app)}
+                  appId={step.app}
+                  kind={step.kind}
+                  onSelect={(name) => onPatch({ title: name, config: {} })}
+                />
+              </Field>
+            )}
 
             {/* Account — the connect UX differs by provider */}
             <AccountField app={step.app} />
+
+            {/* Per-app config — only rendered once a live event is chosen */}
+            {isEventLive(step.app, step.kind, step.title) && (
+              <AutomationConfigFields
+                app={step.app}
+                kind={step.kind}
+                config={step.config ?? {}}
+                onChange={(config) => onPatch({ config })}
+              />
+            )}
           </div>
         )}
       </div>
@@ -1256,6 +1518,434 @@ function ConfigPanel({
         </div>
       )}
     </aside>
+    {changingApp && (
+      <AppPickerDialog
+        apps={pickableApps}
+        currentApp={step.app}
+        kind={step.kind}
+        subtitle={isTrigger ? "This app's event will start the automation." : "This app will run when the automation fires."}
+        onSelect={(a) => {
+          if (a.id !== step.app) {
+            // Skip the event-picker entirely when there's only one possible
+            // event for this app/kind (e.g. Riz Agent, Twilio) — nothing to choose.
+            onPatch({ app: a.id, title: soleLiveEvent(a.id, step.kind) ?? "", subtitle: a.name, config: {} });
+          }
+          setChangingApp(false);
+        }}
+        onClose={() => (step.app ? setChangingApp(false) : onClose())}
+      />
+    )}
+    </>
+  );
+}
+
+// ── Chat panel ───────────────────────────────────────────────────────────────
+// The flow-builder copilot. Talks to /api/automations/chat — a dedicated
+// builder agent, not the general assistant: it receives the steps currently on
+// the canvas and returns edit operations, which the panel applies one at a
+// time so the flow visibly assembles/changes while the agent explains itself.
+// Ephemeral — not saved to the main chat history.
+
+type FlowOpLine = { icon: "add" | "remove" | "update" | "name"; label: string };
+
+type FlowChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  /** The agent's short first-person reasoning, shown above the reply. */
+  thinking?: string;
+  /** Canvas edits from this turn, ticked in as each one lands. */
+  opLines?: FlowOpLine[];
+  /** True while this turn's edits are still being applied to the canvas. */
+  building?: boolean;
+};
+
+const WORKING_PHRASES = ["Thinking…", "Reading your flow…", "Planning the steps…"];
+
+function ChatPanel({
+  flowId,
+  flowName,
+  steps,
+  onApplyOps,
+  onClose,
+}: {
+  flowId: string;
+  flowName: string;
+  steps: AutomationStep[];
+  onApplyOps: (
+    ops: BuilderChatOp[],
+    name: string | undefined,
+    onProgress: (icon: FlowOpLine["icon"], label: string) => void,
+  ) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [messages, setMessages] = useState<FlowChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  /** Request in flight, nothing to show yet — drives the cycling status bubble. */
+  const [waiting, setWaiting] = useState(false);
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, sending]);
+
+  useEffect(() => {
+    if (!waiting) return;
+    setPhraseIdx(0);
+    const t = setInterval(() => setPhraseIdx((i) => (i + 1) % WORKING_PHRASES.length), 1500);
+    return () => clearInterval(t);
+  }, [waiting]);
+
+  async function send() {
+    const trimmed = input.trim();
+    if (!trimmed || sending) return;
+    setInput("");
+    setError(null);
+    setSending(true);
+    setWaiting(true);
+    const history = messages
+      .filter((m) => m.content)
+      .map((m) => ({ role: m.role, content: m.content }));
+    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+
+    try {
+      const res = await builderChat({ flowId, name: flowName, steps, message: trimmed, history });
+      setWaiting(false);
+      if (res.error || !res.reply) throw new Error(res.error || "The assistant didn't respond.");
+      const ops = res.operations ?? [];
+
+      // Reveal the agent's thinking first; the reply lands once the canvas work is done.
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "",
+          thinking: res.thinking || undefined,
+          opLines: [],
+          building: ops.length > 0,
+        },
+      ]);
+
+      if (ops.length > 0 || res.name) {
+        await onApplyOps(ops, res.name, (icon, label) => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role !== "assistant") return prev;
+            next[next.length - 1] = { ...last, opLines: [...(last.opLines ?? []), { icon, label }] };
+            return next;
+          });
+        });
+      }
+
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role !== "assistant") return prev;
+        next[next.length - 1] = { ...last, content: res.reply ?? "", building: false };
+        return next;
+      });
+    } catch (err) {
+      setWaiting(false);
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <aside className="flex h-full w-full flex-col overflow-hidden rounded-xl border-2 border-[#6C4BF4] bg-white shadow-xl">
+      <div className="flex items-center gap-2 px-4 py-3">
+        <ChatGlyph className="h-4 w-4 text-[#6C4BF4]" />
+        <p className="flex-1 text-[15px] font-semibold text-slate-900">Chat</p>
+        <button type="button" onClick={onClose} aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto border-t border-slate-100 px-4 py-4">
+        {messages.length === 0 ? (
+          <div className="flex flex-col gap-2 text-[13px] text-slate-400">
+            <p className="font-medium text-slate-600">Tell me what to automate.</p>
+            <p>
+              Try &ldquo;when an email from my boss arrives, wait 10 minutes, summarize it and send it to me
+              on Telegram&rdquo; — I&apos;ll build it on the canvas while you watch. Click any step afterward
+              to link its account and fine-tune it.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="ml-auto max-w-[92%] rounded-xl bg-[#6C4BF4] px-3 py-2 text-[13px] text-white">
+                  {m.content}
+                </div>
+              ) : (
+                <div key={i} className="max-w-[95%]">
+                  {m.thinking && (
+                    <div className="mb-1.5 border-l-2 border-slate-200 pl-2.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Thinking</p>
+                      <p className="mt-0.5 text-[12px] italic leading-relaxed text-slate-500">{m.thinking}</p>
+                    </div>
+                  )}
+                  {(m.opLines?.length ?? 0) > 0 && (
+                    <div className="mb-1.5 flex flex-col gap-1 rounded-lg bg-slate-50 px-2.5 py-2">
+                      {(m.opLines ?? []).map((line, j) => (
+                        <p key={j} className="flex items-center gap-1.5 text-[12px] text-slate-600">
+                          <OpGlyph icon={line.icon} />
+                          <span className="min-w-0 truncate">{line.label}</span>
+                        </p>
+                      ))}
+                      {m.building && <p className="pl-[22px] text-[11px] text-slate-400">Updating the canvas…</p>}
+                    </div>
+                  )}
+                  {m.content ? (
+                    <div className="rounded-xl bg-slate-100 px-3 py-2 text-[13px] text-slate-800">
+                      <MarkdownMessage content={m.content} />
+                    </div>
+                  ) : null}
+                </div>
+              ),
+            )}
+            {waiting && (
+              <div className="max-w-[92%] rounded-xl bg-slate-100 px-3 py-2 text-[13px] text-slate-400">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#6C4BF4]" />
+                  {WORKING_PHRASES[phraseIdx]}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+        {error && <p className="mt-2 text-[12px] text-red-500">{error}</p>}
+      </div>
+
+      <div className="p-3">
+        <form
+          className="rounded-[22px] border border-black/20 bg-white py-3 shadow-[0px_12px_32px_0px_rgba(0,0,0,0.03)] transition focus-within:border-black/30"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+            rows={1}
+            disabled={sending}
+            placeholder="Describe what to automate…"
+            className="min-h-[46px] max-h-[160px] w-full resize-none bg-transparent px-4 text-[14px] leading-6 text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+          />
+          <div className="mt-2 flex items-center justify-between gap-2 px-3">
+            <Link
+              href="/dashboard/connectors"
+              title="Connectors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+            >
+              <PlugIcon className="h-4 w-4" />
+            </Link>
+            <button
+              type="submit"
+              disabled={!input.trim() || sending}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-white transition hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+              aria-label="Send"
+            >
+              <ArrowUpIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </form>
+      </div>
+    </aside>
+  );
+}
+
+function OpGlyph({ icon }: { icon: FlowOpLine["icon"] }) {
+  const cls = "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold";
+  if (icon === "add") return <span className={`${cls} bg-emerald-100 text-emerald-600`}>+</span>;
+  if (icon === "remove") return <span className={`${cls} bg-red-100 text-red-500`}>−</span>;
+  if (icon === "update") return <span className={`${cls} bg-amber-100 text-amber-600`}>✎</span>;
+  return <span className={`${cls} bg-slate-200 text-slate-600`}>✦</span>;
+}
+
+function AppPickerDialog({
+  apps,
+  currentApp,
+  kind,
+  subtitle,
+  onSelect,
+  onClose,
+}: {
+  apps: AppDef[];
+  currentApp: string;
+  kind: AutomationStep["kind"];
+  subtitle: string;
+  onSelect: (app: AppDef) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const isTrigger = kind === "trigger";
+
+  // Left sidebar — every category present in the catalog, "All" pinned first,
+  // each with a count against the full (unfiltered) list so it doesn't jitter
+  // while searching.
+  const categoryList = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of apps) {
+      const cat = a.category ?? "Other";
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    return [
+      { name: "All", count: apps.length },
+      ...Array.from(counts.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, count]) => ({ name, count })),
+    ];
+  }, [apps]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = apps.filter(
+    (a) =>
+      (activeCategory === "All" || (a.category ?? "Other") === activeCategory) &&
+      (!q || a.name.toLowerCase().includes(q) || (a.category ?? "").toLowerCase().includes(q)),
+  );
+  const groups = useMemo(() => {
+    const map = new Map<string, AppDef[]>();
+    for (const a of filtered) {
+      const cat = a.category ?? "Other";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(a);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, activeCategory, apps]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{ maxHeight: "min(640px, 85vh)" }}
+        className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      >
+      <>
+          {/* Search */}
+          <div className="shrink-0 border-b border-slate-100 p-2">
+            <p className="mb-2 px-1 text-[12px] text-slate-400">{subtitle}</p>
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5">
+              <SearchGlyph className="h-4 w-4 shrink-0 text-slate-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+                placeholder={`Search ${apps.length}+ apps`}
+                className="h-9 w-full bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Category panel (left) + apps panel (right) */}
+          <div className="flex min-h-0 flex-1">
+            <div className="w-48 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/50 p-1.5">
+              {categoryList.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => setActiveCategory(c.name)}
+                  className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] transition ${
+                    activeCategory === c.name
+                      ? "bg-[#6C4BF4]/10 font-medium text-[#6C4BF4]"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="min-w-0 truncate">{c.name}</span>
+                  <span className="shrink-0 pl-1.5 text-[11px] text-slate-400">{c.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-2">
+              {groups.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-slate-400">No apps match &ldquo;{query}&rdquo;</p>
+              ) : (
+                groups.map(([category, list]) => (
+                  <div key={category} className="mb-3 last:mb-0">
+                    {activeCategory === "All" && (
+                      <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{category}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-1">
+                      {list.map((a) => {
+                        // Does this app even have a trigger/action for the step kind
+                        // we're picking? (e.g. AI/Delay/Filter have no triggers — they
+                        // can't start a flow.) Checked before live-ness, since "not
+                        // applicable to this step" is a different reason than "not
+                        // wired up yet".
+                        const applicable = isTrigger ? a.triggers.length > 0 : a.actions.length > 0;
+                        const live = applicable && isAppLive(a.id, kind);
+                        const disabledReason = !applicable
+                          ? `${a.name} has no ${isTrigger ? "triggers" : "actions"} — it can only be used as ${isTrigger ? "an action" : "a trigger"} step.`
+                          : !live
+                            ? `${a.name}'s ${isTrigger ? "trigger" : "action"} isn't wired up yet — coming soon.`
+                            : undefined;
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            disabled={!live}
+                            title={disabledReason}
+                            onClick={() => live && onSelect(a)}
+                            className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
+                              !live
+                                ? "cursor-not-allowed border-transparent opacity-40"
+                                : a.id === currentApp
+                                  ? "border-[#6C4BF4] bg-[#6C4BF4]/5"
+                                  : "border-transparent hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-slate-200">
+                              <AppIcon app={a.id} className="h-5 w-5" />
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[14px] text-slate-900">{a.name}</span>
+                            {!live && (
+                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                                {applicable ? "Soon" : "N/A"}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1272,12 +1962,40 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 // ── Account field (connect UX varies by provider) ─────────────────────────────
 
+// Real connection status — checked against the same data the /dashboard/connectors
+// page uses (GET /api/connectors for OAuth apps, GET /api/telegram for the bot link).
+// Nothing here is simulated: connecting means actually completing the same OAuth
+// flow (or Telegram deep-link) as the connectors page, not flipping local state.
 function AccountField({ app }: { app: string }) {
   const method = connectMethod(app);
   const name = appName(app);
-  // Demo-only connection state (no backend yet): idle → connecting → connected.
-  const [connected, setConnected] = useState(false);
+  const provider = oauthProviderFor(app);
+  const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const refresh = useCallback(() => {
+    if (method === "none") return;
+    setStatus("loading");
+    if (method === "bot") {
+      fetch("/api/telegram")
+        .then((r) => r.json())
+        .then((data: { linked?: boolean }) => setStatus(data.linked ? "connected" : "disconnected"))
+        .catch(() => setStatus("disconnected"));
+      return;
+    }
+    fetch("/api/connectors")
+      .then((r) => r.json())
+      .then((accounts: Array<{ provider?: string }>) =>
+        setStatus(
+          Array.isArray(accounts) && accounts.some((a) => a.provider === provider) ? "connected" : "disconnected",
+        ),
+      )
+      .catch(() => setStatus("disconnected"));
+  }, [provider, method]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   if (method === "none") {
     return (
@@ -1289,7 +2007,17 @@ function AccountField({ app }: { app: string }) {
     );
   }
 
-  if (connected) {
+  if (status === "loading") {
+    return (
+      <Field label="Account" required>
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+          Checking connection…
+        </div>
+      </Field>
+    );
+  }
+
+  if (status === "connected") {
     return (
       <Field label="Account" required>
         <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
@@ -1297,22 +2025,19 @@ function AccountField({ app }: { app: string }) {
             <CheckGlyph className="h-4 w-4 text-emerald-600" />
             {method === "bot" ? `${name} · @rizly_bot` : `${name} account`}
           </span>
-          <button
-            type="button"
-            onClick={() => setConnected(false)}
+          <Link
+            href="/dashboard/connectors"
             className="text-[13px] font-medium text-slate-500 underline hover:text-slate-700"
           >
-            Disconnect
-          </button>
+            Manage
+          </Link>
         </div>
-        <p className="mt-2 text-[12px] text-emerald-700">Connected (demo). Ready to use in this step.</p>
+        <p className="mt-2 text-[12px] text-emerald-700">Connected. Ready to use in this step.</p>
       </Field>
     );
   }
 
   if (method === "bot") {
-    // Telegram isn't OAuth: you open the Rizly bot and message it. Demo dialog
-    // simulates the deep-link / QR + link-status polling handshake.
     return (
       <Field label="Account" required>
         <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
@@ -1334,8 +2059,8 @@ function AccountField({ app }: { app: string }) {
             appName={name}
             onClose={() => setDialogOpen(false)}
             onConnected={() => {
-              setConnected(true);
               setDialogOpen(false);
+              refresh();
             }}
           />
         )}
@@ -1344,45 +2069,888 @@ function AccountField({ app }: { app: string }) {
   }
 
   if (method === "secret") {
-    const isDb = app === "postgres";
+    const secretKind = app === "postgres" ? "a connection string" : app === "discord" ? "a webhook URL" : "an API key";
     return (
       <Field label="Account" required>
-        <input
-          type="password"
-          placeholder={isDb ? "postgresql://user:password@host:5432/db" : `${name} API key (sk_live_…)`}
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-        />
+        <Link
+          href="/dashboard/connectors"
+          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300"
+        >
+          <span className="text-[14px] text-slate-400">Connect {name}</span>
+          <span className="rounded-md bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-medium text-white">Connect</span>
+        </Link>
         <p className="mt-3 text-[13px] leading-relaxed text-slate-500">
-          {name} connects with {isDb ? "a connection string" : "an API key"}, not sign-in.{" "}
-          <span className="text-[#6C4BF4] underline">Your credentials are encrypted and can be removed at any time</span>.
+          {name} connects with {secretKind} from the{" "}
+          <span className="text-[#6C4BF4] underline">connectors page</span>.
         </p>
       </Field>
     );
   }
 
-  // OAuth default (demo: click "Sign in" → connected)
+  // OAuth default — a real "Sign in" that starts the same OAuth flow the
+  // connectors page uses, then returns here.
+  const returnTo = typeof window !== "undefined" ? window.location.pathname : `/dashboard/automations`;
   return (
     <Field label="Account" required>
       <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
         <span className="text-[14px] text-slate-400">Connect {name}</span>
-        <button
-          type="button"
-          onClick={() => setConnected(true)}
+        <a
+          href={`/api/connectors/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`}
           className="rounded-md bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-medium text-white transition hover:brightness-105"
         >
           Sign in
-        </button>
+        </a>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-slate-500">
         {name} is a secure partner with Rizly.{" "}
         <span className="text-[#6C4BF4] underline">Your credentials are encrypted and can be removed at any time</span>. You can{" "}
-        <span className="text-[#6C4BF4] underline">manage all of your connected accounts here</span>.
+        <Link href="/dashboard/connectors" className="text-[#6C4BF4] underline">
+          manage all of your connected accounts here
+        </Link>
+        .
       </p>
     </Field>
   );
 }
 
-// ── Telegram connect dialog (demo: simulates QR → message bot → linked) ────────
+// ── Per-app config fields — only the live app/event combos reach here ──────────
+
+function AutomationConfigFields({
+  app,
+  kind,
+  config,
+  onChange,
+}: {
+  app: string;
+  kind: AutomationStep["kind"];
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+}) {
+  function set(patch: Record<string, unknown>) {
+    onChange({ ...config, ...patch });
+  }
+
+  if (app === "schedule") {
+    return (
+      <Field label="Run every" required>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            value={typeof config.everyMinutes === "number" ? config.everyMinutes : 60}
+            onChange={(e) => set({ everyMinutes: Math.max(1, Number(e.target.value) || 1) })}
+            className="h-11 w-24 rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <span className="text-[14px] text-slate-500">minutes</span>
+        </div>
+      </Field>
+    );
+  }
+
+  if (app === "gmail") {
+    return (
+      <Field label="Search query" required>
+        <input
+          value={typeof config.query === "string" ? config.query : ""}
+          onChange={(e) => set({ query: e.target.value })}
+          placeholder='e.g. from:boss@company.com is:unread'
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+        />
+        <p className="mt-2 text-[12px] text-slate-400">Uses Gmail search syntax — the same you&apos;d type in the Gmail search bar.</p>
+      </Field>
+    );
+  }
+
+  if (app === "calendar") {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-500">
+        Checks your primary calendar for new events on the next 24 hours, every poll.
+      </div>
+    );
+  }
+
+  if (app === "slack" || app === "telegram") {
+    return (
+      <Field label="Message" required>
+        <textarea
+          value={typeof config.message === "string" ? config.message : ""}
+          onChange={(e) => set({ message: e.target.value })}
+          rows={4}
+          placeholder="e.g. New email from {{from}}: {{subject}}"
+          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+        />
+        <p className="mt-2 text-[12px] text-slate-400">
+          Sent to your linked {appName(app)} {app === "slack" ? "DM" : "chat"}. Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to
+          insert data from the trigger (e.g. <code className="rounded bg-slate-100 px-1 py-0.5">{"{{subject}}"}</code>).
+        </p>
+      </Field>
+    );
+  }
+
+  if (app === "calcom") {
+    return <CalComBookingFields config={config} onChange={onChange} />;
+  }
+
+  if (app === "google-drive") {
+    return (
+      <>
+        <Field label="File name" required>
+          <input
+            value={typeof config.name === "string" ? config.name : ""}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder="e.g. {{subject}}.txt"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Content" required>
+          <textarea
+            value={typeof config.content === "string" ? config.content : ""}
+            onChange={(e) => set({ content: e.target.value })}
+            rows={4}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <p className="text-[12px] text-slate-400">Uploaded as a plain text file, visible only to files Rizly itself creates in your Drive.</p>
+      </>
+    );
+  }
+
+  if (app === "google-sheets") {
+    const isTrigger = kind === "trigger";
+    return (
+      <>
+        <Field label="Spreadsheet ID" required>
+          <input
+            value={typeof config.spreadsheetId === "string" ? config.spreadsheetId : ""}
+            onChange={(e) => set({ spreadsheetId: e.target.value })}
+            placeholder="From the sheet's URL: /spreadsheets/d/<id>/edit"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Sheet / range" required>
+          <input
+            value={typeof config.range === "string" ? config.range : "Sheet1"}
+            onChange={(e) => set({ range: e.target.value })}
+            placeholder="Sheet1"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        {isTrigger ? (
+          <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={config.hasHeaderRow !== false}
+              onChange={(e) => set({ hasHeaderRow: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            First row is a header (skip it)
+          </label>
+        ) : (
+          <Field label="Values" required>
+            <input
+              value={typeof config.values === "string" ? config.values : ""}
+              onChange={(e) => set({ values: e.target.value })}
+              placeholder="e.g. {{from}}, {{subject}}, {{snippet}}"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">Comma-separated — one value per column, left to right.</p>
+          </Field>
+        )}
+      </>
+    );
+  }
+
+  if (app === "google-forms") {
+    return (
+      <>
+        <Field label="Response spreadsheet ID" required>
+          <input
+            value={typeof config.spreadsheetId === "string" ? config.spreadsheetId : ""}
+            onChange={(e) => set({ spreadsheetId: e.target.value })}
+            placeholder="From Forms → Responses → the linked sheet's URL"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Sheet / range" required>
+          <input
+            value={typeof config.range === "string" ? config.range : "Form Responses 1"}
+            onChange={(e) => set({ range: e.target.value })}
+            placeholder="Form Responses 1"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <p className="text-[12px] text-slate-400">
+          Google Forms has no direct submission trigger — this watches the response spreadsheet the form is already linked to.
+        </p>
+      </>
+    );
+  }
+
+  if (app === "google-docs") {
+    return (
+      <>
+        <Field label="Title" required>
+          <input
+            value={typeof config.title === "string" ? config.title : ""}
+            onChange={(e) => set({ title: e.target.value })}
+            placeholder="e.g. {{subject}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Content">
+          <textarea
+            value={typeof config.content === "string" ? config.content : ""}
+            onChange={(e) => set({ content: e.target.value })}
+            rows={4}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "postgres") {
+    return (
+      <>
+        <Field label="SQL query" required>
+          <textarea
+            value={typeof config.query === "string" ? config.query : ""}
+            onChange={(e) => set({ query: e.target.value })}
+            rows={4}
+            placeholder="e.g. select * from leads where email = $1"
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-[13px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Read-only — a single SELECT. Use <code className="rounded bg-slate-100 px-1 py-0.5">$1</code>,{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5">$2</code>… for parameters, never paste trigger data directly into the query text.
+          </p>
+        </Field>
+        <Field label="Parameters">
+          <input
+            value={typeof config.paramsCsv === "string" ? config.paramsCsv : ""}
+            onChange={(e) => set({ paramsCsv: e.target.value })}
+            placeholder="e.g. {{from}}, {{subject}} — fills $1, $2 in order"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Save result as">
+          <input
+            value={typeof config.outputField === "string" ? config.outputField : ""}
+            onChange={(e) => set({ outputField: e.target.value })}
+            placeholder="query_result (default)"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Also sets <code className="rounded bg-slate-100 px-1 py-0.5">{"{{" + (typeof config.outputField === "string" && config.outputField ? config.outputField : "query_result") + "_count}}"}</code>{" "}
+            — handy for a Filter step right after this one.
+          </p>
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "mongodb") {
+    return (
+      <>
+        <Field label="Collection" required>
+          <input
+            value={typeof config.collection === "string" ? config.collection : ""}
+            onChange={(e) => set({ collection: e.target.value })}
+            placeholder="e.g. leads"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Filter (JSON)">
+          <textarea
+            value={typeof config.filter === "string" ? config.filter : ""}
+            onChange={(e) => set({ filter: e.target.value })}
+            rows={3}
+            placeholder={'{ "email": "{{from}}" }'}
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-[13px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Only the values inside the JSON are filled from <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> — leave blank to match everything.
+          </p>
+        </Field>
+        <Field label="Save result as">
+          <input
+            value={typeof config.outputField === "string" ? config.outputField : ""}
+            onChange={(e) => set({ outputField: e.target.value })}
+            placeholder="query_result (default)"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "jira") {
+    return (
+      <>
+        <Field label="Project key" required>
+          <input
+            value={typeof config.projectKey === "string" ? config.projectKey : ""}
+            onChange={(e) => set({ projectKey: e.target.value })}
+            placeholder="e.g. OPS"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Summary" required>
+          <input
+            value={typeof config.summary === "string" ? config.summary : ""}
+            onChange={(e) => set({ summary: e.target.value })}
+            placeholder="e.g. Follow up with {{from}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Description">
+          <textarea
+            value={typeof config.description === "string" ? config.description : ""}
+            onChange={(e) => set({ description: e.target.value })}
+            rows={3}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Issue type">
+          <input
+            value={typeof config.issueType === "string" ? config.issueType : ""}
+            onChange={(e) => set({ issueType: e.target.value })}
+            placeholder="Task (default)"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "pagerduty") {
+    return (
+      <>
+        <Field label="Service ID" required>
+          <input
+            value={typeof config.serviceId === "string" ? config.serviceId : ""}
+            onChange={(e) => set({ serviceId: e.target.value })}
+            placeholder="From the service's PagerDuty URL"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Title" required>
+          <input
+            value={typeof config.title === "string" ? config.title : ""}
+            onChange={(e) => set({ title: e.target.value })}
+            placeholder="e.g. {{subject}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Urgency" required>
+          <select
+            value={config.urgency === "low" ? "low" : "high"}
+            onChange={(e) => set({ urgency: e.target.value })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="high">High</option>
+            <option value="low">Low</option>
+          </select>
+        </Field>
+        <Field label="Details">
+          <textarea
+            value={typeof config.details === "string" ? config.details : ""}
+            onChange={(e) => set({ details: e.target.value })}
+            rows={3}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "trello") {
+    return (
+      <>
+        <Field label="List ID" required>
+          <input
+            value={typeof config.listId === "string" ? config.listId : ""}
+            onChange={(e) => set({ listId: e.target.value })}
+            placeholder="From the list's Trello share link"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Card name" required>
+          <input
+            value={typeof config.name === "string" ? config.name : ""}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder="e.g. {{subject}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Description">
+          <textarea
+            value={typeof config.description === "string" ? config.description : ""}
+            onChange={(e) => set({ description: e.target.value })}
+            rows={3}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "airtable") {
+    const isTrigger = kind === "trigger";
+    return (
+      <>
+        <Field label="Base ID" required>
+          <input
+            value={typeof config.baseId === "string" ? config.baseId : ""}
+            onChange={(e) => set({ baseId: e.target.value })}
+            placeholder="From the base's API docs URL (starts with app...)"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Table" required>
+          <input
+            value={typeof config.table === "string" ? config.table : ""}
+            onChange={(e) => set({ table: e.target.value })}
+            placeholder="e.g. Leads"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        {!isTrigger && (
+          <Field label="Fields (JSON)" required>
+            <textarea
+              value={typeof config.fields === "string" ? config.fields : ""}
+              onChange={(e) => set({ fields: e.target.value })}
+              rows={4}
+              placeholder={'{ "Name": "{{from}}", "Status": "New" }'}
+              className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-[13px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              Only the values inside the JSON are filled from <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code>.
+            </p>
+          </Field>
+        )}
+      </>
+    );
+  }
+
+  if (app === "twilio") {
+    return (
+      <>
+        <Field label="To" required>
+          <input
+            value={typeof config.to === "string" ? config.to : ""}
+            onChange={(e) => set({ to: e.target.value })}
+            placeholder="+1 555 123 4567"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Message" required>
+          <textarea
+            value={typeof config.body === "string" ? config.body : ""}
+            onChange={(e) => set({ body: e.target.value })}
+            rows={3}
+            placeholder="e.g. New email from {{from}}: {{subject}}"
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "google-meet") {
+    return (
+      <>
+        <Field label="Title" required>
+          <input
+            value={typeof config.summary === "string" ? config.summary : ""}
+            onChange={(e) => set({ summary: e.target.value })}
+            placeholder="e.g. Intro call with {{from}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Start time" required>
+          <input
+            type="datetime-local"
+            value={typeof config.start === "string" ? config.start : ""}
+            onChange={(e) => set({ start: e.target.value })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Duration" required>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={5}
+              value={typeof config.durationMinutes === "number" ? config.durationMinutes : 30}
+              onChange={(e) => set({ durationMinutes: Math.max(5, Number(e.target.value) || 30) })}
+              className="h-11 w-24 rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <span className="text-[14px] text-slate-500">minutes</span>
+          </div>
+        </Field>
+        <Field label="Attendees">
+          <input
+            value={typeof config.attendees === "string" ? config.attendees : ""}
+            onChange={(e) => set({ attendees: e.target.value })}
+            placeholder="Comma-separated emails, e.g. {{from}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "discord") {
+    return (
+      <Field label="Message" required>
+        <textarea
+          value={typeof config.message === "string" ? config.message : ""}
+          onChange={(e) => set({ message: e.target.value })}
+          rows={4}
+          placeholder="e.g. New email from {{from}}: {{subject}}"
+          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+        />
+        <p className="mt-2 text-[12px] text-slate-400">
+          Posted to the channel your webhook is set up for. Use{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to insert data from the trigger.
+        </p>
+      </Field>
+    );
+  }
+
+  if (app === "github") {
+    return (
+      <>
+        <Field label="Repository" required>
+          <input
+            value={typeof config.repo === "string" ? config.repo : ""}
+            onChange={(e) => set({ repo: e.target.value })}
+            placeholder="owner/repo"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Title" required>
+          <input
+            value={typeof config.title === "string" ? config.title : ""}
+            onChange={(e) => set({ title: e.target.value })}
+            placeholder="e.g. Follow up with {{from}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Body">
+          <textarea
+            value={typeof config.body === "string" ? config.body : ""}
+            onChange={(e) => set({ body: e.target.value })}
+            rows={4}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "notion") {
+    return (
+      <>
+        <Field label="Parent type" required>
+          <select
+            value={typeof config.parentType === "string" ? config.parentType : "database_id"}
+            onChange={(e) => set({ parentType: e.target.value })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="database_id">Database</option>
+            <option value="page_id">Page</option>
+          </select>
+        </Field>
+        <Field label={typeof config.parentType === "string" && config.parentType === "page_id" ? "Parent page ID" : "Database ID"} required>
+          <input
+            value={typeof config.parentId === "string" ? config.parentId : ""}
+            onChange={(e) => set({ parentId: e.target.value })}
+            placeholder="From the Notion page/database URL"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Title" required>
+          <input
+            value={typeof config.title === "string" ? config.title : ""}
+            onChange={(e) => set({ title: e.target.value })}
+            placeholder="e.g. {{subject}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Content">
+          <textarea
+            value={typeof config.content === "string" ? config.content : ""}
+            onChange={(e) => set({ content: e.target.value })}
+            rows={4}
+            placeholder="Use {{field}} to insert data from the trigger."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "stripe") {
+    return (
+      <>
+        <Field label="Email" required>
+          <input
+            value={typeof config.email === "string" ? config.email : ""}
+            onChange={(e) => set({ email: e.target.value })}
+            placeholder="e.g. {{from}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Name">
+          <input
+            value={typeof config.name === "string" ? config.name : ""}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder="e.g. {{fromName}}"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "delay") {
+    return (
+      <Field label="Wait for" required>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            value={typeof config.delayMinutes === "number" ? config.delayMinutes : 5}
+            onChange={(e) => set({ delayMinutes: Math.max(1, Number(e.target.value) || 1) })}
+            className="h-11 w-24 rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <span className="text-[14px] text-slate-500">minutes, then continue</span>
+        </div>
+      </Field>
+    );
+  }
+
+  if (app === "filter") {
+    return (
+      <Field label="Only continue if" required>
+        <div className="flex flex-col gap-2">
+          <input
+            value={typeof config.field === "string" ? config.field : ""}
+            onChange={(e) => set({ field: e.target.value })}
+            placeholder="Field from the trigger, e.g. subject"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <div className="flex gap-2">
+            <select
+              value={typeof config.operator === "string" ? config.operator : "contains"}
+              onChange={(e) => set({ operator: e.target.value })}
+              className="h-11 rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+            >
+              <option value="contains">contains</option>
+              <option value="not_contains">does not contain</option>
+              <option value="equals">equals</option>
+            </select>
+            <input
+              value={typeof config.value === "string" ? config.value : ""}
+              onChange={(e) => set({ value: e.target.value })}
+              placeholder="value"
+              className="h-11 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+          </div>
+        </div>
+        <p className="mt-2 text-[12px] text-slate-400">
+          For a Gmail trigger, common fields are <code className="rounded bg-slate-100 px-1 py-0.5">subject</code>,{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5">from</code>, or{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5">snippet</code>. If this doesn&apos;t match, every step after it is skipped.
+        </p>
+      </Field>
+    );
+  }
+
+  if (app === "ai") {
+    return (
+      <>
+        <Field label="Prompt" required>
+          <textarea
+            value={typeof config.prompt === "string" ? config.prompt : ""}
+            onChange={(e) => set({ prompt: e.target.value })}
+            rows={3}
+            placeholder="e.g. Extract the sender's name, company, and what they're asking for."
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <EnhancePromptButton
+            prompt={typeof config.prompt === "string" ? config.prompt : ""}
+            onEnhanced={(next) => set({ prompt: next })}
+          />
+        </Field>
+        <Field label="Read from field">
+          <input
+            value={typeof config.sourceField === "string" ? config.sourceField : ""}
+            onChange={(e) => set({ sourceField: e.target.value })}
+            placeholder="e.g. snippet — leave blank to read the whole trigger"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="Quality">
+          <select
+            value={config.quality === "advanced" ? "advanced" : "fast"}
+            onChange={(e) => set({ quality: e.target.value })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="fast">Fast (default — cheap, good for extraction)</option>
+            <option value="advanced">Advanced (slower, better reasoning, uses more AI credits)</option>
+          </select>
+        </Field>
+        <Field label="Save result as">
+          <input
+            value={typeof config.outputField === "string" ? config.outputField : ""}
+            onChange={(e) => set({ outputField: e.target.value })}
+            placeholder="ai_output (default)"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{" + (typeof config.outputField === "string" && config.outputField ? config.outputField : "ai_output") + "}}"}</code> in
+            a later step to insert the result. This step uses your plan&apos;s AI credits — it&apos;s skipped (marked failed) if your AI budget is exhausted.
+          </p>
+        </Field>
+      </>
+    );
+  }
+
+  return null;
+}
+
+type CalComEventType = { id: number; title: string };
+
+// "Enhance with AI" — rewrites the user's rough instruction into a precise
+// prompt via a real LLM call (see gateway's /api/automations/enhance-prompt),
+// without running it against any data.
+function EnhancePromptButton({
+  prompt,
+  onEnhanced,
+}: {
+  prompt: string;
+  onEnhanced: (next: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enhance() {
+    const text = prompt.trim();
+    if (!text || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/automations/enhance-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      });
+      const data = (await res.json().catch(() => null)) as { prompt?: string; error?: string } | null;
+      if (!res.ok || !data?.prompt) {
+        setError(data?.error || "Couldn't enhance that prompt — try again.");
+        return;
+      }
+      onEnhanced(data.prompt);
+    } catch {
+      setError("Couldn't reach Riz — try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={enhance}
+        disabled={!prompt.trim() || loading}
+        className="flex items-center gap-1.5 rounded-md border border-[#6C4BF4]/30 bg-[#6C4BF4]/5 px-2.5 py-1.5 text-[12px] font-medium text-[#6C4BF4] transition hover:border-[#6C4BF4]/50 hover:bg-[#6C4BF4]/10 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+      >
+        <WandIcon className="h-3.5 w-3.5" />
+        {loading ? "Enhancing…" : "Enhance with AI"}
+      </button>
+      {error && <p className="mt-1.5 text-[12px] text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+function CalComBookingFields({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+}) {
+  const [eventTypes, setEventTypes] = useState<CalComEventType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/automations/calcom-event-types")
+      .then((r) => r.json())
+      .then((data: { eventTypes?: CalComEventType[] }) => setEventTypes(data.eventTypes ?? []))
+      .catch(() => setEventTypes([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function set(patch: Record<string, unknown>) {
+    onChange({ ...config, ...patch });
+  }
+
+  return (
+    <>
+      <Field label="Event type" required>
+        <select
+          value={typeof config.eventTypeId === "number" ? config.eventTypeId : ""}
+          onChange={(e) => set({ eventTypeId: Number(e.target.value) })}
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+        >
+          <option value="" disabled>
+            {loading ? "Loading event types…" : eventTypes.length === 0 ? "No Cal.com event types found" : "Choose an event type"}
+          </option>
+          {eventTypes.map((et) => (
+            <option key={et.id} value={et.id}>
+              {et.title}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Attendee name" required>
+        <input
+          value={typeof config.attendeeName === "string" ? config.attendeeName : ""}
+          onChange={(e) => set({ attendeeName: e.target.value })}
+          placeholder="e.g. {{from}}"
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+        />
+      </Field>
+      <Field label="Attendee email" required>
+        <input
+          value={typeof config.attendeeEmail === "string" ? config.attendeeEmail : ""}
+          onChange={(e) => set({ attendeeEmail: e.target.value })}
+          placeholder="name@example.com"
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+        />
+      </Field>
+      <Field label="Start time" required>
+        <input
+          type="datetime-local"
+          value={typeof config.start === "string" ? config.start : ""}
+          onChange={(e) => set({ start: e.target.value })}
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+        />
+      </Field>
+    </>
+  );
+}
+
+// ── Telegram connect dialog — real deep-link token + real link-status polling ──
 
 function TelegramConnectDialog({
   appName,
@@ -1394,21 +2962,37 @@ function TelegramConnectDialog({
   onConnected: () => void;
 }) {
   const [status, setStatus] = useState<"waiting" | "linking" | "done">("waiting");
-  // Demo deep link + one-time token (would come from POST /api/onboarding/telegram/token).
-  const [token, setToken] = useState("demo");
-  useEffect(() => {
-    setToken(Math.random().toString(36).slice(2, 10));
-  }, []);
-  const deepLink = `https://t.me/rizly_bot?start=${token}`;
+  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [qrSeed, setQrSeed] = useState("");
 
-  // Auto-advance to "done" a moment after "linking" begins (simulated poll).
+  useEffect(() => {
+    fetch("/api/onboarding/telegram/token", { method: "POST" })
+      .then((r) => r.json())
+      .then((data: { deepLink?: string }) => {
+        if (data.deepLink) {
+          setDeepLink(data.deepLink);
+          setQrSeed(data.deepLink);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  // Real link-status polling — matches /dashboard/telegram's own loop.
   useEffect(() => {
     if (status !== "linking") return;
-    const t = setTimeout(() => {
-      setStatus("done");
-      setTimeout(onConnected, 700);
-    }, 1400);
-    return () => clearTimeout(t);
+    const interval = setInterval(() => {
+      fetch("/api/telegram")
+        .then((r) => r.json())
+        .then((data: { linked?: boolean }) => {
+          if (data.linked) {
+            clearInterval(interval);
+            setStatus("done");
+            setTimeout(onConnected, 700);
+          }
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(interval);
   }, [status, onConnected]);
 
   useEffect(() => {
@@ -1453,7 +3037,7 @@ function TelegramConnectDialog({
           ) : (
             <>
               <div className="relative">
-                <FakeQr seed={token} className={`h-[200px] w-[200px] rounded-xl border border-slate-200 p-3 ${status === "linking" ? "opacity-40" : ""}`} />
+                <FakeQr seed={qrSeed || appName} className={`h-[200px] w-[200px] rounded-xl border border-slate-200 p-3 ${status === "linking" ? "opacity-40" : ""}`} />
                 {status === "linking" && (
                   <span className="absolute inset-0 flex items-center justify-center">
                     <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-[#6C4BF4]" />
@@ -1462,11 +3046,12 @@ function TelegramConnectDialog({
               </div>
 
               <a
-                href={deepLink}
+                href={deepLink ?? "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setStatus("linking")}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#6C4BF4] px-4 py-2.5 text-[14px] font-medium text-white transition hover:brightness-105"
+                onClick={() => deepLink && setStatus("linking")}
+                aria-disabled={!deepLink}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#6C4BF4] px-4 py-2.5 text-[14px] font-medium text-white transition hover:brightness-105 aria-disabled:pointer-events-none aria-disabled:opacity-50"
               >
                 <AppIcon app="telegram" className="h-4 w-4 [&_*]:fill-white" />
                 Open {appName}
@@ -1477,15 +3062,6 @@ function TelegramConnectDialog({
                   ? "Waiting for you to message the bot…"
                   : <>Scan the QR, or tap <b>Open {appName}</b>, then send <code className="rounded bg-slate-100 px-1 py-0.5">/start</code> to the bot.</>}
               </p>
-
-              {/* Demo shortcut so the flow is testable without a real device */}
-              <button
-                type="button"
-                onClick={() => setStatus("linking")}
-                className="mt-4 text-[12px] font-medium text-[#6C4BF4] underline"
-              >
-                Simulate messaging the bot (demo)
-              </button>
             </>
           )}
         </div>
@@ -1545,15 +3121,25 @@ function FakeQr({ seed, className }: { seed: string; className?: string }) {
 function EventPicker({
   events,
   selected,
+  appName,
+  appId,
+  kind,
   onSelect,
 }: {
   events: AppEvent[];
   selected: string;
+  appName: string;
+  appId: string;
+  kind: AutomationStep["kind"];
   onSelect: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<"list" | "describe">("list");
+  const [promptText, setPromptText] = useState("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number; width: number; maxHeight: number; drop: "down" | "up" } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1579,6 +3165,9 @@ function EventPicker({
 
   useEffect(() => {
     if (!open) return;
+    setMode("list");
+    setPromptText("");
+    setPromptError(null);
     place();
     function onDocClick(e: MouseEvent) {
       const t = e.target as HTMLElement;
@@ -1610,6 +3199,48 @@ function EventPicker({
   // Pinned events float to the top, preserving original order within groups.
   const ordered = [...filtered].sort((a, b) => Number(pinned.has(b.name)) - Number(pinned.has(a.name)));
 
+  // Sends the user's plain-English description to Riz's real agent (the same
+  // one behind the dashboard chat) as a one-shot classification call — no
+  // conversation history attached — and asks it to pick the matching event
+  // name from this app's fixed list. Falls back to an error if nothing matches.
+  async function submitPrompt() {
+    const text = promptText.trim();
+    if (!text || promptLoading) return;
+    setPromptLoading(true);
+    setPromptError(null);
+    try {
+      const message = [
+        `You are matching a user's plain-English automation request to one predefined event for the "${appName}" app.`,
+        "Available events:",
+        ...events.map((ev) => `- ${ev.name}: ${ev.description}`),
+        `User's request: "${text}"`,
+        "Reply with ONLY the exact event name from the list above that best matches (verbatim, no extra words). If nothing matches well, reply with exactly: NONE",
+      ].join("\n");
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message, history: [] }),
+      });
+      const data = (await response.json().catch(() => null)) as { reply?: string; error?: string } | null;
+      if (!response.ok || !data?.reply) {
+        setPromptError(data?.error || "Riz couldn't process that — try again.");
+        return;
+      }
+      const answer = data.reply.trim();
+      const match = events.find((ev) => ev.name.toLowerCase() === answer.toLowerCase());
+      if (!match) {
+        setPromptError(`Couldn't match that to a ${appName} event — try rephrasing or pick from the list.`);
+        return;
+      }
+      onSelect(match.name);
+      setOpen(false);
+    } catch {
+      setPromptError("Couldn't reach Riz — try again.");
+    } finally {
+      setPromptLoading(false);
+    }
+  }
+
   return (
     <div className="relative">
       {/* Trigger */}
@@ -1640,6 +3271,44 @@ function EventPicker({
             }}
             className="z-[100] flex flex-col overflow-hidden rounded-xl border border-[#d7d3c9] bg-[#fffefb] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.25)]"
           >
+          {mode === "describe" ? (
+            <div className="flex min-h-0 flex-1 flex-col p-3">
+              <button
+                type="button"
+                onClick={() => setMode("list")}
+                className="mb-2 flex items-center gap-1 self-start text-[12px] font-medium text-slate-400 hover:text-slate-600"
+              >
+                <ChevronRight className="h-3 w-3 rotate-180" /> Back to list
+              </button>
+              <p className="mb-2 text-[12px] text-slate-500">
+                Describe what you want in plain English — Riz will match it to a {appName} event.
+              </p>
+              <textarea
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submitPrompt();
+                  }
+                }}
+                autoFocus
+                rows={3}
+                placeholder={`e.g. "when a customer's payment fails"`}
+                className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6C4BF4]"
+              />
+              {promptError && <p className="mt-2 text-[12px] text-red-500">{promptError}</p>}
+              <button
+                type="button"
+                onClick={submitPrompt}
+                disabled={!promptText.trim() || promptLoading}
+                className="mt-2 h-9 w-full rounded-lg text-[13px] font-medium transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 enabled:bg-[#6C4BF4] enabled:text-white enabled:hover:brightness-105"
+              >
+                {promptLoading ? "Asking Riz…" : "Ask Riz"}
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Search */}
           <div className="shrink-0 p-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5">
@@ -1662,32 +3331,52 @@ function EventPicker({
           </div>
 
           {/* List */}
-          <div role="listbox" className="min-h-0 flex-1 overflow-y-auto pb-1">
+          <div role="listbox" className="min-h-0 flex-1 overflow-y-auto p-2 pb-1">
+            {/* Pinned "Create with AI" */}
+            <button
+              type="button"
+              onClick={() => setMode("describe")}
+              className="mb-2 flex w-full items-center gap-3 rounded-lg border border-[#6C4BF4]/30 bg-[#6C4BF4]/5 px-3 py-2.5 text-left transition hover:border-[#6C4BF4]/50 hover:bg-[#6C4BF4]/10"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#6C4BF4] text-white">
+                <CopilotGlyph className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#6C4BF4]">Create with AI…</span>
+            </button>
+
             {ordered.length === 0 ? (
               <p className="px-4 py-8 text-center text-[13px] text-slate-400">No matching events</p>
             ) : (
               ordered.map((ev) => {
                 const isSel = ev.name === selected;
                 const isPinned = pinned.has(ev.name);
+                const live = isEventLive(appId, kind, ev.name);
                 return (
                   <div
                     key={ev.name}
                     role="option"
                     aria-selected={isSel}
+                    aria-disabled={!live}
                     tabIndex={0}
                     onClick={() => {
+                      if (!live) return;
                       onSelect(ev.name);
                       setOpen(false);
                     }}
                     onKeyDown={(e) => {
+                      if (!live) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         onSelect(ev.name);
                         setOpen(false);
                       }
                     }}
-                    className={`group cursor-pointer px-3 py-2 outline-none transition ${
-                      isSel ? "bg-[#6C4BF4]/8" : "hover:bg-slate-50 focus:bg-slate-50"
+                    className={`group px-3 py-2 outline-none transition ${
+                      !live
+                        ? "cursor-not-allowed opacity-40"
+                        : isSel
+                          ? "cursor-pointer bg-[#6C4BF4]/8"
+                          : "cursor-pointer hover:bg-slate-50 focus:bg-slate-50"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1697,6 +3386,11 @@ function EventPicker({
                           <KindGlyph kind={ev.kind} className="h-3 w-3" />
                           {ev.kind}
                         </span>
+                        {!live && (
+                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                            Soon
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1724,6 +3418,8 @@ function EventPicker({
               })
             )}
           </div>
+          </>
+          )}
           </div>,
           document.body,
         )}

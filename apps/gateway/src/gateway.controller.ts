@@ -381,6 +381,32 @@ export class GatewayController {
     return { chatId: chatId ?? null };
   }
 
+  /** Cal.com event types, for the flow-builder's "Create Booking" config dropdown. */
+  @Get("api/automations/calcom/event-types")
+  async automationCalcomEventTypes(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) return { connected: false, eventTypes: [] };
+    return this.gatewayService.sendToAiCore("automation.calcom.eventTypes", { userId });
+  }
+
+  /** Slack analog of resolveTelegramChatId — used by the automation-run worker's Slack action. */
+  @Get("api/slack/resolve")
+  async resolveSlackTarget(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) return { channel: null, botToken: null };
+    const link = await this.authRepo.findSlackLinkByUserId(userId);
+    if (!link?.dmChannelId) return { channel: null, botToken: null };
+    const teamId = link.slackKey.split(":")[0];
+    const botToken = await this.authRepo.findSlackBotTokenByTeam(teamId);
+    return { channel: link.dmChannelId, botToken: botToken ?? null };
+  }
+
   @Get("api/telegram/history")
   async telegramHistory(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

@@ -131,6 +131,8 @@ const schema = z.object({
   MORNING_BRIEF_HOUR: z.coerce.number().int().min(0).max(23).default(8),
   MEETING_SYNC_MINUTES: z.coerce.number().int().positive().default(5),
   EMAIL_POLL_MINUTES: z.coerce.number().int().positive().default(3),
+  // Cadence for the flow-builder automation trigger poller (schedule/gmail/calendar).
+  AUTOMATION_POLL_MINUTES: z.coerce.number().int().positive().default(5),
   // Recency window (days) for inbox triage. Starred / Gmail-important mail is
   // always included regardless of age — importance beats a flat time cutoff.
   EMAIL_TRIAGE_WINDOW_DAYS: z.coerce.number().int().positive().default(7),

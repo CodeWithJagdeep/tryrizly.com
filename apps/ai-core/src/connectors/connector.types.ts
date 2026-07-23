@@ -18,7 +18,17 @@ export type ConnectorProvider =
   | "paypal"
   | "github"
   | "mpesa"
-  | "discord";
+  | "discord"
+  // Bundled Drive/Sheets/Docs connection for the automation flow-builder's
+  // Google Workspace actions — a third independent Google OAuth grant, same
+  // pattern as the gmail/calendar split (see GoogleService.findAccount).
+  | "google_workspace"
+  // Manual API-key/token connectors — no OAuth app registration needed.
+  | "jira"
+  | "pagerduty"
+  | "trello"
+  | "airtable"
+  | "twilio";
 
 export type ConnectorAuthType = "oauth" | "manual";
 
@@ -77,7 +87,7 @@ export type DeleteConnectorInput = {
   provider: ConnectorProvider;
 };
 
-export type GoogleOAuthProvider = "gmail" | "calendar";
+export type GoogleOAuthProvider = "gmail" | "calendar" | "google_workspace";
 export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion" | "github" | "stripe";
 
 export type StartOAuthInput = {
@@ -154,6 +164,11 @@ export type MpesaConnectorSecret = {
   shortcode: string;
   environment: "sandbox" | "production";
 };
+export type JiraConnectorSecret = { siteUrl: string; email: string; apiToken: string };
+export type PagerDutyConnectorSecret = { apiKey: string; fromEmail: string };
+export type TrelloConnectorSecret = { apiKey: string; token: string };
+export type AirtableConnectorSecret = { apiKey: string };
+export type TwilioConnectorSecret = { accountSid: string; authToken: string; fromNumber: string };
 
 export type DataSourceSecretResult =
   | { connected: false }

@@ -97,6 +97,10 @@
     "./automations/types": {
       "types": "./dist/automations/types.d.ts",
       "default": "./dist/automations/types.js"
+    },
+    "./automations/schemas": {
+      "types": "./dist/automations/schemas.d.ts",
+      "default": "./dist/automations/schemas.js"
     }
   },
   "files": [

@@ -94,6 +94,9 @@ export type StartOAuthInput = {
   userId?: string;
   provider: ConnectorOAuthProvider;
   returnTo?: string;
+  /** "automation" requests only the scopes an automation step needs (e.g. Gmail
+   * read-only, no send/contacts). Defaults to the full assistant scope set. */
+  scopeProfile?: "full" | "automation";
   calComClientId?: string;
   calComClientSecret?: string;
   /** Which Cal.com OAuth client to use - they're separate approved apps per

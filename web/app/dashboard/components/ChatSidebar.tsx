@@ -24,6 +24,7 @@ import {
   ChatIcon,
   ClockIcon,
   GearIcon,
+  HomeIcon,
   LayersIcon,
   MailIcon,
   PanelToggleIcon,
@@ -167,26 +168,36 @@ export function ChatSidebar() {
   // Flat groups separated by a divider, no text section labels — keeps the
   // list scannable instead of stacking category headers over a handful of items.
   const iconCls = "h-[18px] w-[18px]";
-  const navSections = [
-    [
-      { href: "/dashboard", icon: <ChatIcon className={iconCls} />, label: "Chat" },
-      { href: "/dashboard/emails", icon: <MailIcon className={iconCls} />, label: "Emails", badge: emailBadge > 0 ? String(emailBadge) : undefined },
-      { href: "/dashboard/calendar", icon: <CalendarIcon className={iconCls} />, label: "Calendar" },
-      { href: "/dashboard/meetings", icon: <VideoIcon className={iconCls} />, label: "Meetings" },
-      { href: "/dashboard/people", icon: <UsersIcon className={iconCls} />, label: "People" },
-      { href: "/dashboard/scheduled", icon: <ClockIcon className={iconCls} />, label: "Scheduled" },
-      { href: "/dashboard/automations", icon: <BoltIcon className={iconCls} />, label: "Automations" },
-      { href: "/dashboard/connectors", icon: <PlugIcon className={iconCls} />, label: "Connectors" },
-    ],
-    [
-      {
-        href: "/dashboard/channels",
-        icon: <LayersIcon className={iconCls} />,
-        label: "Channels",
-        badge: !telegramLinked && !slackLinked ? "!" : undefined,
-      },
-    ],
-  ];
+  // On the flow-builder canvas we strip the sidebar down to just Home + Chat
+  // so it doesn't compete with the builder's own panels ("for now").
+  const isFlowBuilder = /^\/dashboard\/automations\/.+/.test(pathname);
+  const navSections = isFlowBuilder
+    ? [
+        [
+          { href: "/dashboard", icon: <HomeIcon className={iconCls} />, label: "Home" },
+          { href: "/dashboard", icon: <ChatIcon className={iconCls} />, label: "Chat" },
+        ],
+      ]
+    : [
+        [
+          { href: "/dashboard", icon: <ChatIcon className={iconCls} />, label: "Chat" },
+          { href: "/dashboard/emails", icon: <MailIcon className={iconCls} />, label: "Emails", badge: emailBadge > 0 ? String(emailBadge) : undefined },
+          { href: "/dashboard/calendar", icon: <CalendarIcon className={iconCls} />, label: "Calendar" },
+          { href: "/dashboard/meetings", icon: <VideoIcon className={iconCls} />, label: "Meetings" },
+          { href: "/dashboard/people", icon: <UsersIcon className={iconCls} />, label: "People" },
+          { href: "/dashboard/scheduled", icon: <ClockIcon className={iconCls} />, label: "Scheduled" },
+          { href: "/dashboard/automations", icon: <BoltIcon className={iconCls} />, label: "Automations" },
+          { href: "/dashboard/connectors", icon: <PlugIcon className={iconCls} />, label: "Connectors" },
+        ],
+        [
+          {
+            href: "/dashboard/channels",
+            icon: <LayersIcon className={iconCls} />,
+            label: "Channels",
+            badge: !telegramLinked && !slackLinked ? "!" : undefined,
+          },
+        ],
+      ];
 
   return (
     <>
@@ -249,7 +260,7 @@ export function ChatSidebar() {
                     (pathname.startsWith("/dashboard/telegram") || pathname.startsWith("/dashboard/slack")));
               return (
                 <Link
-                  key={item.href}
+                  key={`${item.href}-${item.label}`}
                   href={item.href}
                   title={collapsed ? item.label : undefined}
                   className={`group flex h-9 items-center rounded-lg px-2.5 text-sm transition-colors ${
@@ -278,7 +289,7 @@ export function ChatSidebar() {
         ))}
 
         {/* Apps — quick-glance grid of connected integrations, links to full connectors page */}
-        {!collapsed && (
+        {!collapsed && !isFlowBuilder && (
           <div className="mb-3 border-t border-slate-200/70 pt-3">
             <div className="px-2.5">
               <SectionLabel>Apps</SectionLabel>

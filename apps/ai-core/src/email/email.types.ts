@@ -89,7 +89,7 @@ export type EmailBehaviorPreference = {
 export type EmailPipelineResult = {
   messageId: string;
   category: EmailCategory;
-  handled: "auto" | "ask" | "ignored";
+  handled: "auto" | "ask" | "ignored" | "held";
   notificationSent: boolean;
   facts: ExtractedEmailFacts;
   actionsScheduled: string[];

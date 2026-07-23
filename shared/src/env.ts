@@ -133,6 +133,14 @@ const schema = z.object({
   EMAIL_POLL_MINUTES: z.coerce.number().int().positive().default(3),
   // Cadence for the flow-builder automation trigger poller (schedule/gmail/calendar).
   AUTOMATION_POLL_MINUTES: z.coerce.number().int().positive().default(5),
+  // Independent from AGENT_MAX_STEPS: structured automations are deterministic
+  // saved flows, so their explicit step budget must not inherit chat's small
+  // free-form reasoning ceiling.
+  AUTOMATION_MAX_STEPS: z.coerce.number().int().positive().max(100).default(50),
+  // Production-safe by default. "expanded" is an explicit operator decision
+  // after connector-specific evaluations pass; it must never happen merely
+  // because code for a new catalog step exists.
+  AUTOMATION_RELEASE_TIER: z.enum(["safe", "expanded"]).default("safe"),
   // Recency window (days) for inbox triage. Starred / Gmail-important mail is
   // always included regardless of age — importance beats a flat time cutoff.
   EMAIL_TRIAGE_WINDOW_DAYS: z.coerce.number().int().positive().default(7),

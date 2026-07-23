@@ -157,7 +157,15 @@ export class EmailClassifierService {
         entities: normalizeEntities(parsed?.entities),
         serviceName: parsed?.serviceName?.trim() || undefined,
         amount: parsed?.amount?.trim() || undefined,
-        dueDate: this.toUtcIso(parsed?.dueDate, timezone),
+        // For bills, if the model omitted the deadline, try a regex backstop over
+        // the body before giving up — "pay by / due date / autopay on <date>".
+        dueDate: this.toUtcIso(
+          parsed?.dueDate?.trim() ||
+            (category === "payment_due"
+              ? extractDueDateFallback(`${input.subject}\n${input.body}`)
+              : undefined),
+          timezone,
+        ),
         meetingTime: this.toUtcIso(parsed?.meetingTime, timezone),
         meetingEndTime: this.toUtcIso(parsed?.meetingEndTime, timezone),
         meetingTitle: parsed?.meetingTitle?.trim() || undefined,
@@ -475,6 +483,25 @@ function normalizeBoolean(raw: unknown): boolean | undefined {
   if (normalized === "true") return true;
   if (normalized === "false") return false;
   return undefined;
+}
+
+// Regex backstop for a payment deadline when the model omits `dueDate`. Looks
+// for a due-phrase followed by a date (month-name, D Month, or numeric). Returns
+// the raw date substring — toUtcIso()/Date.parse handle the format normalization.
+const DUE_MONTHS =
+  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+const DUE_DATE_PATTERN =
+  `(?:(?:${DUE_MONTHS})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*\\d{4})?` +
+  `|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${DUE_MONTHS})(?:,?\\s*\\d{4})?` +
+  `|\\d{4}-\\d{2}-\\d{2}` +
+  `|\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})`;
+const DUE_PHRASE =
+  "(?:due\\s*date|payment\\s+due|amount\\s+due\\s+by|pay(?:able)?\\s+by|due\\s+by|due\\s+on|autopay(?:\\s+on)?|\\bdue\\b)";
+const DUE_DATE_REGEX = new RegExp(`${DUE_PHRASE}[:\\s.-]*?(${DUE_DATE_PATTERN})`, "i");
+
+export function extractDueDateFallback(text: string): string | undefined {
+  const match = DUE_DATE_REGEX.exec(text);
+  return match?.[1]?.trim() || undefined;
 }
 
 function normalizeEntities(raw: unknown): string[] | undefined {

@@ -31,10 +31,22 @@ export class ConnectorRepository implements OnModuleDestroy {
     }
   }
 
-  /** Upsert by (userId, provider) — used for OAuth flows where there is always exactly one account per provider. */
-  async upsert(account: Omit<ConnectedAccount, "id" | "createdAt" | "updatedAt">) {
+  /**
+   * Upsert an OAuth account. By default keyed by (userId, provider) — one row
+   * per provider. Pass `opts.externalId` (e.g. the Google account email) to key
+   * by (userId, provider, externalId) instead, so multiple accounts of the same
+   * provider coexist as separate rows and reconnecting one updates it in place.
+   */
+  async upsert(
+    account: Omit<ConnectedAccount, "id" | "createdAt" | "updatedAt">,
+    opts?: { externalId?: string },
+  ) {
     const now = new Date().toISOString();
-    const existing = await this.find(account.userId, account.provider);
+    const existing = opts?.externalId
+      ? (await this.findAll(account.userId, account.provider)).find(
+          (a) => (a.metadata?.accountEmail as string | undefined) === opts.externalId,
+        )
+      : await this.find(account.userId, account.provider);
     const next: ConnectedAccount = {
       ...account,
       id: existing?.id ?? crypto.randomUUID(),
@@ -43,7 +55,8 @@ export class ConnectorRepository implements OnModuleDestroy {
     };
 
     if (!this.pool) {
-      inMemoryAccounts.set(this.key(account.userId, account.provider), next);
+      // Multi-account rows are keyed by id; single-provider rows by (userId, provider).
+      inMemoryAccounts.set(opts?.externalId ? next.id : this.key(account.userId, account.provider), next);
       return next;
     }
 

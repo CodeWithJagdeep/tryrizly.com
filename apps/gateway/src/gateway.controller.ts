@@ -651,6 +651,7 @@ export class GatewayController {
     @Query("userId") userId = "default",
     @Query("returnTo") returnTo: string | undefined,
     @Query("region") region: string | undefined,
+    @Query("scopeProfile") scopeProfile: string | undefined,
   ) {
     this.requireInternal(secret);
     const oauthProvider = this.requireConnectorOAuthProvider(provider);
@@ -663,6 +664,7 @@ export class GatewayController {
       provider: oauthProvider,
       returnTo,
       calComRegion: region === "eu" ? "eu" : undefined,
+      scopeProfile: scopeProfile === "automation" ? "automation" : undefined,
     });
   }
 
@@ -713,10 +715,23 @@ export class GatewayController {
       return;
     }
 
-    const result = await this.gatewayService.sendToAiCore<{
-      returnTo?: string;
-      provider?: string;
-    }>("connector.oauth.complete", { code, state });
+    let result: { returnTo?: string; provider?: string };
+    try {
+      result = await this.gatewayService.sendToAiCore<{
+        returnTo?: string;
+        provider?: string;
+      }>("connector.oauth.complete", { code, state });
+    } catch {
+      // Completion can legitimately fail when the callback is replayed (single-
+      // use state/code already consumed) or the state expired. That's not a 500
+      // — send the user back to connectors with a friendly note to retry.
+      res.redirect(
+        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(
+          "Couldn't finish connecting your account — please try again.",
+        )}`,
+      );
+      return;
+    }
 
     const returnTo = sanitizeReturnPath(
       result.returnTo,

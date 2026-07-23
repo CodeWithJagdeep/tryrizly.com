@@ -8,6 +8,21 @@ const inMemoryDisplayNames = new Map<string, { name: string; overridden: boolean
 const inMemoryTimezones = new Map<string, string>();
 const inMemoryLanguages = new Map<string, string>();
 const inMemoryAvatars = new Map<string, string>();
+const inMemoryAwayUntil = new Map<string, string>();
+const inMemoryAwayHeld = new Map<string, HeldAwayEmail[]>();
+
+/** An email held (not notified) while the principal is in Away/Vacation mode. */
+export type HeldAwayEmail = {
+  from: string;
+  subject: string;
+  summary: string;
+  category: string;
+  urgency?: string;
+  amount?: string;
+  dueDate?: string;
+  messageId?: string;
+  at: string;
+};
 
 /**
  * The principal can say "call me X" at any point in chat; that overrides the
@@ -219,6 +234,100 @@ export class UserPreferencesRepository implements OnModuleDestroy {
     );
   }
 
+  // ── Away / Vacation mode ────────────────────────────────────────────────────
+
+  /** ISO timestamp the principal is away until, or undefined if not away / expired. */
+  async getAwayUntil(userId: string): Promise<string | undefined> {
+    if (!this.pool) {
+      const until = inMemoryAwayUntil.get(userId);
+      return until && new Date(until) > new Date() ? until : undefined;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query<{ away_until: Date | null }>(
+      "select away_until from user_preferences where user_id = $1 limit 1",
+      [userId],
+    );
+    const until = result.rows[0]?.away_until;
+    if (!until) return undefined;
+    const iso = new Date(until).toISOString();
+    return new Date(iso) > new Date() ? iso : undefined;
+  }
+
+  async setAwayUntil(userId: string, untilIso: string): Promise<void> {
+    if (!this.pool) {
+      inMemoryAwayUntil.set(userId, untilIso);
+      inMemoryAwayHeld.set(userId, []); // fresh trip → fresh held list
+      return;
+    }
+    await this.ensureTable();
+    await this.pool.query(
+      `insert into user_preferences (user_id, honorific, away_until, away_held, updated_at)
+       values ($1, $2, $3, '[]'::jsonb, $4)
+       on conflict (user_id)
+       do update set away_until = excluded.away_until, away_held = '[]'::jsonb, updated_at = excluded.updated_at`,
+      [userId, env.PRINCIPAL_HONORIFIC, untilIso, new Date().toISOString()],
+    );
+  }
+
+  /** Append one held email to the away list (atomic jsonb concat). */
+  async holdAwayEmail(userId: string, item: HeldAwayEmail): Promise<void> {
+    if (!this.pool) {
+      const list = inMemoryAwayHeld.get(userId) ?? [];
+      list.push(item);
+      inMemoryAwayHeld.set(userId, list);
+      return;
+    }
+    await this.ensureTable();
+    await this.pool.query(
+      `insert into user_preferences (user_id, honorific, away_held, updated_at)
+       values ($1, $2, $3::jsonb, $4)
+       on conflict (user_id)
+       do update set away_held = coalesce(user_preferences.away_held, '[]'::jsonb) || $3::jsonb, updated_at = excluded.updated_at`,
+      [userId, env.PRINCIPAL_HONORIFIC, JSON.stringify([item]), new Date().toISOString()],
+    );
+  }
+
+  async getHeldAwayEmails(userId: string): Promise<HeldAwayEmail[]> {
+    if (!this.pool) return inMemoryAwayHeld.get(userId) ?? [];
+    await this.ensureTable();
+    const result = await this.pool.query<{ away_held: HeldAwayEmail[] | null }>(
+      "select away_held from user_preferences where user_id = $1 limit 1",
+      [userId],
+    );
+    return result.rows[0]?.away_held ?? [];
+  }
+
+  /** End away mode and drop the held list (called after the return digest is delivered). */
+  async clearAway(userId: string): Promise<void> {
+    if (!this.pool) {
+      inMemoryAwayUntil.delete(userId);
+      inMemoryAwayHeld.delete(userId);
+      return;
+    }
+    await this.ensureTable();
+    await this.pool.query(
+      `update user_preferences set away_until = null, away_held = '[]'::jsonb, updated_at = $2 where user_id = $1`,
+      [userId, new Date().toISOString()],
+    );
+  }
+
+  /** Users whose away window has elapsed but who still have held emails — for the scheduler's return digest. */
+  async listExpiredAwayUsers(): Promise<string[]> {
+    if (!this.pool) {
+      const now = new Date();
+      return [...inMemoryAwayUntil.entries()]
+        .filter(([uid, until]) => new Date(until) <= now && (inMemoryAwayHeld.get(uid)?.length ?? 0) > 0)
+        .map(([uid]) => uid);
+    }
+    await this.ensureTable();
+    const result = await this.pool.query<{ user_id: string }>(
+      `select user_id from user_preferences
+        where away_until is not null and away_until <= now()
+          and jsonb_array_length(coalesce(away_held, '[]'::jsonb)) > 0`,
+    );
+    return result.rows.map((r) => r.user_id);
+  }
+
   async onModuleDestroy() {
     await this.pool?.end();
   }
@@ -238,7 +347,9 @@ export class UserPreferencesRepository implements OnModuleDestroy {
         add column if not exists display_name_overridden boolean not null default false,
         add column if not exists timezone text,
         add column if not exists language text,
-        add column if not exists avatar_url text
+        add column if not exists avatar_url text,
+        add column if not exists away_until timestamptz,
+        add column if not exists away_held jsonb not null default '[]'::jsonb
     `);
   }
 }

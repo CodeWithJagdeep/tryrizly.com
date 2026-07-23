@@ -37,8 +37,13 @@ export type AutomationStep = {
   /** Catalog app id — may be any id in the frontend's full catalog; only the
    * ids in LIVE_* actually execute. */
   app: string;
-  /** Display event name, e.g. "New Email Matching Search". */
+  /** Display event name, e.g. "New Email Matching Search". Also the key that
+   * LIVE_* event matching (isEventLive) checks — do not overwrite with a
+   * user-facing rename; use `label` for that. */
   title: string;
+  /** Optional user-given step name, shown in place of `title` on the canvas
+   * and panel header. Purely cosmetic — never used for event matching. */
+  label?: string;
   subtitle?: string;
   config: Record<string, unknown>;
 };
@@ -67,6 +72,21 @@ export type AutomationRunStepResult = {
   app: string;
   status: "success" | "failed" | "skipped";
   error?: string;
+  /** Deterministic receipt from the provider/runtime. A success without
+   * evidence is never considered a completed unattended action. */
+  evidence?: AutomationStepEvidence;
+};
+
+export type AutomationStepEvidence = {
+  kind: "provider_ack" | "data_result" | "ai_result" | "control";
+  provider: string;
+  acknowledged: true;
+  /** Stable provider object id when the API returned one (message, issue,
+   * event, file, booking, etc.). */
+  resourceId?: string;
+  resourceUrl?: string;
+  /** Bounded metadata only — never connector credentials or full payloads. */
+  metadata?: Record<string, string | number | boolean | null>;
 };
 
 export type AutomationRunStatus = "running" | "success" | "failed";

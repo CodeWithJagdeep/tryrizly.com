@@ -40,6 +40,8 @@ import { EntityRepository } from "../spine/entity.repository";
 import { EventRepository } from "../spine/event.repository";
 import {
   createSetDisplayNameTool,
+  createEndAwayModeTool,
+  createSetAwayModeTool,
   createSetHonorificTool,
   createSetLanguageTool,
   createSetTimezoneTool,
@@ -202,6 +204,8 @@ export class ToolRegistryService {
       createSetDisplayNameTool(this.preferences),
       createSetTimezoneTool(this.preferences),
       createSetLanguageTool(this.preferences),
+      createSetAwayModeTool(this.preferences),
+      createEndAwayModeTool(this.preferences),
       listAutomationsTool,
       createAutomationTool(),
       createActivateAutomationTool(),

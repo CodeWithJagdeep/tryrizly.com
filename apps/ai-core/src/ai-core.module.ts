@@ -54,11 +54,15 @@ import { DecisionService } from "./spine/decision.service";
 import { TaskRepository } from "./tasks/task.repository";
 import { DraftCacheService } from "./tools/draft-cache.service";
 import { ToolRegistryService } from "./tools/tool-registry.service";
+import { AgentSkillRegistryService } from "./skills/agent-skill-registry.service";
+import { SkillRouterService } from "./skills/skill-router.service";
+import { PromptAssemblerService } from "./prompt/prompt-assembler.service";
 
 @Module({
   controllers: [AiCoreController],
   providers: [
     AgentService,
+    AgentSkillRegistryService,
     AccountDeletionService,
     AgentPlanRepository,
     AiCoreService,
@@ -89,6 +93,7 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     DecisionService,
     DraftCacheService,
     ProactiveService,
+    PromptAssemblerService,
     DigestService,
     CalComService,
     RazorpayService,
@@ -107,6 +112,7 @@ import { ToolRegistryService } from "./tools/tool-registry.service";
     TextToQueryService,
     TaskRepository,
     ToolRegistryService,
+    SkillRouterService,
     UsageLedgerService,
     UserPreferencesRepository,
     VectorMemoryService,

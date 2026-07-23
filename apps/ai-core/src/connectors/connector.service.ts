@@ -50,6 +50,17 @@ const oauthScopesByProvider: Record<GoogleOAuthProvider, string[]> = {
   ],
 };
 
+// Reduced scope sets for connections initiated from the automation builder.
+// Automations only ever *read* Gmail (the "New Email Matching Search" trigger —
+// there's no live Gmail action), so read-only is all that's required; send and
+// contacts are assistant-only. Providers not listed here fall back to the full
+// set above (Calendar automations can create Meet events; Workspace file scopes
+// are already narrow). Requested with include_granted_scopes so a user who
+// already granted the assistant more never gets downgraded.
+const automationOauthScopesByProvider: Partial<Record<GoogleOAuthProvider, string[]>> = {
+  gmail: [...IDENTITY_SCOPES, "https://www.googleapis.com/auth/gmail.readonly"],
+};
+
 const calComOAuthScopes = [
   "BOOKING_READ",
   "BOOKING_WRITE",
@@ -273,6 +284,17 @@ export class ConnectorService {
     const account = await this.repository.find(userId, provider);
     if (!account) return true; // not connected → not our call to gate
     return account.metadata.notificationsEnabled !== false;
+  }
+
+  /**
+   * Whether Riz may read & AI-summarise this account's inbox in the background
+   * (the connectors page "Auto-process emails" toggle). Gates the email poll
+   * itself so turning it off stops the *reading*, not just the notification.
+   */
+  async isAutoProcessEnabled(userId: string, provider: ConnectorProvider): Promise<boolean> {
+    const account = await this.repository.find(userId, provider);
+    if (!account) return false; // not connected → nothing to process
+    return account.metadata.autoProcess !== false;
   }
 
   /** Decrypts Cal.com auth for a user. Returns null if not connected or refresh fails. */
@@ -533,7 +555,10 @@ export class ConnectorService {
   }
 
   async startOAuth(input: StartOAuthInput) {
-    const scopes = scopesForOAuthProvider(input.provider);
+    const scopes =
+      input.scopeProfile === "automation" && input.provider in automationOauthScopesByProvider
+        ? automationOauthScopesByProvider[input.provider as GoogleOAuthProvider]!
+        : scopesForOAuthProvider(input.provider);
     let calComOAuthClient: CalComOAuthClient | undefined;
     let statePayload: Record<string, string> | undefined;
     let codeChallenge: string | undefined;
@@ -716,8 +741,12 @@ export class ConnectorService {
         setup: "oauth",
         hasRefreshToken: Boolean(tokenJson.refresh_token),
         ...(profile?.email ? { accountEmail: profile.email } : {}),
+        ...(profile?.name ? { accountName: profile.name } : {}),
+        ...(profile?.picture ? { picture: profile.picture } : {}),
       },
-    });
+      // Key by the Google account email so connecting a second account adds a
+      // separate row instead of overwriting the first (multi-account support).
+    }, { externalId: profile?.email });
 
     return { ...this.toSummary(account), returnTo: storedState.returnTo };
   }
@@ -1145,6 +1174,10 @@ function authorizationUrlForProvider(
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("scope", scopes.join(" "));
+  // Incremental auth: the issued token carries the union of these scopes and any
+  // the user previously granted, so a reduced (e.g. automation read-only) request
+  // never strips scopes the assistant already relies on.
+  url.searchParams.set("include_granted_scopes", "true");
   url.searchParams.set("state", state);
   return url.toString();
 }
@@ -1288,12 +1321,14 @@ async function fetchCalComProfile(
   return payload.data ?? null;
 }
 
-async function fetchGoogleProfile(accessToken: string): Promise<{ email?: string } | null> {
+async function fetchGoogleProfile(
+  accessToken: string,
+): Promise<{ email?: string; name?: string; picture?: string } | null> {
   const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) return null;
-  const payload = (await response.json()) as { email?: string };
+  const payload = (await response.json()) as { email?: string; name?: string; picture?: string };
   return payload ?? null;
 }
 

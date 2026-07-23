@@ -6,6 +6,8 @@ import type { ToolRegistryService } from "../tools/tool-registry.service";
 import type { HeyRizRuntimeContext } from "../context/context.types";
 import type { ToolExecutionResult } from "../tools/tool.types";
 import type { AgentPlanRepository } from "../planning/agent-plan.repository";
+import { AgentSkillRegistryService } from "../skills/agent-skill-registry.service";
+import { PromptAssemblerService } from "../prompt/prompt-assembler.service";
 
 // Always-ok budget gate — these scenarios test tool-loop behavior, not billing.
 const fakeBudgetGate = {
@@ -22,6 +24,8 @@ const fakePlans = {
   recordApprovedResult: async (plan: unknown) => plan,
   complete: async (plan: unknown) => plan,
 } as unknown as AgentPlanRepository;
+const fakeSkills = new AgentSkillRegistryService();
+const fakePrompts = new PromptAssemblerService(fakeSkills);
 
 // A scripted LLM: returns one canned step per call, in order.
 function fakeLlm(script: string[]): LlmRouterService {
@@ -95,6 +99,8 @@ async function main() {
     ]),
     fakeBudgetGate,
     fakePlans,
+    fakeSkills,
+    fakePrompts,
   );
   const a = await agentA.run({ userId: "default", message: "Reply to Naman accepting", context });
   console.log("SCENARIO_A_steps:", a.steps.map((s) => s.tool).join(" -> "));
@@ -106,6 +112,8 @@ async function main() {
     fakeLlm(['{"action":"final","say":"Sent, sir — your reply is on its way to Naman."}']),
     fakeBudgetGate,
     fakePlans,
+    fakeSkills,
+    fakePrompts,
   );
   const b = await agentB.run({
     userId: "default",
@@ -126,6 +134,8 @@ async function main() {
     ]),
     fakeBudgetGate,
     fakePlans,
+    fakeSkills,
+    fakePrompts,
   );
   const c = await agentC.run({
     userId: "default",
@@ -163,6 +173,8 @@ async function main() {
     } as unknown as LlmRouterService,
     fakeBudgetGate,
     fakePlans,
+    fakeSkills,
+    fakePrompts,
   );
   const d = await agentD.run({
     userId: "default",

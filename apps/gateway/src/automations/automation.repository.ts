@@ -122,11 +122,13 @@ export class AutomationRepository {
 
   async finishRun(
     id: string,
+    userId: string,
     patch: Pick<AutomationRun, "status" | "finishedAt" | "stepResults">,
-  ): Promise<void> {
+  ): Promise<boolean> {
     await this.ensureIndexes();
     const db = await getDb();
-    await db.collection("automation_runs").updateOne({ id }, { $set: patch });
+    const result = await db.collection("automation_runs").updateOne({ id, userId }, { $set: patch });
+    return result.matchedCount === 1;
   }
 
   async listRuns(userId: string, flowId: string, limit = 20): Promise<AutomationRun[]> {

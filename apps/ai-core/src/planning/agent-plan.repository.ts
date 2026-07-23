@@ -152,17 +152,7 @@ export class AgentPlanRepository implements OnModuleDestroy {
   }
 
   async complete(plan: AgentPlan): Promise<AgentPlan> {
-    const now = new Date().toISOString();
-    const completed: AgentPlan = {
-      ...plan,
-      status: "completed",
-      steps: plan.steps.map((step) =>
-        step.status === "pending" || step.status === "in_progress"
-          ? { ...step, status: "completed" as const, evidence: step.evidence ?? "completed in final synthesis" }
-          : step,
-      ),
-      updatedAt: now,
-    };
+    const completed = completePlanWithEvidence(plan);
     await this.persist(completed);
     return completed;
   }
@@ -228,6 +218,28 @@ export class AgentPlanRepository implements OnModuleDestroy {
       .then(() => undefined);
     return this.ready;
   }
+}
+
+export function completePlanWithEvidence(plan: AgentPlan): AgentPlan {
+  const hasUnverifiedToolStep = plan.steps.some(
+    (step) =>
+      Boolean(step.tool) &&
+      (step.status === "pending" || step.status === "in_progress"),
+  );
+  return {
+    ...plan,
+    status: hasUnverifiedToolStep ? "active" : "completed",
+    steps: plan.steps.map((step) =>
+      (step.status === "pending" || step.status === "in_progress") && !step.tool
+        ? {
+            ...step,
+            status: "completed" as const,
+            evidence: step.evidence ?? "completed in final synthesis",
+          }
+        : step,
+    ),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function normalizePlan(

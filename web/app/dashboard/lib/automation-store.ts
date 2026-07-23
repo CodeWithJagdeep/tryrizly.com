@@ -11,6 +11,9 @@ export type AutomationStep = {
   id: string;
   kind: AutomationStepKind;
   title: string;
+  /** Optional user-given step name, shown in place of `title`. Cosmetic only —
+   * never used for live-event matching. Mirrors shared/src/automations/types.ts. */
+  label?: string;
   subtitle: string;
   app: string;
   /** Per-app fields (Gmail search query, Slack target/message, Cal.com booking fields, …). */
@@ -32,6 +35,14 @@ export type AutomationRunStepResult = {
   app: string;
   status: "success" | "failed" | "skipped";
   error?: string;
+  evidence?: {
+    kind: "provider_ack" | "data_result" | "ai_result" | "control";
+    provider: string;
+    acknowledged: true;
+    resourceId?: string;
+    resourceUrl?: string;
+    metadata?: Record<string, string | number | boolean | null>;
+  };
 };
 
 export type AutomationRun = {
@@ -75,11 +86,19 @@ export async function deleteFlow(id: string): Promise<boolean> {
   return Boolean(data.ok);
 }
 
-export async function activateFlow(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function activateFlow(id: string): Promise<{
+  ok: boolean;
+  error?: string;
+  issues?: Array<{ stepId?: string; path: string; message: string }>;
+}> {
   return api(`/api/automations/${encodeURIComponent(id)}/activate`, { method: "POST" });
 }
 
-export async function pauseFlow(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function pauseFlow(id: string): Promise<{
+  ok: boolean;
+  error?: string;
+  issues?: Array<{ stepId?: string; path: string; message: string }>;
+}> {
   return api(`/api/automations/${encodeURIComponent(id)}/pause`, { method: "POST" });
 }
 

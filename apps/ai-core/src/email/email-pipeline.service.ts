@@ -130,6 +130,35 @@ export class EmailPipelineService {
       };
     }
 
+    // Away / Vacation mode: hold substantive emails into a priority list instead
+    // of pinging the principal. Notifications auto-resume once the window passes;
+    // the held list is handed over as a digest on return (say "I'm back" or the
+    // scheduler's return sweep). Away expires by date inside getAwayUntil().
+    const awayUntil = await this.userPrefs.getAwayUntil(input.userId);
+    if (awayUntil) {
+      await this.userPrefs.holdAwayEmail(input.userId, {
+        from: input.from,
+        subject: input.subject,
+        summary: facts.summary,
+        category: facts.category,
+        urgency: facts.urgency,
+        amount: facts.amount,
+        dueDate: facts.dueDate,
+        messageId: input.messageId,
+        at: new Date().toISOString(),
+      });
+      await this.storeToMemory(input, facts);
+      logger.info("email pipeline: held while away", { messageId: input.messageId, category: facts.category });
+      return {
+        messageId: input.messageId,
+        category: facts.category,
+        handled: "held",
+        notificationSent: false,
+        facts,
+        actionsScheduled: [],
+      };
+    }
+
     const pref = await this.emailPrefs.get(input.userId, facts.category);
     const honorific = await this.userPrefs.getHonorific(input.userId);
     const actionsScheduled: string[] = [];
@@ -396,9 +425,13 @@ export class EmailPipelineService {
 
     switch (facts.category) {
       case "payment_due": {
-        const when = facts.dueDate ? ` due ${fmt(facts.dueDate, timezone)}` : "";
         const amt = facts.amount ? ` for ${facts.amount}` : "";
-        return `${prefix} ${gist}${amt}${when}. Should I set a reminder?`;
+        if (facts.dueDate) {
+          return `${prefix} ${gist}${amt} due ${fmt(facts.dueDate, timezone)}. Should I set a reminder?`;
+        }
+        // No deadline found — say so explicitly rather than silently dropping it,
+        // so the principal knows the bill has no date attached and can add one.
+        return `${prefix} ${gist}${amt}. I couldn't find a due date in it — want me to open the email or set a reminder date?`;
       }
 
       case "meeting_request": {

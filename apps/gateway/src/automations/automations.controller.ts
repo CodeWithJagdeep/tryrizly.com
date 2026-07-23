@@ -214,18 +214,31 @@ export class AutomationsController {
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Body()
     body: {
+      userId?: string;
       status?: "success" | "failed";
       stepResults?: AutomationRunStepResult[];
     },
     @Param("runId") runId: string,
   ) {
     requireInternalSecret(secret);
-    if (!body.status) return { ok: false };
-    await this.repo.finishRun(runId, {
+    if (!body.status || !body.userId) return { ok: false, error: "status_and_user_required" };
+    const stepResults = body.stepResults ?? [];
+    if (
+      body.status === "success" &&
+      (stepResults.length === 0 ||
+        stepResults.some(
+          (step) =>
+            step.status === "failed" ||
+            (step.status === "success" && step.evidence?.acknowledged !== true),
+        ))
+    ) {
+      return { ok: false, error: "success_requires_evidence_for_every_completed_step" };
+    }
+    const updated = await this.repo.finishRun(runId, body.userId, {
       status: body.status,
       finishedAt: new Date().toISOString(),
-      stepResults: body.stepResults ?? [],
+      stepResults,
     });
-    return { ok: true };
+    return updated ? { ok: true } : { ok: false, error: "run_not_found" };
   }
 }

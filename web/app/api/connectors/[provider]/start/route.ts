@@ -31,8 +31,10 @@ export async function GET(
   const returnTo = sanitizeReturnPath(requestUrl.searchParams.get("returnTo"), "/dashboard/connectors");
   const region = requestUrl.searchParams.get("region") === "eu" ? "eu" : undefined;
   const regionQuery = region ? `&region=${region}` : "";
+  // "automation" asks the backend for the reduced scope set (e.g. Gmail read-only).
+  const scopeProfileQuery = requestUrl.searchParams.get("scopeProfile") === "automation" ? "&scopeProfile=automation" : "";
   const result = await callGateway<ConnectorStartResult>(
-    `/api/connectors/${provider}/start?userId=${encodeURIComponent(session.userId)}&returnTo=${encodeURIComponent(returnTo)}${regionQuery}`,
+    `/api/connectors/${provider}/start?userId=${encodeURIComponent(session.userId)}&returnTo=${encodeURIComponent(returnTo)}${regionQuery}${scopeProfileQuery}`,
   );
 
   if (!result.authUrl) {

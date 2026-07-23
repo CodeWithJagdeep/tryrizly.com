@@ -299,6 +299,7 @@ export class GoogleService {
   async listThreads(
     userId: string,
     opts: { q?: string; maxResults?: number } = {},
+    accountId?: string,
   ): Promise<GoogleResult<{ messages: GmailThreadSummary[] }>> {
     const params = new URLSearchParams({
       maxResults: String(opts.maxResults ?? 10),
@@ -313,6 +314,8 @@ export class GoogleService {
       userId,
       "gmail",
       `${GMAIL_BASE}/users/me/messages?${params.toString()}`,
+      {},
+      accountId,
     );
     if (!listRes.connected) return listRes;
 
@@ -323,7 +326,7 @@ export class GoogleService {
     const messages: GmailThreadSummary[] = [];
 
     for (const id of ids) {
-      const msg = await this.getMessage(userId, id, "metadata");
+      const msg = await this.getMessage(userId, id, "metadata", accountId);
       if (msg.connected) {
         const m = msg.message;
         messages.push({
@@ -346,6 +349,7 @@ export class GoogleService {
     userId: string,
     id: string,
     format: "full" | "metadata" = "full",
+    accountId?: string,
   ): Promise<GoogleResult<{ message: GmailMessage }>> {
     const params = new URLSearchParams({ format });
     if (format === "metadata") {
@@ -358,6 +362,8 @@ export class GoogleService {
       userId,
       "gmail",
       `${GMAIL_BASE}/users/me/messages/${id}?${params.toString()}`,
+      {},
+      accountId,
     );
     if (!res.connected) return res;
 
@@ -480,8 +486,9 @@ export class GoogleService {
     provider: "gmail" | "calendar" | "google_workspace",
     url: string,
     init: RequestInit = {},
+    accountId?: string,
   ): Promise<{ connected: true; response: Response } | GoogleNotConnectedLocal> {
-    const account = await this.findAccount(userId, provider);
+    const account = await this.findAccount(userId, provider, accountId);
     if (!account) {
       return { connected: false, reason: "not_connected" };
     }
@@ -531,7 +538,18 @@ export class GoogleService {
   private async findAccount(
     userId: string,
     provider: "gmail" | "calendar" | "google_workspace",
+    accountId?: string,
   ): Promise<ConnectedAccount | undefined> {
+    // A specific account was chosen (e.g. an automation step targeting one of
+    // several connected Google accounts) — use it, but only if it belongs to
+    // this user and matches the provider (or the legacy combined "google" row).
+    if (accountId) {
+      const chosen = await this.repository.findById(accountId);
+      if (chosen && chosen.userId === userId && (chosen.provider === provider || chosen.provider === "google")) {
+        return chosen;
+      }
+      // Fall through to the default account if the id is stale/invalid.
+    }
     const account = await this.repository.find(userId, provider);
     if (account) return account;
     // "google_workspace" is a standalone grant, no legacy combined-account fallback.

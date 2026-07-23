@@ -4,7 +4,6 @@ import {
   type HeyRizContextRequest,
   type HeyRizRuntimeContext,
   type LiveContext,
-  type StructuredContext,
 } from "./context.types";
 import { ConnectorService } from "../connectors/connector.service";
 import { GoogleService } from "../google/google.service";
@@ -13,6 +12,7 @@ import { VectorMemoryService } from "../memory/vector-memory.service";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
 import { zonedTimeToUtc } from "../lib/timezone";
 import { logger } from "@heyriz/shared/logger";
+import type { AgentContextScope } from "../skills/agent-skill.types";
 
 const LIVE_TIMEOUT_MS = 3000;
 
@@ -29,24 +29,43 @@ export class ContextService {
     private readonly google: GoogleService,
   ) {}
 
-  async build(input: HeyRizContextRequest): Promise<HeyRizRuntimeContext> {
-    const timezone = await this.preferences.getTimezone(input.userId);
+  async build(
+    input: HeyRizContextRequest,
+    options?: { scopes?: readonly AgentContextScope[] },
+  ): Promise<HeyRizRuntimeContext> {
+    const [timezone, honorific, principalName, timezoneConfirmed, language] =
+      await Promise.all([
+        this.preferences.getTimezone(input.userId),
+        this.preferences.getHonorific(input.userId),
+        this.preferences.getDisplayName(input.userId),
+        this.preferences.hasExplicitTimezone(input.userId),
+        this.preferences.getLanguage(input.userId),
+      ]);
     const query = [input.message, input.contactName, input.topic]
       .filter(Boolean)
       .join(" ");
+    const scoped = Boolean(options?.scopes);
+    const wants = (scope: AgentContextScope) =>
+      !scoped || options?.scopes?.includes(scope) === true;
 
-    // Live calendar/inbox is only worth fetching for the interactive chat path;
-    // background event ingestion doesn't need it and shouldn't pay the latency.
-    const [semantic, live] = await Promise.all([
-      query
+    // The router selects expensive context before prompt assembly. Non-agent
+    // callers omit scopes and retain the legacy full context behavior.
+    const [semantic, live, connected] = await Promise.all([
+      query && wants("memory")
         ? this.vectorMemory.search({ userId: input.userId, query, limit: 8 })
         : Promise.resolve([]),
-      input.source === "telegram"
-        ? this.fetchLive(input.userId, timezone)
+      input.source === "telegram" &&
+      (wants("live_calendar") || wants("live_inbox"))
+        ? this.fetchLive(input.userId, timezone, {
+            calendar: wants("live_calendar"),
+            inbox: wants("live_inbox"),
+          })
         : Promise.resolve(EMPTY_LIVE),
+      wants("connectors")
+        ? this.connectors.list(input.userId)
+        : Promise.resolve([]),
     ]);
 
-    const connected = await this.connectors.list(input.userId);
     const connectedDataSources = connected
       .filter((c) => c.status === "connected")
       .map((c) => c.provider);
@@ -55,14 +74,23 @@ export class ContextService {
       userId: input.userId,
       source: input.source,
       currentMessage: input.message,
-      structured: await this.getStructuredContext(input.userId),
+      structured: {
+        activeDeals: [],
+        preferences: [
+          `honorific:${honorific}`,
+          `timezone:${timezone}`,
+          ...(principalName ? [`displayName:${principalName}`] : []),
+          ...(language ? [`language:${language}`] : []),
+        ],
+        pendingStates: [],
+      },
       semantic,
       live,
-      honorific: await this.preferences.getHonorific(input.userId),
-      principalName: await this.preferences.getDisplayName(input.userId),
+      honorific,
+      principalName,
       timezone,
-      timezoneConfirmed: await this.preferences.hasExplicitTimezone(input.userId),
-      language: await this.preferences.getLanguage(input.userId),
+      timezoneConfirmed,
+      language,
       connectedDataSources,
     };
   }
@@ -73,23 +101,31 @@ export class ContextService {
    * timeout and degrade to empty — a slow/failed Google call must never block
    * or break a chat reply (the agent can still call the tools on demand).
    */
-  private async fetchLive(userId: string, timezone: string): Promise<LiveContext> {
+  private async fetchLive(
+    userId: string,
+    timezone: string,
+    selection: { calendar: boolean; inbox: boolean },
+  ): Promise<LiveContext> {
     const now = new Date();
     const timeMin = zonedTimeToUtc(now, timezone, 0, 0);
     const timeMax = new Date(zonedTimeToUtc(now, timezone, 23, 59).getTime() + 59_999);
 
     const [cal, inbox] = await Promise.allSettled([
-      withTimeout(
-        this.google.listEvents(userId, { timeMin, timeMax, maxResults: 12 }),
-        LIVE_TIMEOUT_MS,
-      ),
-      withTimeout(
-        this.google.listThreads(userId, {
-          q: primaryUpdatesInboxQuery("is:unread newer_than:3d"),
-          maxResults: 8,
-        }),
-        LIVE_TIMEOUT_MS,
-      ),
+      selection.calendar
+        ? withTimeout(
+            this.google.listEvents(userId, { timeMin, timeMax, maxResults: 12 }),
+            LIVE_TIMEOUT_MS,
+          )
+        : Promise.resolve(undefined),
+      selection.inbox
+        ? withTimeout(
+            this.google.listThreads(userId, {
+              q: primaryUpdatesInboxQuery("is:unread newer_than:3d"),
+              maxResults: 8,
+            }),
+            LIVE_TIMEOUT_MS,
+          )
+        : Promise.resolve(undefined),
     ]);
 
     const live: LiveContext = {
@@ -103,50 +139,31 @@ export class ContextService {
       unread: [],
     };
 
-    if (cal.status === "fulfilled" && cal.value.connected) {
+    if (cal.status === "fulfilled" && cal.value?.connected) {
       live.connected = true;
       live.calendarConnected = true;
       live.calendarStatus = "fresh";
       for (const e of cal.value.events) {
         live.schedule.push({ title: e.title, start: e.start, end: e.end, allDay: e.allDay });
       }
-    } else if (cal.status === "rejected") {
+    } else if (selection.calendar && cal.status === "rejected") {
       live.calendarStatus = "unavailable";
       logger.warn("context: live calendar fetch failed", { error: String(cal.reason) });
     }
 
-    if (inbox.status === "fulfilled" && inbox.value.connected) {
+    if (inbox.status === "fulfilled" && inbox.value?.connected) {
       live.connected = true;
       live.inboxConnected = true;
       live.inboxStatus = "fresh";
       for (const m of inbox.value.messages) {
         live.unread.push({ from: m.from, subject: m.subject });
       }
-    } else if (inbox.status === "rejected") {
+    } else if (selection.inbox && inbox.status === "rejected") {
       live.inboxStatus = "unavailable";
       logger.warn("context: live inbox fetch failed", { error: String(inbox.reason) });
     }
 
     return live;
-  }
-
-  private async getStructuredContext(userId: string): Promise<StructuredContext> {
-    const [honorific, displayName, timezone, language] = await Promise.all([
-      this.preferences.getHonorific(userId),
-      this.preferences.getDisplayName(userId),
-      this.preferences.getTimezone(userId),
-      this.preferences.getLanguage(userId),
-    ]);
-    return {
-      activeDeals: [],
-      preferences: [
-        `honorific:${honorific}`,
-        `timezone:${timezone}`,
-        ...(displayName ? [`displayName:${displayName}`] : []),
-        ...(language ? [`language:${language}`] : []),
-      ],
-      pendingStates: [],
-    };
   }
 }
 

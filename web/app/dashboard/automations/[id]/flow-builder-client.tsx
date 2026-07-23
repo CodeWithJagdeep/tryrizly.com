@@ -518,41 +518,6 @@ function isFlowRunnable(steps: AutomationStep[]): boolean {
   return actions.every((step) => step.app && isEventLive(step.app, "action", step.title));
 }
 
-// ── Demo seed ─────────────────────────────────────────────────────────────────
-// A long, realistic "inbound lead → onboarding" pipeline used when a flow id
-// isn't in localStorage yet (e.g. a shared/deep-linked builder URL). Every step
-// maps to a real catalog event so the config panel stays consistent.
-
-const DEMO_FLOW_NAME = "Inbound lead → onboarding pipeline";
-
-const DEMO_STEPS: { kind: AutomationStep["kind"]; app: string; title: string }[] = [
-  { kind: "trigger", app: "gmail", title: "New Email Matching Search" }, // to sales@
-  { kind: "action", app: "postgres", title: "Run a Query" }, // does this lead already exist?
-  { kind: "action", app: "notion", title: "Create Page" }, // new lead record in CRM
-  { kind: "action", app: "slack", title: "Send Channel Message" }, // announce in #sales
-  { kind: "action", app: "telegram", title: "Notify Me" }, // ping the founder
-  { kind: "action", app: "gmail", title: "Send Email" }, // instant welcome reply
-  { kind: "action", app: "calendar", title: "Find Availability" }, // open intro-call slots
-  { kind: "action", app: "calendar", title: "Create Detailed Event" }, // book the intro call
-  { kind: "action", app: "gmail", title: "Create Draft" }, // follow-up draft for later
-  { kind: "action", app: "stripe", title: "Create Customer" }, // provision billing profile
-  { kind: "action", app: "stripe", title: "Create Invoice" }, // draft proposal invoice
-  { kind: "action", app: "notion", title: "Update Page" }, // move stage → Proposal
-  { kind: "action", app: "slack", title: "Send Direct Message" }, // notify account owner
-  { kind: "action", app: "postgres", title: "Insert Row" }, // log the activity
-  { kind: "action", app: "github", title: "Create Issue" }, // onboarding checklist task
-];
-
-function buildDemoSteps(): AutomationStep[] {
-  return DEMO_STEPS.map((s) => ({
-    id: newStepId(),
-    kind: s.kind,
-    title: s.title,
-    subtitle: appName(s.app),
-    app: s.app,
-    config: {},
-  }));
-}
 
 // ── Layout constants ─────────────────────────────────────────────────────────
 
@@ -631,7 +596,7 @@ function StepNode({ data }: NodeProps) {
       <div className="mt-2 text-[15px]">
         <span className="font-semibold text-slate-900">{index + 1}. </span>
         <span className={hasEvent ? "text-slate-900" : "text-slate-500"}>
-          {hasEvent ? step.title : isTrigger ? "Select the event" : "Select the event for your Zap to run"}
+          {hasEvent ? (step.label || step.title) : isTrigger ? "Select the event" : "Select the event for your Zap to run"}
         </span>
       </div>
 
@@ -724,6 +689,7 @@ function Builder({ flowId }: { flowId: string }) {
   const [steps, setSteps] = useState<AutomationStep[]>([]);
   const [saved, setSaved] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [configExpanded, setConfigExpanded] = useState(false);
   const [status, setStatus] = useState<AutomationFlow["status"]>("draft");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -741,21 +707,18 @@ function Builder({ flowId }: { flowId: string }) {
     let cancelled = false;
     getFlow(flowId).then((flow) => {
       if (cancelled) return;
-      // Only seed the demo for an id that was never saved at all (e.g. someone
-      // typed/shared a URL with no matching flow) — a genuinely blank flow the
-      // user just created (via "New automation") loads as-is, empty, not the
-      // sample pipeline. "Load sample" in the toolbar covers wanting an example.
+      // A found flow loads as-is; an unknown id (e.g. a shared/deep-linked URL
+      // with no matching flow) starts as a blank draft — no sample pipeline.
       if (flow) {
         setName(flow.name);
         setSteps(flow.steps);
         setStatus(flow.status);
         setSelectedId(flow.steps[0]?.id ?? null);
       } else {
-        const demo = buildDemoSteps();
-        setName(DEMO_FLOW_NAME);
-        setSteps(demo);
+        setName("Untitled Zap");
+        setSteps([]);
         setStatus("draft");
-        setSelectedId(demo[0]?.id ?? null);
+        setSelectedId(null);
       }
     });
     return () => {
@@ -991,14 +954,6 @@ function Builder({ flowId }: { flowId: string }) {
     setSaved(true);
   }
 
-  function loadDemo() {
-    const demo = buildDemoSteps();
-    setName(DEMO_FLOW_NAME);
-    setSteps(demo);
-    setSelectedId(demo[0]?.id ?? null);
-    setSaved(false);
-  }
-
   async function handleDuplicate() {
     const newId = newFlowId();
     await saveFlow({ id: newId, name: `${name.trim() || "Untitled Zap"} (copy)`, steps });
@@ -1024,9 +979,10 @@ function Builder({ flowId }: { flowId: string }) {
         status === "active" ? await pauseFlow(flowId) : await activateFlow(flowId);
       if (!result.ok) {
         setPublishError(
-          result.error === "flow_not_runnable"
+          result.issues?.[0]?.message ??
+          (result.error === "flow_not_runnable"
             ? "This flow needs a live trigger and at least one live action before it can run."
-            : (result.error ?? "Couldn't update this automation."),
+            : (result.error ?? "Couldn't update this automation.")),
         );
         return;
       }
@@ -1056,7 +1012,6 @@ function Builder({ flowId }: { flowId: string }) {
           onDuplicate={() => void handleDuplicate()}
           onDelete={() => void handleDelete()}
           onSave={() => void handleSave()}
-          onLoadSample={loadDemo}
           runnable={runnable}
           publishing={publishing}
           onPublish={() => void handlePublish()}
@@ -1104,14 +1059,25 @@ function Builder({ flowId }: { flowId: string }) {
 
           {/* Config panel (floating, overlays the right edge) */}
           {selectedStep && (
-            <div className="absolute inset-x-2 bottom-2 top-2 sm:inset-y-3 sm:left-auto sm:right-3 sm:w-[min(420px,calc(100vw-1.5rem))]">
+            <div
+              className={`absolute inset-x-2 bottom-2 top-2 transition-[width] duration-200 sm:inset-y-3 sm:left-auto sm:right-3 ${
+                configExpanded
+                  ? "sm:w-[min(720px,calc(100vw-1.5rem))]"
+                  : "sm:w-[min(420px,calc(100vw-1.5rem))]"
+              }`}
+            >
               <ConfigPanel
                 key={selectedStep.id}
                 step={selectedStep}
                 index={selectedIndex}
                 runs={runs}
+                expanded={configExpanded}
+                onToggleExpand={() => setConfigExpanded((v) => !v)}
                 onPatch={(patch) => patchStep(selectedStep.id, patch)}
-                onClose={() => setSelectedId(null)}
+                onClose={() => {
+                  setConfigExpanded(false);
+                  setSelectedId(null);
+                }}
               />
             </div>
           )}
@@ -1132,7 +1098,8 @@ export function FlowBuilderClient({ flowId }: { flowId: string }) {
 // ── Left rail ──────────────────────────────────────────────────────────────────
 
 function LeftRail({ chatOpen, onToggleChat }: { chatOpen: boolean; onToggleChat: () => void }) {
-  const railIcons = [GridGlyph, DocGlyph, ChatGlyph, CalGlyph, ClockGlyph, FlowGlyph, GearGlyph, DrawerGlyph];
+  // Pared down to Home (below) + Chat only "for now" — other rail entries hidden.
+  const railIcons = [ChatGlyph];
   return (
     <div className="flex w-14 shrink-0 flex-col items-center border-r border-slate-200 bg-[#f1f0ec] py-3">
       <Link href="/dashboard" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2b2440] text-white" title="Home">
@@ -1160,9 +1127,6 @@ function LeftRail({ chatOpen, onToggleChat }: { chatOpen: boolean; onToggleChat:
           ),
         )}
       </div>
-      <span className="mt-auto flex h-8 w-8 items-center justify-center rounded-full bg-[#FF4F00]/10 text-[#FF4F00]">
-        <TargetGlyph className="h-4 w-4" />
-      </span>
     </div>
   );
 }
@@ -1178,7 +1142,6 @@ function TopBar({
   onDuplicate,
   onDelete,
   onSave,
-  onLoadSample,
   runnable,
   publishing,
   onPublish,
@@ -1191,13 +1154,19 @@ function TopBar({
   onDuplicate: () => void;
   onDelete: () => void;
   onSave: () => void;
-  onLoadSample: () => void;
   runnable: boolean;
   publishing: boolean;
   onPublish: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1284,16 +1253,53 @@ function TopBar({
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-1">
+        {/* Fixed icon slot keeps the toolbar layout stable; the expanded field
+            floats absolutely over the bar so nothing else shifts. */}
+        <div className="relative mr-1 h-8 w-8 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            title="Search (Ctrl F)"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-black/5"
+          >
+            <SearchGlyph className="h-4 w-4" />
+          </button>
+          {searchOpen && (
+            <div className="absolute right-0 top-1/2 z-30 flex -translate-y-1/2 items-center gap-2 rounded-lg border border-[#6C4BF4] bg-white px-2.5 py-1 shadow-lg">
+              <SearchGlyph className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearchQuery("");
+                    setSearchOpen(false);
+                  }
+                }}
+                onBlur={() => {
+                  if (!searchQuery) setSearchOpen(false);
+                }}
+                placeholder="Search steps…"
+                className="w-[180px] bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchOpen(false);
+                }}
+                className="shrink-0 text-slate-400 hover:text-slate-600"
+                aria-label="Close search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
         <span className="mr-1 shrink-0 text-[12px] text-slate-400">{saved ? "All changes saved" : "Unsaved changes"}</span>
-        <button
-          type="button"
-          onClick={onLoadSample}
-          title="Replace the canvas with a sample 15-step pipeline"
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-600 hover:bg-black/5"
-        >
-          <CopilotGlyph className="h-4 w-4 text-[#FF4F00]" />
-          Load sample
-        </button>
         <button
           type="button"
           onClick={onSave}
@@ -1321,18 +1327,13 @@ function TopBar({
 
 // ── Sub bar (row 2) ─────────────────────────────────────────────────────────────
 
+// Only surfaces when there's a publish error — the search moved up into TopBar,
+// so there's no reason to reserve a full row when nothing needs saying.
 function SubBar({ publishError }: { publishError: string | null }) {
+  if (!publishError) return null;
   return (
     <div className="flex h-11 shrink-0 items-center border-b border-slate-200 bg-white px-3">
-      {publishError ? (
-        <p className="truncate text-[12px] text-red-500">{publishError}</p>
-      ) : (
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1 text-[13px] text-slate-400">
-          <SearchGlyph className="h-3.5 w-3.5" />
-          Search
-          <span className="ml-1 rounded border border-slate-200 px-1 text-[10px] text-slate-400">Ctrl F</span>
-        </div>
-      )}
+      <p className="truncate text-[12px] text-red-500">{publishError}</p>
     </div>
   );
 }
@@ -1343,18 +1344,44 @@ function ConfigPanel({
   step,
   index,
   runs,
+  expanded,
+  onToggleExpand,
   onPatch,
   onClose,
 }: {
   step: AutomationStep;
   index: number;
   runs: AutomationRun[];
+  expanded: boolean;
+  onToggleExpand: () => void;
   onPatch: (patch: Partial<AutomationStep>) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"setup" | "test">("setup");
   const [changingApp, setChangingApp] = useState(!step.app);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const renameRef = useRef<HTMLInputElement>(null);
   const appFieldRef = useRef<HTMLDivElement>(null);
+
+  // Display name: the user's custom label if set, otherwise the event title.
+  const displayName = step.label || step.title || "Select the event";
+
+  useEffect(() => {
+    if (renaming) renameRef.current?.select();
+  }, [renaming]);
+
+  function startRename() {
+    setDraftName(step.label || step.title || "");
+    setRenaming(true);
+  }
+  function commitRename() {
+    const trimmed = draftName.trim();
+    // Clearing the field (or matching the event title) drops the custom label
+    // so the header falls back to the live event name.
+    onPatch({ label: trimmed && trimmed !== step.title ? trimmed : undefined });
+    setRenaming(false);
+  }
   const isTrigger = step.kind === "trigger";
   const def = appDef(step.app);
   const events = def ? (isTrigger ? def.triggers : def.actions) : [];
@@ -1375,20 +1402,56 @@ function ConfigPanel({
 
   return (
     <>
-    <aside className="flex h-full w-full flex-col overflow-hidden rounded-xl border-2 border-[#6C4BF4] bg-white shadow-xl">
+    <aside className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-black/[0.02]">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3">
-        <AppIcon app={step.app} className="h-5 w-5 shrink-0" />
-        <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-slate-900">
-          {index + 1}. {step.title || "Select the event"}
-        </p>
-        <button type="button" className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Rename">
+      <div className="flex items-center gap-1.5 px-4 py-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50">
+          <AppIcon app={step.app} className="h-[18px] w-[18px]" />
+        </span>
+        {renaming ? (
+          <input
+            ref={renameRef}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            placeholder={step.title || "Step name"}
+            className="min-w-0 flex-1 rounded-md border border-[#6C4BF4] bg-white px-2 py-1 text-[15px] font-semibold text-slate-900 outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={startRename}
+            title="Click to rename"
+            className="group/name flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-left hover:bg-slate-50"
+          >
+            <span className="min-w-0 truncate text-[15px] font-semibold text-slate-900">
+              {index + 1}. {displayName}
+            </span>
+            <PencilGlyph className="h-3.5 w-3.5 shrink-0 text-slate-300 opacity-0 transition group-hover/name:opacity-100" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={startRename}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          title="Rename"
+        >
           <PencilGlyph className="h-4 w-4" />
         </button>
-        <button type="button" className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Expand">
-          <ExpandGlyph className="h-4 w-4" />
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          title={expanded ? "Collapse" : "Expand"}
+          aria-pressed={expanded}
+        >
+          {expanded ? <CollapseGlyph className="h-4 w-4" /> : <ExpandGlyph className="h-4 w-4" />}
         </button>
-        <button type="button" onClick={onClose} aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+        <button type="button" onClick={onClose} aria-label="Close" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
@@ -1396,25 +1459,28 @@ function ConfigPanel({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-3 border-b border-slate-100 px-4">
+      <div className="flex items-center gap-6 border-b border-slate-100 px-4">
         <button
           type="button"
           onClick={() => setTab("setup")}
-          className={`-mb-px flex items-center gap-1.5 border-b-2 py-2.5 text-[14px] font-medium transition ${
+          className={`-mb-px flex items-center gap-1.5 border-b-2 py-3 text-[13px] font-semibold transition ${
             tab === "setup" ? "border-[#6C4BF4] text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
           }`}
         >
-          Setup <CircleGlyph className="h-3.5 w-3.5 text-slate-300" />
+          Setup
+          {step.title && <CheckGlyph className="h-3.5 w-3.5 text-emerald-500" />}
         </button>
-        <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
         <button
           type="button"
           onClick={() => setTab("test")}
-          className={`-mb-px flex items-center gap-1.5 border-b-2 py-2.5 text-[14px] font-medium transition ${
+          className={`-mb-px flex items-center gap-1.5 border-b-2 py-3 text-[13px] font-semibold transition ${
             tab === "test" ? "border-[#6C4BF4] text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
           }`}
         >
-          Test <ClockGlyph className="h-3.5 w-3.5 text-slate-300" />
+          Runs
+          {runs.length > 0 && (
+            <span className="rounded-full bg-slate-100 px-1.5 text-[11px] font-semibold text-slate-500">{runs.length}</span>
+          )}
         </button>
       </div>
 
@@ -1451,6 +1517,36 @@ function ConfigPanel({
                       {run.stepResults.find((r) => r.status === "failed")?.error ?? "A step failed"}
                     </p>
                   )}
+                  {run.stepResults.some((result) => result.evidence) && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {run.stepResults
+                        .filter((result) => result.evidence)
+                        .map((result) => {
+                          const receipt = result.evidence!;
+                          const label = receipt.resourceId
+                            ? `${receipt.provider} · ${receipt.resourceId}`
+                            : `${receipt.provider} acknowledged`;
+                          return receipt.resourceUrl ? (
+                            <a
+                              key={result.stepId}
+                              href={receipt.resourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                            >
+                              {label}
+                            </a>
+                          ) : (
+                            <span
+                              key={result.stepId}
+                              className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700"
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1459,15 +1555,17 @@ function ConfigPanel({
           <div className="flex flex-col gap-5">
             {/* App */}
             <Field label="App" required>
-              <div ref={appFieldRef} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                <span className="flex items-center gap-2">
-                  <AppIcon app={step.app} className="h-[18px] w-[18px]" />
-                  <span className="text-[14px] text-slate-900">{appName(step.app)}</span>
+              <div ref={appFieldRef} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                <span className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50">
+                    <AppIcon app={step.app} className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="text-[14px] font-medium text-slate-900">{appName(step.app)}</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => setChangingApp(true)}
-                  className="rounded-md bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-medium text-white transition hover:brightness-105"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   Change
                 </button>
@@ -1489,7 +1587,11 @@ function ConfigPanel({
             )}
 
             {/* Account — the connect UX differs by provider */}
-            <AccountField app={step.app} />
+            <AccountField
+              app={step.app}
+              value={typeof step.config?.account === "string" ? step.config.account : undefined}
+              onChange={(account) => onPatch({ config: { ...(step.config ?? {}), account } })}
+            />
 
             {/* Per-app config — only rendered once a live event is chosen */}
             {isEventLive(step.app, step.kind, step.title) && (
@@ -1506,12 +1608,12 @@ function ConfigPanel({
 
       {/* Footer */}
       {tab === "setup" && !changingApp && (
-        <div className="border-t border-slate-100 p-3">
+        <div className="border-t border-slate-100 bg-slate-50/50 p-3">
           <button
             type="button"
             onClick={onClose}
             disabled={!step.title}
-            className="h-11 w-full rounded-lg text-[14px] font-medium transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 enabled:bg-[#6C4BF4] enabled:text-white enabled:hover:brightness-105"
+            className="h-11 w-full rounded-xl text-[14px] font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 enabled:bg-[#6C4BF4] enabled:text-white enabled:shadow-sm enabled:shadow-[#6C4BF4]/30 enabled:hover:brightness-105"
           >
             {step.title ? "Continue" : "To continue, choose an event"}
           </button>
@@ -1656,7 +1758,7 @@ function ChatPanel({
   }
 
   return (
-    <aside className="flex h-full w-full flex-col overflow-hidden rounded-xl border-2 border-[#6C4BF4] bg-white shadow-xl">
+    <aside className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-black/[0.02]">
       <div className="flex items-center gap-2 px-4 py-3">
         <ChatGlyph className="h-4 w-4 text-[#6C4BF4]" />
         <p className="flex-1 text-[15px] font-semibold text-slate-900">Chat</p>
@@ -1952,7 +2054,7 @@ function AppPickerDialog({
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">
         {label} {required && <span className="text-[#6C4BF4]">*</span>}
       </label>
       {children}
@@ -1962,40 +2064,137 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 // ── Account field (connect UX varies by provider) ─────────────────────────────
 
+type AccountOption = { id: string; label: string; picture?: string };
+
+// One of 6 stable hues, chosen from the label so the same account keeps its color.
+const AVATAR_HUES = ["#6C4BF4", "#0EA5E9", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
+function AccountAvatar({ label, picture }: { label: string; picture?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (picture && !broken) {
+    // Loaded via our server-side proxy — Google photo hosts often reject
+    // hotlinked <img> requests on referrer policy; the proxy sidesteps that.
+    const proxied = `/api/image-proxy?url=${encodeURIComponent(picture)}`;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={proxied}
+        alt=""
+        onError={() => setBroken(true)}
+        className="h-8 w-8 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  const initial = (label.trim()[0] || "?").toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  const hue = AVATAR_HUES[hash % AVATAR_HUES.length];
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+      style={{ backgroundColor: hue }}
+    >
+      {initial}
+    </span>
+  );
+}
+
 // Real connection status — checked against the same data the /dashboard/connectors
 // page uses (GET /api/connectors for OAuth apps, GET /api/telegram for the bot link).
 // Nothing here is simulated: connecting means actually completing the same OAuth
 // flow (or Telegram deep-link) as the connectors page, not flipping local state.
-function AccountField({ app }: { app: string }) {
+function AccountField({
+  app,
+  value,
+  onChange,
+}: {
+  app: string;
+  value?: string;
+  onChange?: (accountId: string | undefined) => void;
+}) {
   const method = connectMethod(app);
   const name = appName(app);
   const provider = oauthProviderFor(app);
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  // OAuth accounts for this provider — null while loading, [] when none linked.
+  const [accounts, setAccounts] = useState<AccountOption[] | null>(null);
+  const returnTo = typeof window !== "undefined" ? window.location.pathname : "/dashboard/automations";
+  // Connections made from the automation builder request only the scopes a step
+  // needs (e.g. Gmail read-only) — see automationOauthScopesByProvider in ai-core.
+  const addHref = `/api/connectors/${provider}/start?returnTo=${encodeURIComponent(returnTo)}&scopeProfile=automation`;
+
+  // Legacy combined "google" rows still count as gmail/calendar until reconnect.
+  const matchesProvider = useCallback(
+    (p?: string) => p === provider || ((provider === "gmail" || provider === "calendar") && p === "google"),
+    [provider],
+  );
 
   const refresh = useCallback(() => {
     if (method === "none") return;
-    setStatus("loading");
     if (method === "bot") {
+      setStatus("loading");
       fetch("/api/telegram")
         .then((r) => r.json())
         .then((data: { linked?: boolean }) => setStatus(data.linked ? "connected" : "disconnected"))
         .catch(() => setStatus("disconnected"));
       return;
     }
+    setAccounts(null);
     fetch("/api/connectors")
       .then((r) => r.json())
-      .then((accounts: Array<{ provider?: string }>) =>
-        setStatus(
-          Array.isArray(accounts) && accounts.some((a) => a.provider === provider) ? "connected" : "disconnected",
-        ),
-      )
-      .catch(() => setStatus("disconnected"));
-  }, [provider, method]);
+      .then((rows: Array<{ id?: string; provider?: string; label?: string; metadata?: Record<string, unknown> }>) => {
+        const list: AccountOption[] = Array.isArray(rows)
+          ? rows
+              .filter((a) => matchesProvider(a.provider))
+              .map((a) => {
+                const email = typeof a.metadata?.accountEmail === "string" ? a.metadata.accountEmail : undefined;
+                const picture = typeof a.metadata?.picture === "string" ? a.metadata.picture : undefined;
+                return {
+                  id: a.id ?? "",
+                  // Prefer the bare email; fall back to the connector label.
+                  label: email || a.label || `${name} account`,
+                  picture,
+                };
+              })
+              .filter((a) => a.id)
+          : [];
+        setAccounts(list);
+      })
+      .catch(() => setAccounts([]));
+  }, [method, matchesProvider, name]);
+
+  // Close the dropdown on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!dropdownRef.current?.contains(e.target as globalThis.Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Auto-select the (only) account so the step is usable without an extra click.
+  useEffect(() => {
+    if (method !== "oauth" && method !== "secret") return;
+    if (!accounts || accounts.length === 0) return;
+    if (!value || !accounts.some((a) => a.id === value)) {
+      onChange?.(accounts[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts, method]);
 
   if (method === "none") {
     return (
@@ -2007,11 +2206,88 @@ function AccountField({ app }: { app: string }) {
     );
   }
 
-  if (status === "loading") {
+  // ── OAuth: account dropdown (Google/Gmail/Calendar/etc.) ────────────────────
+  if (method === "oauth") {
+    if (accounts === null) {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+            Checking connection…
+          </div>
+        </Field>
+      );
+    }
+    if (accounts.length === 0) {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <span className="text-[14px] text-slate-400">No account connected</span>
+            <a
+              href={addHref}
+              className="rounded-lg bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm shadow-[#6C4BF4]/25 transition hover:brightness-105"
+            >
+              Sign in with {name}
+            </a>
+          </div>
+          <p className="mt-2.5 text-[12px] leading-relaxed text-slate-400">
+            Connects securely — your credentials are encrypted and removable anytime.
+          </p>
+        </Field>
+      );
+    }
+    const selectedId = value && accounts.some((a) => a.id === value) ? value : accounts[0].id;
+    const selectedAcc = accounts.find((a) => a.id === selectedId) ?? accounts[0];
     return (
       <Field label="Account" required>
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
-          Checking connection…
+        <div ref={dropdownRef} className="relative">
+          {/* Selected account (dropdown trigger) */}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className={`flex h-12 w-full items-center gap-2.5 rounded-xl border bg-white px-3 text-left transition ${
+              open ? "border-[#6C4BF4]" : "border-slate-200 hover:border-slate-300"
+            }`}
+          >
+            <AccountAvatar label={selectedAcc.label} picture={selectedAcc.picture} />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-900">{selectedAcc.label}</span>
+            <SelectChevrons className="h-4 w-4 shrink-0 text-slate-400" />
+          </button>
+
+          {/* Menu */}
+          {open && (
+            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.25)]">
+              {accounts.map((a) => {
+                const isSel = a.id === selectedId;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      onChange?.(a.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
+                      isSel ? "bg-[#6C4BF4]/8" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <AccountAvatar label={a.label} picture={a.picture} />
+                    <span className="min-w-0 flex-1 truncate text-[14px] text-slate-900">{a.label}</span>
+                    {isSel && <CheckGlyph className="h-4 w-4 shrink-0 text-[#6C4BF4]" />}
+                  </button>
+                );
+              })}
+              <div className="my-1 h-px bg-slate-100" />
+              <a
+                href={addHref}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-slate-50"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400">
+                  <PlusGlyph />
+                </span>
+                <span className="text-[14px] font-medium text-[#6C4BF4]">Add account</span>
+              </a>
+            </div>
+          )}
         </div>
       </Field>
     );
@@ -2023,7 +2299,7 @@ function AccountField({ app }: { app: string }) {
         <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
           <span className="flex items-center gap-2 text-[14px] text-emerald-800">
             <CheckGlyph className="h-4 w-4 text-emerald-600" />
-            {method === "bot" ? `${name} · @rizly_bot` : `${name} account`}
+            {`${name} · @rizly_bot`}
           </span>
           <Link
             href="/dashboard/connectors"
@@ -2038,6 +2314,15 @@ function AccountField({ app }: { app: string }) {
   }
 
   if (method === "bot") {
+    if (status === "loading") {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+            Checking connection…
+          </div>
+        </Field>
+      );
+    }
     return (
       <Field label="Account" required>
         <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
@@ -2087,30 +2372,7 @@ function AccountField({ app }: { app: string }) {
     );
   }
 
-  // OAuth default — a real "Sign in" that starts the same OAuth flow the
-  // connectors page uses, then returns here.
-  const returnTo = typeof window !== "undefined" ? window.location.pathname : `/dashboard/automations`;
-  return (
-    <Field label="Account" required>
-      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-        <span className="text-[14px] text-slate-400">Connect {name}</span>
-        <a
-          href={`/api/connectors/${provider}/start?returnTo=${encodeURIComponent(returnTo)}`}
-          className="rounded-md bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-medium text-white transition hover:brightness-105"
-        >
-          Sign in
-        </a>
-      </div>
-      <p className="mt-3 text-[13px] leading-relaxed text-slate-500">
-        {name} is a secure partner with Rizly.{" "}
-        <span className="text-[#6C4BF4] underline">Your credentials are encrypted and can be removed at any time</span>. You can{" "}
-        <Link href="/dashboard/connectors" className="text-[#6C4BF4] underline">
-          manage all of your connected accounts here
-        </Link>
-        .
-      </p>
-    </Field>
-  );
+  return null;
 }
 
 // ── Per-app config fields — only the live app/event combos reach here ──────────
@@ -2148,16 +2410,103 @@ function AutomationConfigFields({
   }
 
   if (app === "gmail") {
+    const subject = typeof config.subject === "string" ? config.subject : "";
+    const from = typeof config.from === "string" ? config.from : "";
+    const hasAttachment = config.hasAttachment === true;
+    const unread = config.unread === true;
+    const query = typeof config.query === "string" ? config.query : "";
+    const hasStructured = Boolean(subject || from || hasAttachment || unread);
+    // Pre-existing flows with a raw query (and no structured fields) open in
+    // advanced mode; new ones default to the simple builder.
+    const advanced = config.advanced === true || (config.advanced !== false && !!query && !hasStructured);
+
+    // Compile the simple filters into one Gmail search string (what the backend
+    // actually runs). Kept in config.query so nothing downstream has to change.
+    const buildQuery = (next: { subject: string; from: string; hasAttachment: boolean; unread: boolean }) => {
+      const parts: string[] = [];
+      if (next.subject.trim()) parts.push(`subject:(${next.subject.trim()})`);
+      if (next.from.trim()) parts.push(`from:${next.from.trim()}`);
+      if (next.hasAttachment) parts.push("has:attachment");
+      if (next.unread) parts.push("is:unread");
+      return parts.join(" ");
+    };
+    const updateSimple = (patch: Partial<{ subject: string; from: string; hasAttachment: boolean; unread: boolean }>) => {
+      const nextVals = { subject, from, hasAttachment, unread, ...patch };
+      set({ ...nextVals, query: buildQuery(nextVals) });
+    };
+
+    if (advanced) {
+      return (
+        <>
+          <Field label="Gmail search" required>
+            <input
+              value={query}
+              onChange={(e) => set({ query: e.target.value, advanced: true })}
+              placeholder="from:stripe.com subject:invoice has:attachment"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">Full Gmail search syntax — the same you&apos;d type in the Gmail search bar.</p>
+          </Field>
+          <button
+            type="button"
+            onClick={() => set({ advanced: false })}
+            className="self-start text-[13px] font-medium text-[#6C4BF4] hover:underline"
+          >
+            ← Use simple filters
+          </button>
+        </>
+      );
+    }
+
     return (
-      <Field label="Search query" required>
-        <input
-          value={typeof config.query === "string" ? config.query : ""}
-          onChange={(e) => set({ query: e.target.value })}
-          placeholder='e.g. from:boss@company.com is:unread'
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-        />
-        <p className="mt-2 text-[12px] text-slate-400">Uses Gmail search syntax — the same you&apos;d type in the Gmail search bar.</p>
-      </Field>
+      <>
+        <Field label="Subject contains">
+          <input
+            value={subject}
+            onChange={(e) => updateSimple({ subject: e.target.value })}
+            placeholder="invoice"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <Field label="From">
+          <input
+            value={from}
+            onChange={(e) => updateSimple({ from: e.target.value })}
+            placeholder="stripe.com or billing@acme.com"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+        </Field>
+        <div className="flex flex-col gap-2.5">
+          <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={hasAttachment}
+              onChange={(e) => updateSimple({ hasAttachment: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-[#6C4BF4] accent-[#6C4BF4]"
+            />
+            Has an attachment
+          </label>
+          <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={unread}
+              onChange={(e) => updateSimple({ unread: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-[#6C4BF4] accent-[#6C4BF4]"
+            />
+            Only unread emails
+          </label>
+        </div>
+        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+          Matches: <span className="font-medium text-slate-700">{query || "every new email"}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => set({ advanced: true })}
+          className="self-start text-[13px] font-medium text-[#6C4BF4] hover:underline"
+        >
+          Advanced: raw Gmail search →
+        </button>
+      </>
     );
   }
 
@@ -2808,6 +3157,60 @@ function AutomationConfigFields({
             <option value="advanced">Advanced (slower, better reasoning, uses more AI credits)</option>
           </select>
         </Field>
+        <Field label="Result type">
+          <select
+            value={
+              config.outputType === "json" ||
+              config.outputType === "boolean" ||
+              config.outputType === "number"
+                ? config.outputType
+                : "text"
+            }
+            onChange={(e) => set({ outputType: e.target.value })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="text">Text</option>
+            <option value="boolean">True / false decision</option>
+            <option value="number">Number</option>
+            <option value="json">Structured JSON</option>
+          </select>
+          <p className="mt-2 text-[12px] text-slate-400">
+            The run fails if Riz returns anything outside this type. Use true / false plus a following filter to gate consequential actions.
+          </p>
+        </Field>
+        <Field label="User context">
+          <div className="flex flex-col gap-2">
+            {[
+              ["preferences", "Saved preferences"],
+              ["memory", "Relevant memory"],
+              ["decisions", "Recorded decisions"],
+            ].map(([scope, label]) => {
+              const scopes = Array.isArray(config.contextScopes)
+                ? config.contextScopes.filter((value): value is string => typeof value === "string")
+                : [];
+              return (
+                <label key={scope} className="flex items-center gap-2 text-[13px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={scopes.includes(scope)}
+                    onChange={(e) =>
+                      set({
+                        contextScopes: e.target.checked
+                          ? [...new Set([...scopes, scope])]
+                          : scopes.filter((value) => value !== scope),
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[12px] text-slate-400">
+            Off by default. Select only the context this decision genuinely needs; connector content is never added automatically.
+          </p>
+        </Field>
         <Field label="Save result as">
           <input
             value={typeof config.outputField === "string" ? config.outputField : ""}
@@ -3136,10 +3539,6 @@ function EventPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pinned, setPinned] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<"list" | "describe">("list");
-  const [promptText, setPromptText] = useState("");
-  const [promptLoading, setPromptLoading] = useState(false);
-  const [promptError, setPromptError] = useState<string | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number; width: number; maxHeight: number; drop: "down" | "up" } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -3165,9 +3564,6 @@ function EventPicker({
 
   useEffect(() => {
     if (!open) return;
-    setMode("list");
-    setPromptText("");
-    setPromptError(null);
     place();
     function onDocClick(e: MouseEvent) {
       const t = e.target as HTMLElement;
@@ -3199,48 +3595,6 @@ function EventPicker({
   // Pinned events float to the top, preserving original order within groups.
   const ordered = [...filtered].sort((a, b) => Number(pinned.has(b.name)) - Number(pinned.has(a.name)));
 
-  // Sends the user's plain-English description to Riz's real agent (the same
-  // one behind the dashboard chat) as a one-shot classification call — no
-  // conversation history attached — and asks it to pick the matching event
-  // name from this app's fixed list. Falls back to an error if nothing matches.
-  async function submitPrompt() {
-    const text = promptText.trim();
-    if (!text || promptLoading) return;
-    setPromptLoading(true);
-    setPromptError(null);
-    try {
-      const message = [
-        `You are matching a user's plain-English automation request to one predefined event for the "${appName}" app.`,
-        "Available events:",
-        ...events.map((ev) => `- ${ev.name}: ${ev.description}`),
-        `User's request: "${text}"`,
-        "Reply with ONLY the exact event name from the list above that best matches (verbatim, no extra words). If nothing matches well, reply with exactly: NONE",
-      ].join("\n");
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, history: [] }),
-      });
-      const data = (await response.json().catch(() => null)) as { reply?: string; error?: string } | null;
-      if (!response.ok || !data?.reply) {
-        setPromptError(data?.error || "Riz couldn't process that — try again.");
-        return;
-      }
-      const answer = data.reply.trim();
-      const match = events.find((ev) => ev.name.toLowerCase() === answer.toLowerCase());
-      if (!match) {
-        setPromptError(`Couldn't match that to a ${appName} event — try rephrasing or pick from the list.`);
-        return;
-      }
-      onSelect(match.name);
-      setOpen(false);
-    } catch {
-      setPromptError("Couldn't reach Riz — try again.");
-    } finally {
-      setPromptLoading(false);
-    }
-  }
-
   return (
     <div className="relative">
       {/* Trigger */}
@@ -3271,44 +3625,6 @@ function EventPicker({
             }}
             className="z-[100] flex flex-col overflow-hidden rounded-xl border border-[#d7d3c9] bg-[#fffefb] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.25)]"
           >
-          {mode === "describe" ? (
-            <div className="flex min-h-0 flex-1 flex-col p-3">
-              <button
-                type="button"
-                onClick={() => setMode("list")}
-                className="mb-2 flex items-center gap-1 self-start text-[12px] font-medium text-slate-400 hover:text-slate-600"
-              >
-                <ChevronRight className="h-3 w-3 rotate-180" /> Back to list
-              </button>
-              <p className="mb-2 text-[12px] text-slate-500">
-                Describe what you want in plain English — Riz will match it to a {appName} event.
-              </p>
-              <textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submitPrompt();
-                  }
-                }}
-                autoFocus
-                rows={3}
-                placeholder={`e.g. "when a customer's payment fails"`}
-                className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6C4BF4]"
-              />
-              {promptError && <p className="mt-2 text-[12px] text-red-500">{promptError}</p>}
-              <button
-                type="button"
-                onClick={submitPrompt}
-                disabled={!promptText.trim() || promptLoading}
-                className="mt-2 h-9 w-full rounded-lg text-[13px] font-medium transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 enabled:bg-[#6C4BF4] enabled:text-white enabled:hover:brightness-105"
-              >
-                {promptLoading ? "Asking Riz…" : "Ask Riz"}
-              </button>
-            </div>
-          ) : (
-          <>
           {/* Search */}
           <div className="shrink-0 p-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5">
@@ -3332,18 +3648,6 @@ function EventPicker({
 
           {/* List */}
           <div role="listbox" className="min-h-0 flex-1 overflow-y-auto p-2 pb-1">
-            {/* Pinned "Create with AI" */}
-            <button
-              type="button"
-              onClick={() => setMode("describe")}
-              className="mb-2 flex w-full items-center gap-3 rounded-lg border border-[#6C4BF4]/30 bg-[#6C4BF4]/5 px-3 py-2.5 text-left transition hover:border-[#6C4BF4]/50 hover:bg-[#6C4BF4]/10"
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#6C4BF4] text-white">
-                <CopilotGlyph className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#6C4BF4]">Create with AI…</span>
-            </button>
-
             {ordered.length === 0 ? (
               <p className="px-4 py-8 text-center text-[13px] text-slate-400">No matching events</p>
             ) : (
@@ -3418,8 +3722,6 @@ function EventPicker({
               })
             )}
           </div>
-          </>
-          )}
           </div>,
           document.body,
         )}
@@ -3529,6 +3831,9 @@ function PencilGlyph({ className }: G) {
 }
 function ExpandGlyph({ className }: G) {
   return <Icon className={className}><path d="M15 3h6v6M9 21H3v-6" /><path d="M21 3 14 10M3 21l7-7" /></Icon>;
+}
+function CollapseGlyph({ className }: G) {
+  return <Icon className={className}><path d="M4 14h6v6M20 10h-6V4" /><path d="M14 10l7-7M3 21l7-7" /></Icon>;
 }
 function CircleGlyph({ className }: G) {
   return <Icon className={className}><circle cx="12" cy="12" r="8" /></Icon>;

@@ -2,18 +2,16 @@ import { Inject, Injectable } from "@nestjs/common";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { BudgetGateService } from "../billing/budget-gate.service";
-import type { HeyRizRuntimeContext, LiveContext, LiveScheduleEntry } from "../context/context.types";
+import type { HeyRizRuntimeContext } from "../context/context.types";
 import {
-  describeNow,
   formatEventRange,
   localDateTimeToUtc,
 } from "../lib/timezone";
 import { LlmRouterService, extractJson } from "../llm/llm-router.service";
 import type { AgentMessage } from "../llm/llm.types";
-import {
-  agentContractInstructions,
-  buildOperatorPrompt,
-} from "../prompt/operator.prompt";
+import { PromptAssemblerService } from "../prompt/prompt-assembler.service";
+import { AgentSkillRegistryService } from "../skills/agent-skill-registry.service";
+import type { AgentSkillId, SkillSelection } from "../skills/agent-skill.types";
 import { ToolRegistryService } from "../tools/tool-registry.service";
 import type { ToolExecutionResult } from "../tools/tool.types";
 import {
@@ -37,12 +35,14 @@ const CHEAP_MODEL = "grok-3-mini";
 const STRONG_TIER = "anthropic" as const;
 /** Once this many tools have already run in the turn, treat it as multi-tool. */
 const MULTI_TOOL_THRESHOLD = 2;
+const MAX_DYNAMIC_SKILL_LOADS = 2;
 
 type AgentStep = {
   thought?: string;
-  action?: "tool" | "final";
+  action?: "tool" | "final" | "load_skill";
   tool_name?: string | null;
   tool_input?: Record<string, unknown> | null;
+  skill_ids?: string[];
   say?: string | null;
   /** Required on the first step of a genuinely multi-step request. */
   plan?: ProposedAgentPlan;
@@ -69,6 +69,8 @@ export type AgentRunInput = {
   userId: string;
   message: string;
   context: HeyRizRuntimeContext;
+  /** Deterministic capability and context selection made before the agent loop. */
+  skillSelection?: SkillSelection;
   /** A previously-proposed action the principal has now explicitly approved. */
   approval?: { id?: string; tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
@@ -82,6 +84,9 @@ export type AgentRunResult = {
   provider: string;
   steps: Array<{ tool: string; status: string; message: string }>;
   toolResults: ToolExecutionResult[];
+  /** Runtime observability for routing quality and prompt-cost evaluation. */
+  activeSkills?: AgentSkillId[];
+  promptChars?: number;
   pendingApproval?: PendingApproval;
   plan?: AgentPlan;
 };
@@ -97,6 +102,10 @@ export class AgentService {
     private readonly budgetGate: BudgetGateService,
     @Inject(AgentPlanRepository)
     private readonly plans: AgentPlanRepository,
+    @Inject(AgentSkillRegistryService)
+    private readonly skills: AgentSkillRegistryService,
+    @Inject(PromptAssemblerService)
+    private readonly prompts: PromptAssemblerService,
   ) {}
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
@@ -116,6 +125,20 @@ export class AgentService {
     }
 
     const budget = await this.budgetGate.check(input.userId);
+    let skillSelection =
+      input.skillSelection ??
+      this.skills.select(["general"], {
+        reasons: ["legacy caller without an explicit route"],
+        source: "fallback",
+      });
+    if (input.approval && !skillSelection.toolNames.includes(input.approval.tool)) {
+      const approvalSkill = this.skills.skillForTool(input.approval.tool);
+      skillSelection = this.skills.expand(
+        skillSelection,
+        approvalSkill ? [approvalSkill] : ["general"],
+        `approved tool capability: ${input.approval.tool}`,
+      );
+    }
     let plan =
       input.approval || isPlanContinuation(input.message)
         ? await this.plans.getActive(input.userId).catch((error: unknown) => {
@@ -123,16 +146,36 @@ export class AgentService {
             return undefined;
           })
         : undefined;
-    const respond = (result: AgentRunResult): AgentRunResult =>
-      this.withBudgetNote(input, budget, { ...result, ...(plan ? { plan } : {}) });
-
+    const systemPrompt = () =>
+      this.prompts.assemble({
+        context: input.context,
+        channel: input.channel,
+        activePlan: plan,
+        selection: skillSelection,
+        tools: this.tools.list(),
+      });
     const messages: AgentMessage[] = [
-      { role: "system", content: this.systemPrompt(input.context, input.channel, plan) },
+      { role: "system", content: systemPrompt() },
       ...(input.history ?? []).map(
         (turn): AgentMessage => ({ role: turn.role, content: turn.content }),
       ),
       { role: "user", content: input.message },
     ];
+    const respond = (result: AgentRunResult): AgentRunResult => {
+      const enriched = {
+        ...result,
+        ...(plan ? { plan } : {}),
+        activeSkills: [...skillSelection.skillIds],
+        promptChars: messages[0]?.content.length ?? 0,
+      };
+      logger.info("agent turn completed", {
+        activeSkills: enriched.activeSkills,
+        promptChars: enriched.promptChars,
+        toolCalls: enriched.toolResults.length,
+        dynamicSkillLoads,
+      });
+      return this.withBudgetNote(input, budget, enriched);
+    };
 
     // If the principal just approved a proposed action, run it before reasoning on.
     let toolCallsSoFar = 0;
@@ -165,6 +208,8 @@ export class AgentService {
 
     let escalated = false;
     let promiseNudges = 0;
+    let capabilityMisses = 0;
+    let dynamicSkillLoads = 0;
 
     for (let i = 0; i < env.AGENT_MAX_STEPS; i += 1) {
       const tier =
@@ -197,7 +242,7 @@ export class AgentService {
       // waiting for a real tool result. extractJson only ever returns the FIRST
       // balanced JSON object, so a genuine, well-formed first step is still safe
       // to act on; whatever fabricated continuation trails after it is discarded.
-      const step = extractJson<AgentStep>(raw);
+      const step = parseAgentStep(raw);
       if (!step) {
         // No parseable step at all. If the unstructured text itself looks like a
         // self-authored tool result (e.g. claiming an email was "sent" without us
@@ -259,6 +304,45 @@ export class AgentService {
         if (started) plan = started;
       }
 
+      if (step.action === "load_skill") {
+        const requested = [...new Set(step.skill_ids ?? [])]
+          .filter((id): id is AgentSkillId => id !== "general" && Boolean(this.skills.get(id)))
+          .filter((id) => !skillSelection.skillIds.includes(id))
+          .slice(0, 3);
+        messages.push(assistantOf(step));
+        if (requested.length === 0) {
+          capabilityMisses += 1;
+          messages.push({
+            role: "user",
+            content:
+              "OBSERVATION: no valid unloaded skill ids were requested. Choose from LOADABLE SKILLS, use an active tool, or answer honestly.",
+          });
+          continue;
+        }
+        if (dynamicSkillLoads >= MAX_DYNAMIC_SKILL_LOADS) {
+          messages.push({
+            role: "user",
+            content:
+              "OBSERVATION: dynamic skill-load budget exhausted. Use the capabilities already active or explain the concrete limitation.",
+          });
+          continue;
+        }
+        dynamicSkillLoads += 1;
+        skillSelection = this.skills.expand(
+          skillSelection,
+          requested,
+          `agent requested: ${requested.join(", ")}`,
+        );
+        messages[0] = { role: "system", content: systemPrompt() };
+        messages.push({
+          role: "user",
+          content:
+            `OBSERVATION: trusted runtime loaded skills: ${requested.join(", ")}. ` +
+            "The system prompt and ACTIVE TOOLS now contain those capabilities. Continue from the same goal.",
+        });
+        continue;
+      }
+
       if (step.action !== "tool" || !step.tool_name) {
         const say = cleanSay(step.say);
         // A "say" that promises imminent action ("Creating the event now.") is a
@@ -282,9 +366,66 @@ export class AgentService {
             toolResults,
           });
         }
+        if (
+          say &&
+          toolResults.length === 0 &&
+          looksLikeCapabilityMiss(say)
+        ) {
+          capabilityMisses += 1;
+          messages.push(assistantOf(step));
+          if (
+            capabilityMisses >= 2 &&
+            !skillSelection.skillIds.includes("general")
+          ) {
+            skillSelection = this.skills.expand(
+              skillSelection,
+              ["general"],
+              "bounded recovery after repeated capability miss",
+            );
+            messages[0] = { role: "system", content: systemPrompt() };
+            messages.push({
+              role: "user",
+              content:
+                "OBSERVATION: trusted runtime enabled the general recovery skill after two capability misses. Re-evaluate the request using ACTIVE TOOLS.",
+            });
+            escalated = true;
+            continue;
+          }
+          if (capabilityMisses < 2) {
+            messages.push({
+              role: "user",
+              content:
+                "OBSERVATION: before claiming a capability is unavailable, inspect LOADABLE SKILLS and request the relevant one with action load_skill.",
+            });
+            escalated = true;
+            continue;
+          }
+        }
         const fallbackReply =
           toolResults.at(-1)?.message ??
           `I checked, ${input.context.honorific}, but I don't have a clear result.`;
+        const unfinishedToolSteps =
+          plan?.steps.filter(
+            (item) =>
+              Boolean(item.tool) &&
+              (item.status === "pending" || item.status === "in_progress"),
+          ) ?? [];
+        if (unfinishedToolSteps.length > 0) {
+          // A final sentence is not evidence that a planned API operation ran.
+          // Keep the loop alive and require the model to execute or explicitly
+          // fail the outstanding tool steps.
+          escalated = true;
+          messages.push(assistantOf(step));
+          messages.push({
+            role: "user",
+            content:
+              `PLAN INCOMPLETE: ${unfinishedToolSteps
+                .map((item) => `${item.id}:${item.tool}`)
+                .join(", ")} still lack tool evidence. ` +
+              "Do not finalize. Execute the next required tool, or report a real tool failure.",
+          });
+          continue;
+        }
         if (plan && step.plan_complete !== false && !plan.steps.some((item) => item.status === "blocked")) {
           plan = await this.plans.complete(plan).catch((error: unknown) => {
             logger.warn("agent plan completion failed", { error: errorMessage(error) });
@@ -309,6 +450,30 @@ export class AgentService {
           role: "user",
           content: `OBSERVATION: unknown tool "${step.tool_name}". Choose from the available tools.`,
         });
+        continue;
+      }
+      if (!skillSelection.toolNames.includes(step.tool_name)) {
+        capabilityMisses += 1;
+        const matchingSkill = this.skills.skillForTool(step.tool_name);
+        messages.push(assistantOf(step));
+        messages.push({
+          role: "user",
+          content: matchingSkill
+            ? `OBSERVATION: tool "${step.tool_name}" exists but is outside ACTIVE SKILLS and was not executed. Request skill "${matchingSkill}" with action load_skill first.`
+            : `OBSERVATION: tool "${step.tool_name}" is outside ACTIVE SKILLS and was not executed. Choose an active tool.`,
+        });
+        if (
+          capabilityMisses >= 2 &&
+          !skillSelection.skillIds.includes("general")
+        ) {
+          skillSelection = this.skills.expand(
+            skillSelection,
+            ["general"],
+            "bounded recovery after repeated inactive tool selection",
+          );
+          messages[0] = { role: "system", content: systemPrompt() };
+        }
+        escalated = true;
         continue;
       }
 
@@ -492,53 +657,6 @@ export class AgentService {
     }
   }
 
-  private systemPrompt(
-    context: HeyRizRuntimeContext,
-    channel?: "web" | "telegram",
-    activePlan?: AgentPlan,
-  ): string {
-    const toolLines = this.tools
-      .list()
-      .map(
-        (t) =>
-          `- ${t.name}${t.approvalRequired ? " (needs approval)" : ""}: ${t.description}`,
-      )
-      .join("\n");
-
-    const memory =
-      context.semantic.length > 0
-        ? context.semantic
-            .map((m) => {
-              const provenance = String(m.metadata?.provenance ?? m.source);
-              const confidence = String(m.metadata?.confidence ?? "medium");
-              return `- [${m.createdAt}; source=${m.source}; provenance=${provenance}; confidence=${confidence}] ${m.summary}`;
-            })
-            .join("\n")
-        : "- (no relevant memory)";
-
-    const dataSources =
-      context.connectedDataSources.length > 0
-        ? `Connected providers (names only; availability still comes from live tool results): ${context.connectedDataSources.join(", ")}.`
-        : "No external providers are currently listed as connected.";
-
-    const formatting =
-      channel === "web"
-        ? "Formatting: your reply renders in the web dashboard, which supports GitHub-flavored Markdown. When presenting numbers across periods or items (revenue, metrics, bookings, lists of records), use a Markdown table; use bold/lists where they aid scanning. Keep it clean — no decorative markup."
-        : "Formatting: your reply renders as plain text (Telegram). Do not use Markdown syntax — no tables, pipes, asterisks, or headings; use short lines and simple bullets (•) instead.";
-
-    return [
-      buildOperatorPrompt(context.honorific, context.language, context.timezoneConfirmed),
-      agentContractInstructions,
-      formatting,
-      `Available tools:\n${toolLines}`,
-      `Right now it is ${describeNow(new Date(), context.timezone)} for the principal. Use this exact date/year when resolving any relative or partial date the principal mentions (e.g. "Thursday", "next week", a date with no year) — never assume a year from training data.`,
-      renderLive(context.live, context.timezone),
-      `Relevant memory (fuzzy recall — NOT authoritative):\n${memory}`,
-      dataSources,
-      activePlan ? renderPlan(activePlan) : "No active multi-step plan is being resumed.",
-    ].join("\n\n");
-  }
-
   /** Deterministic single-shot path when no LLM key is configured. */
   private async ruleFallback(
     input: AgentRunInput,
@@ -610,67 +728,6 @@ export class AgentService {
 
     return { reply: result.message, provider, steps, toolResults };
   }
-}
-
-/** Renders the live calendar + unread inbox as an authoritative in-prompt block. */
-function renderLive(live: LiveContext, timezone: string): string {
-  if (live.calendarStatus === "not_connected" && live.inboxStatus === "not_connected") {
-    return "LIVE calendar & inbox: Google is not connected — for any schedule or mail question, say so (or call connect_google). Do not guess or claim something isn't there.";
-  }
-  const cal = live.calendarStatus === "unavailable"
-    ? "- temporarily unavailable (do not interpret this as an empty calendar or a disconnected account)"
-    : !live.calendarConnected
-      ? "- not connected"
-    : live.schedule.length
-    ? live.schedule.map((e) => `- ${liveScheduleLine(e, timezone)}`).join("\n")
-    : "- clear today";
-  const inbox = live.inboxStatus === "unavailable"
-    ? "- temporarily unavailable (do not interpret this as an empty inbox or a disconnected account)"
-    : !live.inboxConnected
-      ? "- not connected"
-    : live.unread.length
-    ? live.unread.map((m) => `- ${liveFrom(m.from)}: ${m.subject}`).join("\n")
-    : "- nothing unread";
-  return [
-    "LIVE calendar — today (AUTHORITATIVE; trust over Relevant memory for today's schedule). " +
-      "An entry marked \"(completed)\" has already finished — never list it as upcoming/open; " +
-      "if asked what's left today, only count entries with a time still ahead of now:",
-    cal,
-    "LIVE unread inbox (AUTHORITATIVE snapshot; subjects only — use read_email_body for contents):",
-    inbox,
-    `Snapshot checked at: ${live.checkedAt}`,
-  ].join("\n");
-}
-
-/** Already-finished events are marked "(completed)" so the model never reports a past meeting as still open. */
-function liveScheduleLine(e: LiveScheduleEntry, timezone: string): string {
-  if (e.allDay) return `all-day ${e.title}`;
-  const endMs = Date.parse(e.end ?? e.start ?? "");
-  if (!Number.isNaN(endMs) && endMs < Date.now()) {
-    return `${e.title} (completed)`;
-  }
-  return `${liveTime(e.start, timezone)} ${e.title}`;
-}
-
-function liveTime(iso: string | undefined, timezone: string): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleTimeString("en-US", {
-      timeZone: timezone,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function liveFrom(from: string): string {
-  const name = from.match(/^\s*"?([^"<]+?)"?\s*</);
-  if (name) return name[1].trim();
-  const email = from.match(/<([^>]+)>/);
-  return (email ? email[1] : from).split("@")[0];
 }
 
 function directReadOnlyTool(message: string, timezone: string): ToolChoice | undefined {
@@ -901,6 +958,76 @@ function summarize(result: ToolExecutionResult) {
   return { tool: result.tool, status: result.status, message: result.message };
 }
 
+/**
+ * Strictly validates the model's loop envelope before the runtime interprets
+ * it. Tool payloads receive their own per-tool validation immediately after.
+ */
+function parseAgentStep(raw: string): AgentStep | undefined {
+  const value = extractJson<unknown>(raw);
+  if (!isRecord(value)) return undefined;
+  if (value.action !== "tool" && value.action !== "final" && value.action !== "load_skill") {
+    return undefined;
+  }
+  if (
+    value.thought !== undefined &&
+    typeof value.thought !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    value.say !== undefined &&
+    value.say !== null &&
+    typeof value.say !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    value.plan_step_id !== undefined &&
+    value.plan_step_id !== null &&
+    typeof value.plan_step_id !== "string"
+  ) {
+    return undefined;
+  }
+  if (
+    value.plan_complete !== undefined &&
+    typeof value.plan_complete !== "boolean"
+  ) {
+    return undefined;
+  }
+  if (value.plan !== undefined && value.plan !== null && !isRecord(value.plan)) {
+    return undefined;
+  }
+
+  if (value.action === "tool") {
+    if (typeof value.tool_name !== "string" || !value.tool_name.trim()) {
+      return undefined;
+    }
+    if (
+      value.tool_input !== undefined &&
+      value.tool_input !== null &&
+      !isRecord(value.tool_input)
+    ) {
+      return undefined;
+    }
+  }
+  if (value.action === "load_skill") {
+    if (
+      !Array.isArray(value.skill_ids) ||
+      value.skill_ids.length === 0 ||
+      value.skill_ids.length > 5 ||
+      !value.skill_ids.every((id) => typeof id === "string")
+    ) {
+      return undefined;
+    }
+  }
+
+  return value as AgentStep;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function assistantOf(step: AgentStep): AgentMessage {
   return { role: "assistant", content: JSON.stringify(step) };
 }
@@ -946,6 +1073,13 @@ function promisesAction(say: string): boolean {
   return PROMISE_RE.test(say);
 }
 
+const CAPABILITY_MISS_RE =
+  /\b(?:i (?:do not|don't|cannot|can't) (?:have|access|send|schedule|use|do)|not available to me|unable to access|don't have the ability|outside my capabilities|no tools? (?:available|for))\b/i;
+
+function looksLikeCapabilityMiss(say: string): boolean {
+  return CAPABILITY_MISS_RE.test(say);
+}
+
 /** Bounce a stalled promise back to the model, demanding the real tool step. */
 function stallNudge(text: string): string {
   return (
@@ -988,16 +1122,6 @@ function observationFor(
     ? `\nPLAN STATUS: ${plan.steps.map((step) => `${step.id}=${step.status}`).join(", ")}.`
     : "";
   return `OBSERVATION from real tool "${tool}". ${trustBoundary}\n${observation}${planState}`;
-}
-
-function renderPlan(plan: AgentPlan): string {
-  const steps = plan.steps
-    .map(
-      (step) =>
-        `- ${step.id} [${step.status}] ${step.task}${step.tool ? ` (tool: ${step.tool})` : ""}${step.evidence ? ` — ${step.evidence}` : ""}`,
-    )
-    .join("\n");
-  return `ACTIVE DURABLE PLAN (${plan.id})\nGoal: ${plan.goal}\n${steps}\nResume it only when the principal is approving it or explicitly says to continue/resume. If their request is unrelated, create a new plan or answer normally.`;
 }
 
 function isPlanContinuation(message: string): boolean {

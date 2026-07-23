@@ -242,6 +242,16 @@ export class AiCoreController {
     return this.aiCoreService.checkConnectorNotification(payload);
   }
 
+  @MessagePattern("connector.autoprocess.check")
+  checkConnectorAutoProcess(@Payload() payload: { userId: string; provider: string }) {
+    return this.aiCoreService.checkConnectorAutoProcess(payload);
+  }
+
+  @MessagePattern("proactive.away.sweep")
+  awayReturnSweep() {
+    return this.aiCoreService.awayReturnSweep();
+  }
+
   @MessagePattern("connector.oauth.start")
   startOAuth(@Payload() payload: StartOAuthInput) {
     return this.aiCoreService.startConnectorOAuth(payload);
@@ -293,7 +303,7 @@ export class AiCoreController {
   }
 
   @MessagePattern("automation.gmail.search")
-  automationGmailSearch(@Payload() payload: { userId?: string; query: string; maxResults?: number }) {
+  automationGmailSearch(@Payload() payload: { userId?: string; query: string; maxResults?: number; accountId?: string }) {
     return this.aiCoreService.automationGmailSearch(payload);
   }
 
@@ -306,7 +316,15 @@ export class AiCoreController {
 
   @MessagePattern("automation.ai.extract")
   automationAiExtract(
-    @Payload() payload: { userId?: string; prompt: string; input: string; quality?: "fast" | "advanced" },
+    @Payload()
+    payload: {
+      userId?: string;
+      prompt: string;
+      input: string;
+      quality?: "fast" | "advanced";
+      outputType?: "text" | "json" | "boolean" | "number";
+      contextScopes?: Array<"preferences" | "memory" | "decisions">;
+    },
   ) {
     return this.aiCoreService.automationAiExtract(payload);
   }

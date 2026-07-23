@@ -73,10 +73,14 @@ export class GatewayService implements OnModuleDestroy {
     };
   }
 
-  async sendToAiCore<TResponse>(pattern: string, payload: ProxyPayload) {
+  async sendToAiCore<TResponse>(
+    pattern: string,
+    payload: ProxyPayload,
+    timeoutMs: number = AI_CORE_CALL_TIMEOUT_MS,
+  ) {
     try {
       return await firstValueFrom(
-        this.aiCoreClient.send<TResponse>(pattern, payload).pipe(timeout(AI_CORE_CALL_TIMEOUT_MS)),
+        this.aiCoreClient.send<TResponse>(pattern, payload).pipe(timeout(timeoutMs)),
       );
     } catch (error) {
       if (error instanceof TimeoutError) {

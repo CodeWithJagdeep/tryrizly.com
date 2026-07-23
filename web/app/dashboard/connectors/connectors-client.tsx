@@ -3,19 +3,25 @@
 import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { CreditsBadge } from "../components/CreditsBadge";
 import {
+  AirtableIcon,
   CalComIcon,
   CalendarIcon,
   DiscordIcon,
   GitHubIcon,
   GmailIcon,
+  GoogleDriveIcon,
+  JiraIcon,
   MongoDbIcon,
   MpesaIcon,
   NotionIcon,
+  PagerDutyIcon,
   PayPalIcon,
   PostgresIcon,
   RazorpayIcon,
   SlackIcon,
   StripeIcon,
+  TrelloIcon,
+  TwilioIcon,
 } from "../../components/ConnectorIcons";
 
 type ConnectorSummary = {
@@ -46,7 +52,7 @@ type ConnectorField = {
 type ConnectorCatalogItem = {
   id: string;
   /** Backend connector key used for status lookup + connect/disconnect. */
-  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa" | "discord";
+  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa" | "discord" | "google_workspace" | "jira" | "pagerduty" | "trello" | "airtable" | "twilio";
   title: string;
   description: string;
   category: "Google" | "Scheduling" | "Payments" | "Databases" | "Team" | "APIs";
@@ -73,6 +79,15 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     category: "Google",
     authType: "oauth",
     icon: CalendarIcon,
+  },
+  {
+    id: "google_workspace",
+    provider: "google_workspace",
+    title: "Google Drive, Sheets & Docs",
+    description: "Upload files, append sheet rows, and create documents from an automation. A separate grant from Gmail/Calendar.",
+    category: "Google",
+    authType: "oauth",
+    icon: GoogleDriveIcon,
   },
   {
     id: "calcom",
@@ -156,6 +171,72 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     // narrower read-only access than the OAuth app's "repo" scope.
     fields: [
       { name: "token", label: "Personal Access Token", type: "password", placeholder: "ghp_... or github_pat_..." },
+    ],
+  },
+  {
+    id: "jira",
+    provider: "jira",
+    title: "Jira",
+    description: "Create issues in a project from an automation.",
+    category: "Team",
+    authType: "manual",
+    icon: JiraIcon,
+    fields: [
+      { name: "siteUrl", label: "Site URL", placeholder: "https://yourteam.atlassian.net" },
+      { name: "email", label: "Account Email", placeholder: "you@company.com" },
+      { name: "apiToken", label: "API Token", type: "password", placeholder: "Create one at id.atlassian.com/manage-profile/security/api-tokens" },
+    ],
+  },
+  {
+    id: "trello",
+    provider: "trello",
+    title: "Trello",
+    description: "Create cards on a board from an automation.",
+    category: "Team",
+    authType: "manual",
+    icon: TrelloIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", placeholder: "From trello.com/app-key" },
+      { name: "token", label: "Token", type: "password" },
+    ],
+  },
+  {
+    id: "pagerduty",
+    provider: "pagerduty",
+    title: "PagerDuty",
+    description: "Open incidents on a service from an automation.",
+    category: "APIs",
+    authType: "manual",
+    icon: PagerDutyIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From PagerDuty's API Access Keys settings" },
+      { name: "fromEmail", label: "From Email", placeholder: "A valid PagerDuty user's email — required by their API" },
+    ],
+  },
+  {
+    id: "twilio",
+    provider: "twilio",
+    title: "Twilio",
+    description: "Send SMS notifications from an automation.",
+    category: "APIs",
+    authType: "manual",
+    icon: TwilioIcon,
+    fields: [
+      { name: "accountSid", label: "Account SID", placeholder: "AC..." },
+      { name: "authToken", label: "Auth Token", type: "password" },
+      { name: "fromNumber", label: "From Number", placeholder: "+15551234567" },
+    ],
+  },
+  {
+    id: "airtable",
+    provider: "airtable",
+    title: "Airtable",
+    description: "Create and poll records in a base from an automation.",
+    category: "Databases",
+    authType: "manual",
+    icon: AirtableIcon,
+    fields: [
+      { name: "apiKey", label: "Personal Access Token", type: "password", placeholder: "pat..." },
     ],
   },
   {
@@ -253,7 +334,9 @@ const connectorCatalog: ConnectorCatalogItem[] = [
 const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
 
 // Temporarily hidden from the connectors page — remove from this set to bring one back.
-const hiddenConnectorProviders = new Set<string>(["discord", "slack", "notion", "paypal"]);
+// discord/notion unhidden: both are now live automation actions (Send Message /
+// Create Page) and need to be reachable to connect an account.
+const hiddenConnectorProviders = new Set<string>(["slack", "paypal"]);
 const shownCatalog = connectorCatalog.filter((c) => !hiddenConnectorProviders.has(c.provider));
 
 const catalogByProvider = new Map(shownCatalog.map((c) => [c.provider as string, c]));

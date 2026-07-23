@@ -6,4 +6,5 @@ export const queueNames = {
   emailEvents: "jervis.email-events",
   spine: "jervis.spine",
   outboundEmail: "jervis.outbound-email",
+  automationRuns: "jervis.automation-runs",
 } as const;

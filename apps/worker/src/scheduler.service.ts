@@ -10,9 +10,11 @@ import { createRedisConnection } from "@heyriz/shared/queue/connection";
 import { queueNames } from "@heyriz/shared/queue/names";
 import { getNotificationQueue, safeJobId } from "@heyriz/shared/queue/queues";
 import { enqueueEmailEvent } from "@heyriz/shared/queue/email-events";
+import { enqueueAutomationRun } from "@heyriz/shared/queue/automation-runs";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { captureException } from "@heyriz/shared/sentry";
+import type { AutomationFlow } from "@heyriz/shared/automations/types";
 
 /**
  * The cron heartbeat. It owns no intelligence: on each tick it asks ai-core to
@@ -53,6 +55,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       "email-poll",
       { pattern: `*/${env.EMAIL_POLL_MINUTES} * * * *`, tz: env.DEFAULT_TIMEZONE },
       { name: "email-poll", data: {} },
+    );
+    await this.queue.upsertJobScheduler(
+      "automation-poll",
+      { pattern: `*/${env.AUTOMATION_POLL_MINUTES} * * * *`, tz: env.DEFAULT_TIMEZONE },
+      { name: "automation-poll", data: {} },
     );
 
     // Weekly business digest (Sunday 9 AM) and daily anomaly scan (2 PM).
@@ -116,6 +123,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
         if (job.name === "email-poll") {
           await this.pollInbox();
+          return;
+        }
+
+        if (job.name === "automation-poll") {
+          await this.pollAutomations();
           return;
         }
 
@@ -317,6 +329,181 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
       logger.info("email poll: enqueued", { userId, count: result.messages.length });
     });
+  }
+
+  /**
+   * v1 automation trigger poller: schedule/gmail/calendar only (see
+   * @heyriz/shared/automations/types LIVE_TRIGGER_EVENTS). Reads active flows
+   * from the gateway (it owns automation_flows/automation_runs in Mongo — the
+   * worker never opens its own client for gateway-owned collections, same
+   * convention as the billing sweep below), fires a de-duped automation-run
+   * job per new trigger item, and writes the advanced cursor back.
+   */
+  private async pollAutomations() {
+    const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+    const secret = env.AUTH_INTERNAL_SECRET;
+    if (!gatewayUrl) return;
+    const headers: Record<string, string> = {};
+    if (secret) headers["x-heyriz-internal-secret"] = secret;
+
+    let flows: AutomationFlow[];
+    try {
+      const res = await fetch(`${gatewayUrl}/api/automations/_internal/active`, { headers });
+      if (!res.ok) {
+        logger.warn("automation poll: active-flow fetch failed", { status: res.status });
+        return;
+      }
+      const data = (await res.json()) as { flows?: AutomationFlow[] };
+      flows = data.flows ?? [];
+    } catch (error) {
+      logger.warn("automation poll: active-flow fetch threw", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    for (const flow of flows) {
+      try {
+        await this.pollOneAutomation(flow, gatewayUrl, headers);
+      } catch (error) {
+        logger.warn("automation poll: flow failed", {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  private async pollOneAutomation(
+    flow: AutomationFlow,
+    gatewayUrl: string,
+    headers: Record<string, string>,
+  ) {
+    const trigger = flow.steps[0];
+    if (!trigger) return;
+    const seen = new Set(flow.cursor?.seenIds ?? []);
+    const now = new Date();
+    let newItems: { itemId: string; payload: Record<string, unknown> }[] = [];
+
+    if (trigger.app === "schedule") {
+      const everyMinutes = Number(trigger.config?.everyMinutes) || 60;
+      const lastPolledAt = flow.cursor?.lastPolledAt ? new Date(flow.cursor.lastPolledAt) : undefined;
+      const due = !lastPolledAt || now.getTime() - lastPolledAt.getTime() >= everyMinutes * 60_000;
+      if (due) {
+        newItems = [{ itemId: now.toISOString(), payload: { firedAt: now.toISOString() } }];
+      }
+    } else if (trigger.app === "gmail") {
+      const query = String(trigger.config?.query ?? "").trim();
+      if (!query) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          messages: Array<{ id: string; threadId: string; from: string; subject: string; snippet: string }>;
+        }>("automation.gmail.search", { userId: flow.userId, query, maxResults: 10 }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.messages ?? [])
+        .filter((m) => !seen.has(m.id))
+        .map((m) => ({ itemId: m.id, payload: { ...m } }));
+    } else if (trigger.app === "calendar") {
+      const timeMin = now.toISOString();
+      const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          events: Array<{ id: string; summary?: string; start?: unknown; end?: unknown }>;
+        }>("automation.calendar.list", { userId: flow.userId, timeMin, timeMax, maxResults: 25 }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.events ?? [])
+        .filter((e) => !seen.has(e.id))
+        .map((e) => ({ itemId: e.id, payload: { ...e } }));
+    } else if (trigger.app === "google-sheets" || trigger.app === "google-forms") {
+      // Both read a spreadsheet (Forms has no native trigger API here — the
+      // response sheet Forms already writes to is the trigger source). Rows
+      // have no stable id, so the row's 1-based position is the dedup key:
+      // safe as long as rows are only ever appended, never reordered.
+      const spreadsheetId = String(trigger.config?.spreadsheetId ?? "").trim();
+      const range = String(trigger.config?.range ?? "Sheet1").trim();
+      if (!spreadsheetId) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{ connected: boolean; rows?: string[][] }>("automation.google.readSheetRows", {
+          userId: flow.userId,
+          spreadsheetId,
+          range,
+        }),
+      );
+      if (!result?.connected) return;
+      const rows = result.rows ?? [];
+      const skipHeader = trigger.config?.hasHeaderRow !== false;
+      newItems = rows
+        .map((row, i) => ({ rowNumber: i + 1, row }))
+        .filter(({ rowNumber }) => !skipHeader || rowNumber > 1)
+        .filter(({ rowNumber }) => !seen.has(`row-${rowNumber}`))
+        .map(({ rowNumber, row }) => ({
+          itemId: `row-${rowNumber}`,
+          payload: Object.fromEntries(row.map((v, i) => [`col${i + 1}`, v])),
+        }));
+    } else if (trigger.app === "airtable") {
+      const baseId = String(trigger.config?.baseId ?? "").trim();
+      const table = String(trigger.config?.table ?? "").trim();
+      if (!baseId || !table) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          records?: Array<{ id: string; createdTime: string; fields: Record<string, unknown> }>;
+        }>("automation.airtable.listRecords", { userId: flow.userId, baseId, table, maxRecords: 20 }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.records ?? [])
+        .filter((r) => !seen.has(r.id))
+        .map((r) => ({ itemId: r.id, payload: { id: r.id, createdTime: r.createdTime, ...r.fields } }));
+    } else if (trigger.app === "google-meet") {
+      // A tight forward window, polled every AUTOMATION_POLL_MINUTES — "started"
+      // means it falls inside whichever poll window catches its start time.
+      const timeMin = now.toISOString();
+      const timeMax = new Date(now.getTime() + env.AUTOMATION_POLL_MINUTES * 60_000).toISOString();
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          events: Array<{ id: string; summary?: string; hangoutLink?: string; start?: unknown; end?: unknown }>;
+        }>("automation.calendar.list", { userId: flow.userId, timeMin, timeMax, maxResults: 25 }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.events ?? [])
+        .filter((e) => e.hangoutLink && !seen.has(e.id))
+        .map((e) => ({ itemId: e.id, payload: { ...e } }));
+    } else {
+      return;
+    }
+
+    for (const item of newItems) {
+      await enqueueAutomationRun({
+        flowId: flow.id,
+        userId: flow.userId,
+        triggerItemId: item.itemId,
+        triggerPayload: item.payload,
+      }).catch((error: unknown) => {
+        logger.warn("automation poll: enqueue failed", {
+          flowId: flow.id,
+          itemId: item.itemId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+      seen.add(item.itemId);
+    }
+
+    if (newItems.length > 0 || trigger.app === "schedule") {
+      const seenIds = [...seen].slice(-200);
+      await fetch(`${gatewayUrl}/api/automations/_internal/${flow.id}/cursor`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({
+          userId: flow.userId,
+          cursor: { lastPolledAt: now.toISOString(), seenIds },
+        }),
+      }).catch(() => undefined);
+    }
   }
 
   private async forEachActiveUser(

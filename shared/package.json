@@ -74,6 +74,10 @@
       "types": "./dist/queue/outbound-email.d.ts",
       "default": "./dist/queue/outbound-email.js"
     },
+    "./queue/automation-runs": {
+      "types": "./dist/queue/automation-runs.d.ts",
+      "default": "./dist/queue/automation-runs.js"
+    },
     "./billing/plan-budgets": {
       "types": "./dist/billing/plan-budgets.d.ts",
       "default": "./dist/billing/plan-budgets.js"
@@ -89,6 +93,10 @@
     "./action-execution": {
       "types": "./dist/action-execution.d.ts",
       "default": "./dist/action-execution.js"
+    },
+    "./automations/types": {
+      "types": "./dist/automations/types.d.ts",
+      "default": "./dist/automations/types.js"
     }
   },
   "files": [

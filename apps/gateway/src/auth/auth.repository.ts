@@ -512,6 +512,17 @@ export class AuthRepository {
     return record?.dmChannelId ?? null;
   }
 
+  /** Full Slack link for a user — slackKey embeds the teamId (`teamId:slackUserId`). */
+  async findSlackLinkByUserId(
+    userId: string,
+  ): Promise<{ slackKey: string; dmChannelId?: string } | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ userId: string; slackKey: string; dmChannelId?: string }>("slack_links")
+      .findOne({ userId });
+    return record ? { slackKey: record.slackKey, dmChannelId: record.dmChannelId } : null;
+  }
+
   /**
    * Every linked Slack DM, for replaying messages missed during a Socket Mode
    * outage. `slackKey` is `teamId:slackUserId` (see SlackSurfaceService.slackKey).

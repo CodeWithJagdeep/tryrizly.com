@@ -17,12 +17,29 @@ import type {
 import { EmailPipelineService } from "./email/email-pipeline.service";
 import type { EmailCategory, ExtractedEmailFacts } from "./email/email.types";
 import { GoogleService } from "./google/google.service";
+import { CalComService } from "./connectors/calcom.service";
+import { DiscordService } from "./connectors/discord.service";
+import { GitHubService } from "./connectors/github.service";
+import { NotionService } from "./connectors/notion.service";
+import { StripeService } from "./connectors/stripe.service";
+import { PostgresIntrospectionService } from "./connectors/postgres-introspection.service";
+import { MongoIntrospectionService } from "./connectors/mongo-introspection.service";
+import { JiraService } from "./connectors/jira.service";
+import { PagerDutyService } from "./connectors/pagerduty.service";
+import { TrelloService } from "./connectors/trello.service";
+import { AirtableService } from "./connectors/airtable.service";
+import { TwilioService } from "./connectors/twilio.service";
 import { draftBody, ensureRe, fillAndGuardPlaceholders } from "./tools/gmail.tools";
 import { primaryUpdatesInboxQuery } from "./google/gmail-search";
 import { AutoMemoryService } from "./memory/auto-memory.service";
 import { VectorMemoryService } from "./memory/vector-memory.service";
 import type { MemoryWriteInput } from "./memory/memory.types";
-import { LlmRouterService } from "./llm/llm-router.service";
+import { LlmRouterService, extractJson } from "./llm/llm-router.service";
+import {
+  buildAutomationBuilderSystemPrompt,
+  sanitizeBuilderOperations,
+  type BuilderChatOutcome,
+} from "./prompt/automation-builder.prompt";
 import { ProactiveService } from "./proactive/proactive.service";
 import { DigestService } from "./proactive/digest.service";
 import { UserPreferencesRepository } from "./preferences/user-preferences.repository";
@@ -111,6 +128,30 @@ export class AiCoreService {
     private readonly budgetGate: BudgetGateService,
     @Inject(NotificationLogRepository)
     private readonly notificationLog: NotificationLogRepository,
+    @Inject(CalComService)
+    private readonly calcom: CalComService,
+    @Inject(DiscordService)
+    private readonly discord: DiscordService,
+    @Inject(GitHubService)
+    private readonly github: GitHubService,
+    @Inject(NotionService)
+    private readonly notion: NotionService,
+    @Inject(StripeService)
+    private readonly stripe: StripeService,
+    @Inject(PostgresIntrospectionService)
+    private readonly postgresIntrospection: PostgresIntrospectionService,
+    @Inject(MongoIntrospectionService)
+    private readonly mongoIntrospection: MongoIntrospectionService,
+    @Inject(JiraService)
+    private readonly jira: JiraService,
+    @Inject(PagerDutyService)
+    private readonly pagerduty: PagerDutyService,
+    @Inject(TrelloService)
+    private readonly trello: TrelloService,
+    @Inject(AirtableService)
+    private readonly airtable: AirtableService,
+    @Inject(TwilioService)
+    private readonly twilio: TwilioService,
   ) {}
 
   /** Spine: active (non-superseded) decisions, optionally filtered by topic. */
@@ -702,6 +743,485 @@ export class AiCoreService {
       return { connected: false, messages: [] };
     }
     return { connected: true, messages: res.messages };
+  }
+
+  /** Gmail search-by-query for the automation-poll "New Email Matching Search" trigger. */
+  async automationGmailSearch(body: { userId?: string; query: string; maxResults?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.listThreads(userId, {
+      q: body.query,
+      maxResults: body.maxResults ?? 10,
+    });
+    if (!res.connected) return { connected: false, messages: [] };
+    return { connected: true, messages: res.messages };
+  }
+
+  /** Calendar listing for the automation-poll "New Event" trigger — a rolling window. */
+  async automationCalendarList(body: { userId?: string; timeMin: string; timeMax: string; maxResults?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.listEvents(userId, {
+      timeMin: new Date(body.timeMin),
+      timeMax: new Date(body.timeMax),
+      maxResults: body.maxResults ?? 25,
+    });
+    if (!res.connected) return { connected: false, events: [] };
+    return { connected: true, events: res.events };
+  }
+
+  /** Cal.com event types, for the flow-builder's "Create Booking" config dropdown. */
+  async automationCalcomEventTypes(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getCalComSecret(userId);
+    if (!secret) return { connected: false, eventTypes: [] };
+    const eventTypes = await this.calcom.listEventTypes(secret);
+    return { connected: true, eventTypes };
+  }
+
+  /**
+   * The automation flow-builder's "Extract with AI" step — a plain prompt +
+   * input text, budget-gated the same way the chat agent is (skip rather than
+   * silently run up a bill once the plan's AI budget is exhausted). "Fast"
+   * routes to the "extract" tier (cheap/small model); "Advanced" routes to
+   * the "agent" tier (same strong-model route the chat agent loop uses) for
+   * steps that need real reasoning, not just pattern extraction.
+   */
+  async automationAiExtract(body: { userId?: string; prompt: string; input: string; quality?: "fast" | "advanced" }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const budget = await this.budgetGate.check(userId);
+    if (budget.state === "exceeded") {
+      return { ok: false, error: "ai_budget_exceeded" };
+    }
+    const output = await this.llmRouter.complete({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a data-extraction assistant used inside an automation step. Follow the instruction exactly and return ONLY the requested result — no preamble, no markdown, no explanation.",
+        },
+        { role: "user", content: `Instruction: ${body.prompt}\n\nText:\n${body.input}` },
+      ],
+      task: body.quality === "advanced" ? "agent" : "extract",
+      userId,
+    });
+    if (!output) return { ok: false, error: "ai_step_no_output" };
+    return { ok: true, output };
+  }
+
+  /**
+   * The Riz Agent step's "Enhance with AI" button — rewrites the user's rough
+   * instruction into a precise, unambiguous prompt for automationAiExtract to
+   * run later, without executing it against any data now. Cheap "extract"
+   * tier is enough since this is meta-prompt rewriting, not the real task;
+   * still budget-gated since it's a real LLM call.
+   */
+  async automationAiEnhancePrompt(body: { userId?: string; prompt: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const prompt = body.prompt?.trim();
+    if (!prompt) return { ok: false, error: "prompt_required" };
+    const budget = await this.budgetGate.check(userId);
+    if (budget.state === "exceeded") {
+      return { ok: false, error: "ai_budget_exceeded" };
+    }
+    const output = await this.llmRouter.complete({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You rewrite rough instructions into precise prompts for an automation step. That step will later run the exact instruction you produce against a real piece of text (an email, a form row, etc.) with no further guidance. Make it specific and unambiguous: state the exact task, the expected output format (plain text, one line, a number, etc.), and any constraints implied by what the user said. Do not invent requirements they didn't mention. Return ONLY the rewritten instruction — no preamble, no quotes, no explanation.",
+        },
+        { role: "user", content: `Rough instruction: ${prompt}` },
+      ],
+      task: "extract",
+      userId,
+    });
+    if (!output) return { ok: false, error: "enhance_failed" };
+    return { ok: true, prompt: output.trim() };
+  }
+
+  /**
+   * The flow-builder chat panel's dedicated agent. Unlike chat(), this runs no
+   * tool loop and knows nothing about connectors — it turns the user's request
+   * plus the flow currently on their canvas into edit operations the frontend
+   * applies (and animates) locally. Building never blocks on connections;
+   * accounts get linked per-step in the builder afterward.
+   */
+  async automationBuilderChat(body: {
+    userId?: string;
+    message?: string;
+    history?: Array<{ role?: string; content?: string }>;
+    flow?: { id?: string; name?: string; steps?: unknown };
+  }): Promise<BuilderChatOutcome> {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const message = body.message?.trim();
+    if (!message) return { ok: false, error: "message_required" };
+    const budget = await this.budgetGate.check(userId);
+    if (budget.state === "exceeded") return { ok: false, error: "ai_budget_exceeded" };
+
+    const steps = Array.isArray(body.flow?.steps) ? (body.flow?.steps as Array<Record<string, unknown>>) : [];
+    const compactFlow = {
+      name: String(body.flow?.name ?? "Untitled"),
+      steps: steps.slice(0, 30).map((s, i) => ({
+        index: i,
+        id: String(s.id ?? ""),
+        kind: String(s.kind ?? ""),
+        app: String(s.app ?? ""),
+        event: String(s.title ?? ""),
+        config: s.config ?? {},
+      })),
+    };
+
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content.trim())
+      .slice(-12)
+      .map((t) => ({
+        role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: String(t.content).slice(0, 2_000),
+      }));
+
+    const raw = await this.llmRouter.complete({
+      messages: [
+        { role: "system", content: buildAutomationBuilderSystemPrompt() },
+        ...history,
+        {
+          role: "user",
+          content: `CURRENT FLOW:\n${JSON.stringify(compactFlow).slice(0, 12_000)}\n\nREQUEST: ${message.slice(0, 4_000)}`,
+        },
+      ],
+      temperature: 0.3,
+      task: "agent",
+      userId,
+    });
+    if (!raw) return { ok: false, error: "no_output" };
+
+    const parsed = extractJson<{ thinking?: unknown; reply?: unknown; name?: unknown; operations?: unknown }>(raw);
+    if (!parsed) {
+      // Model answered in prose — still a valid conversational turn, just no edits.
+      return { ok: true, reply: raw.trim().slice(0, 4_000), thinking: "", operations: [] };
+    }
+    const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 80) : undefined;
+    return {
+      ok: true,
+      reply: (typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Done.").slice(0, 4_000),
+      thinking: (typeof parsed.thinking === "string" ? parsed.thinking.trim() : "").slice(0, 1_200),
+      ...(name ? { name } : {}),
+      operations: sanitizeBuilderOperations(parsed.operations),
+    };
+  }
+
+  /** Cal.com booking creation for the automation-run "Create Booking" action. */
+  async automationCalcomCreateBooking(body: {
+    userId?: string;
+    eventTypeId: number;
+    start: string;
+    attendeeName: string;
+    attendeeEmail: string;
+    timeZone?: string;
+    notes?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getCalComSecret(userId);
+    if (!secret) return { ok: false, error: "calcom_not_connected" };
+    const result = await this.calcom.createBooking(secret, {
+      eventTypeId: body.eventTypeId,
+      start: body.start,
+      name: body.attendeeName,
+      email: body.attendeeEmail,
+      timeZone: body.timeZone,
+      notes: body.notes,
+    });
+    return { ok: true, ...result };
+  }
+
+  /** The automation "Upload File" action for Google Drive. */
+  async automationGoogleUploadFile(body: { userId?: string; name: string; mimeType: string; content: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.google.uploadDriveFile(userId, {
+      name: body.name,
+      mimeType: body.mimeType || "text/plain",
+      content: body.content,
+    });
+    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    return { ok: true, id: result.id, url: result.webViewLink };
+  }
+
+  /** The automation "Create Row" action for Google Sheets. */
+  async automationGoogleAppendRow(body: { userId?: string; spreadsheetId: string; range: string; values: string[] }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.google.appendSheetRow(userId, {
+      spreadsheetId: body.spreadsheetId,
+      range: body.range,
+      values: body.values,
+    });
+    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    return { ok: true };
+  }
+
+  /** Sheet row reads — backs both the Sheets "New Row" and Forms "New Submission" (via its response sheet) pollers. */
+  async automationGoogleReadSheetRows(body: { userId?: string; spreadsheetId: string; range: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.google.readSheetRows(userId, { spreadsheetId: body.spreadsheetId, range: body.range });
+    if (!result.connected) return { connected: false, rows: [] };
+    return { connected: true, rows: result.rows };
+  }
+
+  /** The automation "Create Document" action for Google Docs. */
+  async automationGoogleCreateDoc(body: { userId?: string; title: string; content?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.google.createDoc(userId, { title: body.title, content: body.content });
+    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    return { ok: true, id: result.id, url: result.url };
+  }
+
+  /**
+   * The automation "Create Meeting" action for Google Meet — piggybacks on
+   * the already-live Calendar connection: createEvent always requests a
+   * hangoutsMeet conference, so no separate Meet OAuth grant is needed.
+   */
+  async automationGoogleCreateMeeting(body: {
+    userId?: string;
+    summary: string;
+    start: string;
+    end: string;
+    attendees?: string[];
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.google.createEvent(userId, {
+      summary: body.summary,
+      start: body.start,
+      end: body.end,
+      attendees: body.attendees,
+    });
+    if (!result.connected) return { ok: false, error: "calendar_not_connected" };
+    return { ok: true, meetingUrl: result.event.hangoutLink, eventId: result.event.id };
+  }
+
+  /**
+   * The automation "Run a Query" step for the user's own Postgres — read-only
+   * by design: connector.service.ts's assertReadOnlyCredentials already
+   * refuses to store a write-capable credential, and runReadOnlyQuery
+   * additionally AST-validates the SQL and runs it inside `BEGIN READ ONLY`.
+   * Values are bound as `$1,$2,...` params, never interpolated into the SQL
+   * text itself.
+   */
+  async automationPostgresQuery(body: { userId?: string; query: string; params?: unknown[] }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.connectorService.getDataSourceSecret(userId, "postgres");
+    if (!result.connected || result.provider !== "postgres") return { ok: false, error: "postgres_not_connected" };
+    try {
+      const schema = await this.postgresIntrospection.getSchema(userId, result.secret.connectionUrl);
+      const { rows } = await this.postgresIntrospection.runReadOnlyQuery(
+        result.secret.connectionUrl,
+        body.query,
+        body.params ?? [],
+        schema,
+      );
+      return { ok: true, rows: rows.slice(0, 50) };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "postgres_query_failed" };
+    }
+  }
+
+  /**
+   * The automation "Find Document" step for the user's own MongoDB — same
+   * read-only guarantee as Postgres (assertReadOnly checks real privileges
+   * at connector-save time), filter is a structured object so there's no SQL/
+   * BSON-injection surface via string templating.
+   */
+  async automationMongoFind(body: {
+    userId?: string;
+    collection: string;
+    filter?: Record<string, unknown>;
+    limit?: number;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.connectorService.getDataSourceSecret(userId, "mongodb");
+    if (!result.connected || result.provider !== "mongodb") return { ok: false, error: "mongodb_not_connected" };
+    try {
+      const schema = await this.mongoIntrospection.getSchema(userId, result.secret.connectionUrl);
+      const { documents } = await this.mongoIntrospection.runFind(
+        result.secret.connectionUrl,
+        { collection: body.collection, filter: body.filter ?? {}, limit: Math.min(body.limit ?? 20, 50) },
+        schema,
+      );
+      return { ok: true, documents };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "mongo_find_failed" };
+    }
+  }
+
+  /** The automation "Create Issue" action for Jira. */
+  async automationJiraCreateIssue(body: {
+    userId?: string;
+    projectKey: string;
+    summary: string;
+    description?: string;
+    issueType?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getJiraSecret(userId);
+    if (!secret) return { ok: false, error: "jira_not_connected" };
+    try {
+      const issue = await this.jira.createIssue(secret, {
+        projectKey: body.projectKey,
+        summary: body.summary,
+        description: body.description,
+        issueType: body.issueType,
+      });
+      return { ok: true, key: issue.key, url: issue.url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "jira_create_issue_failed" };
+    }
+  }
+
+  /** The automation "Create Incident" action for PagerDuty. */
+  async automationPagerDutyCreateIncident(body: {
+    userId?: string;
+    serviceId: string;
+    title: string;
+    urgency?: "high" | "low";
+    details?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getPagerDutySecret(userId);
+    if (!secret) return { ok: false, error: "pagerduty_not_connected" };
+    try {
+      const incident = await this.pagerduty.createIncident(secret, {
+        serviceId: body.serviceId,
+        title: body.title,
+        urgency: body.urgency,
+        details: body.details,
+      });
+      return { ok: true, id: incident.id, url: incident.url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "pagerduty_create_incident_failed" };
+    }
+  }
+
+  /** The automation "Create Card" action for Trello. */
+  async automationTrelloCreateCard(body: { userId?: string; listId: string; name: string; description?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getTrelloSecret(userId);
+    if (!secret) return { ok: false, error: "trello_not_connected" };
+    try {
+      const card = await this.trello.createCard(secret, {
+        listId: body.listId,
+        name: body.name,
+        description: body.description,
+      });
+      return { ok: true, id: card.id, url: card.url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "trello_create_card_failed" };
+    }
+  }
+
+  /** The automation "Create Record" action for Airtable. */
+  async automationAirtableCreateRecord(body: {
+    userId?: string;
+    baseId: string;
+    table: string;
+    fields: Record<string, unknown>;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getAirtableSecret(userId);
+    if (!secret) return { ok: false, error: "airtable_not_connected" };
+    try {
+      const record = await this.airtable.createRecord(secret, {
+        baseId: body.baseId,
+        table: body.table,
+        fields: body.fields,
+      });
+      return { ok: true, id: record.id };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "airtable_create_record_failed" };
+    }
+  }
+
+  /** Backs the Airtable "New Record" poller. */
+  async automationAirtableListRecords(body: { userId?: string; baseId: string; table: string; maxRecords?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getAirtableSecret(userId);
+    if (!secret) return { connected: false, records: [] };
+    try {
+      const records = await this.airtable.listRecords(secret, {
+        baseId: body.baseId,
+        table: body.table,
+        maxRecords: body.maxRecords,
+      });
+      return { connected: true, records };
+    } catch {
+      return { connected: false, records: [] };
+    }
+  }
+
+  /** The automation "Send SMS" action for Twilio. */
+  async automationTwilioSendSms(body: { userId?: string; to: string; body: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getTwilioSecret(userId);
+    if (!secret) return { ok: false, error: "twilio_not_connected" };
+    try {
+      const result = await this.twilio.sendSms(secret, body.to, body.body);
+      return { ok: true, sid: result.sid };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "twilio_send_sms_failed" };
+    }
+  }
+
+  /** The automation "Send Message" action for Discord — webhook-only, same restriction as connectors/discord.service.ts. */
+  async automationDiscordPostMessage(body: { userId?: string; content: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getDiscordSecret(userId);
+    if (!secret?.webhookUrl) return { ok: false, error: "discord_not_connected" };
+    try {
+      await this.discord.postMessage(secret, body.content);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "discord_send_failed" };
+    }
+  }
+
+  /** The automation "Create Issue" action for GitHub. */
+  async automationGitHubCreateIssue(body: { userId?: string; repo: string; title: string; body?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { ok: false, error: "github_not_connected" };
+    try {
+      const issue = await this.github.createIssue(secret, body.repo, body.title, body.body);
+      return { ok: true, number: issue.number, url: issue.html_url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "github_create_issue_failed" };
+    }
+  }
+
+  /** The automation "Create Page" action for Notion. */
+  async automationNotionCreatePage(body: {
+    userId?: string;
+    parentId: string;
+    parentType: "database_id" | "page_id";
+    title: string;
+    content?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getNotionSecret(userId);
+    if (!secret) return { ok: false, error: "notion_not_connected" };
+    try {
+      const page = await this.notion.createPage(secret, body.parentId, body.parentType, body.title, body.content);
+      return { ok: true, id: page.id, url: page.url };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "notion_create_page_failed" };
+    }
+  }
+
+  /** The automation "Create Customer" action for Stripe. */
+  async automationStripeCreateCustomer(body: { userId?: string; email?: string; name?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.connectorService.getDataSourceSecret(userId, "stripe");
+    if (!result.connected || result.provider !== "stripe") return { ok: false, error: "stripe_not_connected" };
+    try {
+      const customer = await this.stripe.createCustomer(result.secret, { email: body.email, name: body.name });
+      return { ok: true, id: customer.id };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "stripe_create_customer_failed" };
+    }
   }
 
   processEmail(body: EmailEventJobData) {

@@ -38,6 +38,16 @@ const oauthScopesByProvider: Record<GoogleOAuthProvider, string[]> = {
     "https://www.googleapis.com/auth/contacts.readonly",
   ],
   calendar: [...IDENTITY_SCOPES, "https://www.googleapis.com/auth/calendar.events"],
+  // Deliberately narrow: drive.file only grants access to files Rizly itself
+  // creates (no broad Drive read/list) — keeps this off Google's "restricted
+  // scope" security-assessment track. spreadsheets/documents are "sensitive"
+  // (standard verification only) since Sheets/Docs have no file-scoped analog.
+  google_workspace: [
+    ...IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/documents",
+  ],
 };
 
 const calComOAuthScopes = [
@@ -352,6 +362,62 @@ export class ConnectorService {
     const guildId = stringSecret(payload.guildId);
     if (!webhookUrl && !(botToken && channelId)) return null;
     return { webhookUrl, botToken, channelId, guildId };
+  }
+
+  /** Decrypts Jira Cloud API-token credentials. Returns null if not connected. */
+  async getJiraSecret(userId: string): Promise<{ siteUrl: string; email: string; apiToken: string } | null> {
+    const account = await this.repository.find(userId, "jira");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const siteUrl = stringSecret(payload.siteUrl);
+    const email = stringSecret(payload.email);
+    const apiToken = stringSecret(payload.apiToken);
+    if (!siteUrl || !email || !apiToken) return null;
+    return { siteUrl, email, apiToken };
+  }
+
+  /** Decrypts a PagerDuty REST API key + the "From" user email PagerDuty requires on writes. */
+  async getPagerDutySecret(userId: string): Promise<{ apiKey: string; fromEmail: string } | null> {
+    const account = await this.repository.find(userId, "pagerduty");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const apiKey = stringSecret(payload.apiKey);
+    const fromEmail = stringSecret(payload.fromEmail);
+    if (!apiKey || !fromEmail) return null;
+    return { apiKey, fromEmail };
+  }
+
+  /** Decrypts a Trello API key + token pair. Returns null if not connected. */
+  async getTrelloSecret(userId: string): Promise<{ apiKey: string; token: string } | null> {
+    const account = await this.repository.find(userId, "trello");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const apiKey = stringSecret(payload.apiKey);
+    const token = stringSecret(payload.token);
+    if (!apiKey || !token) return null;
+    return { apiKey, token };
+  }
+
+  /** Decrypts an Airtable personal access token. Returns null if not connected. */
+  async getAirtableSecret(userId: string): Promise<{ apiKey: string } | null> {
+    const account = await this.repository.find(userId, "airtable");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const apiKey = stringSecret(payload.apiKey);
+    if (!apiKey) return null;
+    return { apiKey };
+  }
+
+  /** Decrypts Twilio account credentials. Returns null if not connected. */
+  async getTwilioSecret(userId: string): Promise<{ accountSid: string; authToken: string; fromNumber: string } | null> {
+    const account = await this.repository.find(userId, "twilio");
+    if (!account) return null;
+    const payload = this.vault.decrypt(account.encryptedPayload);
+    const accountSid = stringSecret(payload.accountSid);
+    const authToken = stringSecret(payload.authToken);
+    const fromNumber = stringSecret(payload.fromNumber);
+    if (!accountSid || !authToken || !fromNumber) return null;
+    return { accountSid, authToken, fromNumber };
   }
 
   /** Decrypts the M-Pesa Daraja credentials. Returns null if not connected. */
@@ -1012,7 +1078,10 @@ function missingOAuthConfig(provider: ConnectorOAuthProvider) {
     };
   }
 
-  if ((provider === "gmail" || provider === "calendar") && !env.GOOGLE_CLIENT_ID) {
+  if (
+    (provider === "gmail" || provider === "calendar" || provider === "google_workspace") &&
+    !env.GOOGLE_CLIENT_ID
+  ) {
     return {
       status: "missing_config" as const,
       message: "GOOGLE_CLIENT_ID is missing",
@@ -1434,6 +1503,12 @@ function providerLabel(provider: ConnectorProvider) {
     github: "GitHub",
     mpesa: "M-Pesa",
     discord: "Discord",
+    google_workspace: "Google Drive + Sheets + Docs",
+    jira: "Jira",
+    pagerduty: "PagerDuty",
+    trello: "Trello",
+    airtable: "Airtable",
+    twilio: "Twilio",
   };
 
   return labels[provider];

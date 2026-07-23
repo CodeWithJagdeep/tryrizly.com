@@ -28,6 +28,48 @@ export class NotionService {
     return (data.results ?? []).map((r) => this.parsePage(r as Record<string, unknown>));
   }
 
+  /**
+   * Creates a page as a child of the given database or page, with a single
+   * paragraph of body text. `parentId` is a database if it looks like a data
+   * source (the vast majority of "Create Page" use is into a tracked
+   * database); Notion's API rejects a mismatched parent type outright, which
+   * surfaces to the caller as notion_api_400/404.
+   */
+  async createPage(
+    secret: NotionSecret,
+    parentId: string,
+    parentType: "database_id" | "page_id",
+    title: string,
+    content?: string,
+  ): Promise<NotionPage> {
+    const properties: Record<string, unknown> =
+      parentType === "database_id"
+        ? { Name: { title: [{ text: { content: title } }] } }
+        : { title: { title: [{ text: { content: title } }] } };
+
+    const res = await fetch("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: this.headers(secret),
+      body: JSON.stringify({
+        parent: { [parentType]: parentId },
+        properties,
+        ...(content?.trim()
+          ? {
+              children: [
+                {
+                  object: "block",
+                  type: "paragraph",
+                  paragraph: { rich_text: [{ type: "text", text: { content: content.slice(0, 2000) } }] },
+                },
+              ],
+            }
+          : {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`notion_api_${res.status}`);
+    return this.parsePage((await res.json()) as Record<string, unknown>);
+  }
+
   async getPageContent(secret: NotionSecret, pageId: string): Promise<string> {
     const res = await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
       headers: this.headers(secret),

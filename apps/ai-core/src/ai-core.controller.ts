@@ -292,6 +292,193 @@ export class AiCoreController {
     return this.aiCoreService.processEmail(payload);
   }
 
+  @MessagePattern("automation.gmail.search")
+  automationGmailSearch(@Payload() payload: { userId?: string; query: string; maxResults?: number }) {
+    return this.aiCoreService.automationGmailSearch(payload);
+  }
+
+  @MessagePattern("automation.calendar.list")
+  automationCalendarList(
+    @Payload() payload: { userId?: string; timeMin: string; timeMax: string; maxResults?: number },
+  ) {
+    return this.aiCoreService.automationCalendarList(payload);
+  }
+
+  @MessagePattern("automation.ai.extract")
+  automationAiExtract(
+    @Payload() payload: { userId?: string; prompt: string; input: string; quality?: "fast" | "advanced" },
+  ) {
+    return this.aiCoreService.automationAiExtract(payload);
+  }
+
+  @MessagePattern("automation.ai.enhancePrompt")
+  automationAiEnhancePrompt(@Payload() payload: { userId?: string; prompt: string }) {
+    return this.aiCoreService.automationAiEnhancePrompt(payload);
+  }
+
+  @MessagePattern("automation.builderChat")
+  automationBuilderChat(
+    @Payload()
+    payload: {
+      userId?: string;
+      message?: string;
+      history?: Array<{ role?: string; content?: string }>;
+      flow?: { id?: string; name?: string; steps?: unknown };
+    },
+  ) {
+    return this.aiCoreService.automationBuilderChat(payload);
+  }
+
+  @MessagePattern("automation.calcom.eventTypes")
+  automationCalcomEventTypes(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationCalcomEventTypes(payload);
+  }
+
+  @MessagePattern("automation.discord.postMessage")
+  automationDiscordPostMessage(@Payload() payload: { userId?: string; content: string }) {
+    return this.aiCoreService.automationDiscordPostMessage(payload);
+  }
+
+  @MessagePattern("automation.github.createIssue")
+  automationGitHubCreateIssue(
+    @Payload() payload: { userId?: string; repo: string; title: string; body?: string },
+  ) {
+    return this.aiCoreService.automationGitHubCreateIssue(payload);
+  }
+
+  @MessagePattern("automation.notion.createPage")
+  automationNotionCreatePage(
+    @Payload()
+    payload: {
+      userId?: string;
+      parentId: string;
+      parentType: "database_id" | "page_id";
+      title: string;
+      content?: string;
+    },
+  ) {
+    return this.aiCoreService.automationNotionCreatePage(payload);
+  }
+
+  @MessagePattern("automation.stripe.createCustomer")
+  automationStripeCreateCustomer(
+    @Payload() payload: { userId?: string; email?: string; name?: string },
+  ) {
+    return this.aiCoreService.automationStripeCreateCustomer(payload);
+  }
+
+  @MessagePattern("automation.google.uploadFile")
+  automationGoogleUploadFile(
+    @Payload() payload: { userId?: string; name: string; mimeType: string; content: string },
+  ) {
+    return this.aiCoreService.automationGoogleUploadFile(payload);
+  }
+
+  @MessagePattern("automation.google.appendRow")
+  automationGoogleAppendRow(
+    @Payload() payload: { userId?: string; spreadsheetId: string; range: string; values: string[] },
+  ) {
+    return this.aiCoreService.automationGoogleAppendRow(payload);
+  }
+
+  @MessagePattern("automation.google.readSheetRows")
+  automationGoogleReadSheetRows(
+    @Payload() payload: { userId?: string; spreadsheetId: string; range: string },
+  ) {
+    return this.aiCoreService.automationGoogleReadSheetRows(payload);
+  }
+
+  @MessagePattern("automation.google.createDoc")
+  automationGoogleCreateDoc(@Payload() payload: { userId?: string; title: string; content?: string }) {
+    return this.aiCoreService.automationGoogleCreateDoc(payload);
+  }
+
+  @MessagePattern("automation.google.createMeeting")
+  automationGoogleCreateMeeting(
+    @Payload()
+    payload: {
+      userId?: string;
+      summary: string;
+      start: string;
+      end: string;
+      attendees?: string[];
+    },
+  ) {
+    return this.aiCoreService.automationGoogleCreateMeeting(payload);
+  }
+
+  @MessagePattern("automation.postgres.query")
+  automationPostgresQuery(
+    @Payload() payload: { userId?: string; query: string; params?: unknown[] },
+  ) {
+    return this.aiCoreService.automationPostgresQuery(payload);
+  }
+
+  @MessagePattern("automation.mongo.find")
+  automationMongoFind(
+    @Payload() payload: { userId?: string; collection: string; filter?: Record<string, unknown>; limit?: number },
+  ) {
+    return this.aiCoreService.automationMongoFind(payload);
+  }
+
+  @MessagePattern("automation.jira.createIssue")
+  automationJiraCreateIssue(
+    @Payload()
+    payload: { userId?: string; projectKey: string; summary: string; description?: string; issueType?: string },
+  ) {
+    return this.aiCoreService.automationJiraCreateIssue(payload);
+  }
+
+  @MessagePattern("automation.pagerduty.createIncident")
+  automationPagerDutyCreateIncident(
+    @Payload()
+    payload: { userId?: string; serviceId: string; title: string; urgency?: "high" | "low"; details?: string },
+  ) {
+    return this.aiCoreService.automationPagerDutyCreateIncident(payload);
+  }
+
+  @MessagePattern("automation.trello.createCard")
+  automationTrelloCreateCard(
+    @Payload() payload: { userId?: string; listId: string; name: string; description?: string },
+  ) {
+    return this.aiCoreService.automationTrelloCreateCard(payload);
+  }
+
+  @MessagePattern("automation.airtable.createRecord")
+  automationAirtableCreateRecord(
+    @Payload() payload: { userId?: string; baseId: string; table: string; fields: Record<string, unknown> },
+  ) {
+    return this.aiCoreService.automationAirtableCreateRecord(payload);
+  }
+
+  @MessagePattern("automation.airtable.listRecords")
+  automationAirtableListRecords(
+    @Payload() payload: { userId?: string; baseId: string; table: string; maxRecords?: number },
+  ) {
+    return this.aiCoreService.automationAirtableListRecords(payload);
+  }
+
+  @MessagePattern("automation.twilio.sendSms")
+  automationTwilioSendSms(@Payload() payload: { userId?: string; to: string; body: string }) {
+    return this.aiCoreService.automationTwilioSendSms(payload);
+  }
+
+  @MessagePattern("automation.calcom.createBooking")
+  automationCalcomCreateBooking(
+    @Payload()
+    payload: {
+      userId?: string;
+      eventTypeId: number;
+      start: string;
+      attendeeName: string;
+      attendeeEmail: string;
+      timeZone?: string;
+      notes?: string;
+    },
+  ) {
+    return this.aiCoreService.automationCalcomCreateBooking(payload);
+  }
+
   @MessagePattern("email.confirm")
   confirmEmailAction(
     @Payload()

@@ -1,4 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
+import {
+  createActivateAutomationTool,
+  createAutomationTool,
+  createPauseAutomationTool,
+  listAutomationsTool,
+} from "./automation.tools";
 import { createBusinessSnapshotTool } from "./business.tools";
 import { createCalComBriefingTool, createCalComBookTool } from "./calcom.tools";
 import { createConnectGoogleTool } from "./connect.tools";
@@ -196,6 +202,10 @@ export class ToolRegistryService {
       createSetDisplayNameTool(this.preferences),
       createSetTimezoneTool(this.preferences),
       createSetLanguageTool(this.preferences),
+      listAutomationsTool,
+      createAutomationTool(),
+      createActivateAutomationTool(),
+      createPauseAutomationTool(),
     ];
   }
 

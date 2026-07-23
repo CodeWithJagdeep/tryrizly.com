@@ -14,9 +14,13 @@ export type GitHubIssueItem = {
   user?: { login?: string };
 };
 
+export type GitHubCreatedIssue = { number: number; html_url: string };
+
 /**
- * Read-only GitHub access with a fine-grained or classic personal access
- * token. Only GETs against fixed paths — no mutation endpoint is reachable.
+ * GitHub access with a fine-grained or classic personal access token. Reads
+ * hit fixed paths; the automation "Create Issue" action is the one mutation
+ * endpoint, gated on the token having `issues:write` (a fine-grained token
+ * without it surfaces as a normal 403 -> github_api_403 step failure).
  */
 @Injectable()
 export class GitHubService {
@@ -31,6 +35,30 @@ export class GitHubService {
     if (res.status === 401) throw new Error("github_invalid_token");
     if (!res.ok) throw new Error(`github_api_${res.status}`);
     return (await res.json()) as T;
+  }
+
+  /** `repo` must be `owner/name`. */
+  async createIssue(
+    secret: GitHubConnectorSecret,
+    repo: string,
+    title: string,
+    body?: string,
+  ): Promise<GitHubCreatedIssue> {
+    if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) throw new Error("github_invalid_repo");
+    const res = await fetch(`${GITHUB_API}/repos/${repo}/issues`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret.token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ title, body: body || undefined }),
+    });
+    if (res.status === 401) throw new Error("github_invalid_token");
+    if (res.status === 404) throw new Error("github_repo_not_found");
+    if (!res.ok) throw new Error(`github_api_${res.status}`);
+    return (await res.json()) as GitHubCreatedIssue;
   }
 
   /** The token owner's login — also serves as the connection health check. */

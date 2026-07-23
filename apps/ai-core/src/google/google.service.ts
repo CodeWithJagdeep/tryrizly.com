@@ -46,7 +46,7 @@ export class GoogleService {
     private readonly vault: ConnectorVaultService,
   ) {}
 
-  async isConnected(userId: string, provider: "gmail" | "calendar"): Promise<boolean> {
+  async isConnected(userId: string, provider: "gmail" | "calendar" | "google_workspace"): Promise<boolean> {
     const account = await this.findAccount(userId, provider);
     return Boolean(account);
   }
@@ -133,6 +133,91 @@ export class GoogleService {
 
     const item = (await res.response.json()) as GoogleCalendarItem;
     return { connected: true, event: toCalendarEvent(item) };
+  }
+
+  // --- Drive / Sheets / Docs (google_workspace grant) ---------------------
+
+  /** Simple (non-resumable) upload — fine for the small text payloads an automation step produces. */
+  async uploadDriveFile(
+    userId: string,
+    input: { name: string; mimeType: string; content: string },
+  ): Promise<GoogleResult<{ id: string; webViewLink?: string }>> {
+    const boundary = `heyriz-${Date.now()}`;
+    const metadata = JSON.stringify({ name: input.name });
+    const body =
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${input.mimeType}\r\n\r\n${input.content}\r\n` +
+      `--${boundary}--`;
+
+    const res = await this.gfetch(
+      userId,
+      "google_workspace",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+      { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${boundary}` } },
+    );
+    if (!res.connected) return res;
+    const file = (await res.response.json()) as { id: string; webViewLink?: string };
+    return { connected: true, id: file.id, webViewLink: file.webViewLink };
+  }
+
+  /** Appends one row to the end of the given sheet/range (A1 notation, e.g. "Sheet1"). */
+  async appendSheetRow(
+    userId: string,
+    input: { spreadsheetId: string; range: string; values: string[] },
+  ): Promise<GoogleResult<{ updatedRange?: string }>> {
+    const url =
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/` +
+      `${encodeURIComponent(input.range)}:append?valueInputOption=USER_ENTERED`;
+    const res = await this.gfetch(userId, "google_workspace", url, {
+      method: "POST",
+      body: JSON.stringify({ values: [input.values] }),
+    });
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as { updates?: { updatedRange?: string } };
+    return { connected: true, updatedRange: data.updates?.updatedRange };
+  }
+
+  /** Reads rows from a sheet — used both by the Sheets/Forms "New Row" pollers. */
+  async readSheetRows(
+    userId: string,
+    input: { spreadsheetId: string; range: string },
+  ): Promise<GoogleResult<{ rows: string[][] }>> {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(input.spreadsheetId)}/values/${encodeURIComponent(input.range)}`;
+    const res = await this.gfetch(userId, "google_workspace", url);
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as { values?: string[][] };
+    return { connected: true, rows: data.values ?? [] };
+  }
+
+  /** Creates a Doc with a title, then inserts the body as plain text. */
+  async createDoc(
+    userId: string,
+    input: { title: string; content?: string },
+  ): Promise<GoogleResult<{ id: string; url: string }>> {
+    const createRes = await this.gfetch(userId, "google_workspace", "https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      body: JSON.stringify({ title: input.title }),
+    });
+    if (!createRes.connected) return createRes;
+    const doc = (await createRes.response.json()) as { documentId: string };
+
+    if (input.content?.trim()) {
+      await this.gfetch(
+        userId,
+        "google_workspace",
+        `https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            requests: [{ insertText: { location: { index: 1 }, text: input.content } }],
+          }),
+        },
+      );
+    }
+
+    return { connected: true, id: doc.documentId, url: `https://docs.google.com/document/d/${doc.documentId}/edit` };
   }
 
   // --- Contacts (via People API + Gmail search) ---------------------------
@@ -392,7 +477,7 @@ export class GoogleService {
    */
   private async gfetch(
     userId: string,
-    provider: "gmail" | "calendar",
+    provider: "gmail" | "calendar" | "google_workspace",
     url: string,
     init: RequestInit = {},
   ): Promise<{ connected: true; response: Response } | GoogleNotConnectedLocal> {
@@ -445,10 +530,12 @@ export class GoogleService {
    */
   private async findAccount(
     userId: string,
-    provider: "gmail" | "calendar",
+    provider: "gmail" | "calendar" | "google_workspace",
   ): Promise<ConnectedAccount | undefined> {
     const account = await this.repository.find(userId, provider);
     if (account) return account;
+    // "google_workspace" is a standalone grant, no legacy combined-account fallback.
+    if (provider === "google_workspace") return undefined;
     return this.repository.find(userId, "google");
   }
 

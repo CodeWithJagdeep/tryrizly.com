@@ -15,6 +15,9 @@ import {
 } from "./conversation-store";
 import { BillingController } from "./billing/billing.controller";
 import { BillingGatewayService } from "./billing/billing.service";
+import { AutomationRepository } from "./automations/automation.repository";
+import { AutomationsController } from "./automations/automations.controller";
+import { AutomationsService } from "./automations/automations.service";
 import { GatewayController } from "./gateway.controller";
 import { GatewayService } from "./gateway.service";
 import { RedisThrottlerStorage } from "./throttler-redis.storage";
@@ -37,11 +40,14 @@ import { TelegramService } from "./telegram.service";
     BillingController,
     ApprovalsController,
     SlackSurfaceController,
+    AutomationsController,
   ],
   providers: [
     AuthRepository,
     AuthService,
     BillingGatewayService,
+    AutomationRepository,
+    AutomationsService,
     EmailThrottlerGuard,
     GatewayService,
     RedisThrottlerStorage,

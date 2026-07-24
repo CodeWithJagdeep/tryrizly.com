@@ -176,7 +176,9 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
         if (!audioFile) return;
         const url = audioFile.url_private_download ?? audioFile.url_private;
         const botToken = await this.resolveBotToken(payload.team_id);
-        text = url ? await transcribeSlackAudio(url, botToken) : undefined;
+        text = url
+          ? await transcribeSlackAudio(url, botToken, audioFile.mimetype)
+          : undefined;
         if (!text) {
           await sendSlackSurfaceMessage({
             channel: event.channel,

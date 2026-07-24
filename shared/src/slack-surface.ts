@@ -194,9 +194,25 @@ export async function fetchMissedDms(
  * either HTTP call is unavailable — callers should fall back to telling the
  * principal voice notes couldn't be understood right now.
  */
+// Whisper infers the codec from the filename extension, not the multipart
+// Content-Type — sending Slack's actual container as a mismatched extension
+// (e.g. a webm clip uploaded as "voice.m4a") gets rejected with a 400.
+const WHISPER_EXT_BY_MIME: Record<string, string> = {
+  "audio/mp4": "mp4",
+  "audio/x-m4a": "m4a",
+  "audio/m4a": "m4a",
+  "audio/webm": "webm",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/ogg": "ogg",
+};
+
 export async function transcribeSlackAudio(
   urlPrivate: string,
   botToken: string | undefined,
+  mimetype: string | undefined,
 ): Promise<string | undefined> {
   const token = botToken ?? env.SLACK_SURFACE_BOT_TOKEN;
   if (!token || !env.OPENAI_API_KEY) return undefined;
@@ -208,8 +224,9 @@ export async function transcribeSlackAudio(
     if (!audioRes.ok) return undefined;
     const audioBlob = await audioRes.blob();
 
+    const ext = (mimetype && WHISPER_EXT_BY_MIME[mimetype.toLowerCase()]) || "m4a";
     const form = new FormData();
-    form.append("file", audioBlob, "voice.m4a");
+    form.append("file", audioBlob, `voice.${ext}`);
     form.append("model", "whisper-1");
 
     const transcribeRes = await fetch(`${env.OPENAI_BASE_URL}/audio/transcriptions`, {

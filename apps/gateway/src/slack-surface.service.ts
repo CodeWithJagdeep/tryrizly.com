@@ -281,42 +281,61 @@ export class SlackSurfaceService {
 
   private async runChat(dst: SendTarget, message: string, userId: string): Promise<void> {
     const conversationKey = this.conversationKey(dst.channel);
-    const history = await this.conversations.get(conversationKey);
-
     const placeholderTs = await sendSlackPlaceholder({
       channel: dst.channel,
       botToken: dst.botToken,
     });
 
-    const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
-      userId,
-      message,
-      history,
-    });
+    try {
+      const history = await this.conversations.get(conversationKey);
+      const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
+        userId,
+        message,
+        history,
+      });
 
-    await this.conversations.append(conversationKey, turn("user", message));
-    await this.conversations.append(
-      conversationKey,
-      turn(
-        "assistant",
-        res.pendingApproval ? `${res.reply}\n\n${res.pendingApproval.preview}` : res.reply,
-      ),
-    );
+      await this.conversations.append(conversationKey, turn("user", message));
+      await this.conversations.append(
+        conversationKey,
+        turn(
+          "assistant",
+          res.pendingApproval ? `${res.reply}\n\n${res.pendingApproval.preview}` : res.reply,
+        ),
+      );
 
-    if (res.pendingApproval) {
-      const rec = await this.approvals.add(userId, res.pendingApproval);
-      const others = (await this.approvals.list(userId)).filter((p) => p.id !== rec.id);
-      const note =
-        others.length > 0
-          ? `\n\nYou've also got ${others.length} waiting (${others
-              .map((p) => `#${p.id} ${p.label}`)
-              .join("; ")}). This one is #${rec.id} — say "yes ${rec.id}" or use the buttons.`
-          : "";
-      const full = `${res.reply}\n\n${res.pendingApproval.preview}${note}`;
-      await this.deliver(dst, placeholderTs, full, approvalActionBlocks(full, rec.id));
-      return;
+      if (res.pendingApproval) {
+        const rec = await this.approvals.add(userId, res.pendingApproval);
+        const others = (await this.approvals.list(userId)).filter((p) => p.id !== rec.id);
+        const note =
+          others.length > 0
+            ? `\n\nYou've also got ${others.length} waiting (${others
+                .map((p) => `#${p.id} ${p.label}`)
+                .join("; ")}). This one is #${rec.id} — say "yes ${rec.id}" or use the buttons.`
+            : "";
+        const full = `${res.reply}\n\n${res.pendingApproval.preview}${note}`;
+        await this.deliver(dst, placeholderTs, full, approvalActionBlocks(full, rec.id));
+        return;
+      }
+      await this.deliver(dst, placeholderTs, res.reply);
+    } catch (error) {
+      await this.deliverFailure(dst, placeholderTs, error);
     }
-    await this.deliver(dst, placeholderTs, res.reply);
+  }
+
+  /** Replaces a stuck "Thinking…" placeholder (or sends fresh) with a plain failure notice — never leave the principal staring at a placeholder that will never resolve. */
+  private async deliverFailure(
+    dst: SendTarget,
+    placeholderTs: string | null,
+    error: unknown,
+  ): Promise<void> {
+    logger.error("slack chat turn failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await this.deliver(
+      dst,
+      placeholderTs,
+      `Sorry, ${env.PRINCIPAL_HONORIFIC} — that took too long or hit an error. Try again?`,
+    );
   }
 
   /** Replaces the "Thinking…" placeholder with the real reply, or sends fresh if there was no placeholder. */
@@ -360,32 +379,35 @@ export class SlackSurfaceService {
       payload: pending.payload,
       approvalId: pending.id,
     }).catch(() => undefined);
-    const history = await this.conversations.get(conversationKey);
-
     const placeholderTs = await sendSlackPlaceholder({
       channel: dst.channel,
       botToken: dst.botToken,
     });
 
-    const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
-      userId,
-      message: "approved",
-      approve: true,
-      pendingApproval: { id: pending.id, tool: pending.tool, payload: pending.payload },
-      history,
-    });
+    try {
+      const history = await this.conversations.get(conversationKey);
+      const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
+        userId,
+        message: "approved",
+        approve: true,
+        pendingApproval: { id: pending.id, tool: pending.tool, payload: pending.payload },
+        history,
+      });
 
-    const remaining = await this.approvals.list(userId);
-    const note =
-      remaining.length > 0
-        ? `\n\n(${remaining.length} still waiting: ${remaining
-            .map((p) => `#${p.id} ${p.label}`)
-            .join("; ")}.)`
-        : "";
+      const remaining = await this.approvals.list(userId);
+      const note =
+        remaining.length > 0
+          ? `\n\n(${remaining.length} still waiting: ${remaining
+              .map((p) => `#${p.id} ${p.label}`)
+              .join("; ")}.)`
+          : "";
 
-    await this.conversations.append(conversationKey, turn("user", "approved"));
-    await this.conversations.append(conversationKey, turn("assistant", res.reply));
-    await this.deliver(dst, placeholderTs, `${res.reply}${note}`);
+      await this.conversations.append(conversationKey, turn("user", "approved"));
+      await this.conversations.append(conversationKey, turn("assistant", res.reply));
+      await this.deliver(dst, placeholderTs, `${res.reply}${note}`);
+    } catch (error) {
+      await this.deliverFailure(dst, placeholderTs, error);
+    }
   }
 
   /** Apply a yes/no/watch decision against the pending queue. */

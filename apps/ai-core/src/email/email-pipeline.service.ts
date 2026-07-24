@@ -9,17 +9,26 @@ import { EmailClassifierService } from "./email-classifier.service";
 import { EmailPreferencesRepository } from "./email-preferences.repository";
 import { UserPreferencesRepository } from "../preferences/user-preferences.repository";
 import { VectorMemoryService } from "../memory/vector-memory.service";
-import { enqueueNotification, enqueueReminder } from "@heyriz/shared/queue/queues";
+import {
+  enqueueNotification,
+  enqueueReminder,
+} from "@heyriz/shared/queue/queues";
 import { enqueueSpineIngest } from "@heyriz/shared/queue/spine";
 import { enqueueWatchReply } from "@heyriz/shared/queue/watch-replies";
-import {
-  addPendingEmailAction,
-} from "@heyriz/shared/queue/pending-actions";
+import { addPendingEmailAction } from "@heyriz/shared/queue/pending-actions";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { appendActionAudit } from "@heyriz/shared/action-audit";
 import { zonedTimeToUtc } from "../lib/timezone";
-import type { EmailCategory, EmailPipelineResult, ExtractedEmailFacts } from "./email.types";
+import type {
+  EmailCategory,
+  EmailPipelineResult,
+  ExtractedEmailFacts,
+} from "./email.types";
+import {
+  EmailAssessmentService,
+  type CanonicalEmailAssessment,
+} from "./email-assessment.service";
 
 const MIN = 60_000;
 
@@ -38,11 +47,13 @@ const DECISION_CATEGORIES = new Set<EmailCategory>([
 
 type ProcessEmailInput = {
   userId: string;
+  accountId?: string;
   messageId: string;
   threadId: string;
   from: string;
   subject: string;
   snippet: string;
+  source?: "push" | "poll";
 };
 
 @Injectable()
@@ -51,6 +62,7 @@ export class EmailPipelineService {
     private readonly google: GoogleService,
     private readonly availability: AvailabilityService,
     private readonly classifier: EmailClassifierService,
+    private readonly assessments: EmailAssessmentService,
     private readonly emailPrefs: EmailPreferencesRepository,
     private readonly userPrefs: UserPreferencesRepository,
     private readonly memory: VectorMemoryService,
@@ -59,29 +71,67 @@ export class EmailPipelineService {
   async process(input: ProcessEmailInput): Promise<EmailPipelineResult> {
     // Fast path: OTP check from headers alone — never fetch body
     if (this.classifier.isOtp(input.subject, input.snippet)) {
-      logger.info("email pipeline: otp ignored", { messageId: input.messageId });
+      const assessment = await this.assessments.assess({
+        userId: input.userId,
+        messageId: input.messageId,
+        from: input.from,
+        subject: input.subject,
+        snippet: input.snippet,
+        origin: input.source === "push" ? "push" : "background",
+      });
+      logger.info("email pipeline: otp ignored", {
+        messageId: input.messageId,
+      });
       return {
         messageId: input.messageId,
         category: "otp",
         handled: "ignored",
         notificationSent: false,
-        facts: { category: "otp", summary: "OTP ignored", confidence: "high" },
+        facts: {
+          priority: assessment.priority,
+          priorityReason: assessment.reason,
+          prioritySource: assessment.source,
+          category: "otp",
+          summary: "OTP ignored",
+          confidence: "high",
+        },
         actionsScheduled: [],
       };
     }
 
     // Fetch full body only when we might act on it
-    const msgRes = await this.google.getMessage(input.userId, input.messageId, "full");
+    const msgRes = await this.google.getMessage(
+      input.userId,
+      input.messageId,
+      "full",
+      input.accountId,
+    );
     const body = msgRes.connected ? msgRes.message.body : input.snippet;
     const timezone = await this.userPrefs.getTimezone(input.userId);
 
-    const facts = await this.classifier.classify({
+    const assessment = await this.assessments.assess({
+      userId: input.userId,
+      messageId: input.messageId,
       from: input.from,
       subject: input.subject,
+      snippet: input.snippet,
       body,
-      timezone,
-      userId: input.userId,
+      origin: input.source === "push" ? "push" : "background",
     });
+    const extracted =
+      assessment.priority === "LOW"
+        ? this.classifier.lowPriorityFacts(
+            { from: input.from, subject: input.subject, body },
+            assessment,
+          )
+        : await this.classifier.classify({
+            from: input.from,
+            subject: input.subject,
+            body,
+            timezone,
+            userId: input.userId,
+          });
+    const facts = alignFactsToCanonicalPriority(extracted, assessment);
 
     if (facts.category === "otp") {
       return {
@@ -101,11 +151,13 @@ export class EmailPipelineService {
     // The worker re-fetches the body live; it is never placed on the queue.
     await enqueueSpineIngest({
       userId: input.userId,
+      accountId: input.accountId,
       messageId: input.messageId,
       threadId: input.threadId,
       from: input.from,
       subject: input.subject,
-      extractDecisions: env.BACKGROUND_AI_ENABLED && DECISION_CATEGORIES.has(facts.category),
+      extractDecisions:
+        env.BACKGROUND_AI_ENABLED && DECISION_CATEGORIES.has(facts.category),
       senderName: facts.person,
       senderType: facts.senderType,
       isAutomated: facts.isAutomated,
@@ -118,7 +170,7 @@ export class EmailPipelineService {
       }),
     );
 
-    if (facts.category === "newsletter" || facts.category === "general_low") {
+    if (facts.priority === "LOW") {
       await this.storeToMemory(input, facts);
       return {
         messageId: input.messageId,
@@ -148,7 +200,10 @@ export class EmailPipelineService {
         at: new Date().toISOString(),
       });
       await this.storeToMemory(input, facts);
-      logger.info("email pipeline: held while away", { messageId: input.messageId, category: facts.category });
+      logger.info("email pipeline: held while away", {
+        messageId: input.messageId,
+        category: facts.category,
+      });
       return {
         messageId: input.messageId,
         category: facts.category,
@@ -183,7 +238,12 @@ export class EmailPipelineService {
     // actions can wait at once, so a proactive email prompt neither clobbers nor
     // is clobbered by another pending action; the principal answers it by id or
     // with the message's buttons.
-    const baseMessage = await this.buildUserMessage(facts, input, honorific, timezone);
+    const baseMessage = await this.buildUserMessage(
+      facts,
+      input,
+      honorific,
+      timezone,
+    );
     const defaultAction = defaultActionFor(facts.category);
     let message = baseMessage;
     let pendingId: string | undefined;
@@ -192,6 +252,7 @@ export class EmailPipelineService {
       const pending = await addPendingEmailAction(input.userId, {
         tool: "email_confirm",
         payload: {
+          accountId: input.accountId,
           messageId: input.messageId,
           threadId: input.threadId,
           category: facts.category,
@@ -244,6 +305,7 @@ export class EmailPipelineService {
   // Called when user says "yes" to a specific email action prompt
   async confirmAction(input: {
     userId: string;
+    accountId?: string;
     messageId: string;
     threadId: string;
     category: EmailCategory;
@@ -256,7 +318,12 @@ export class EmailPipelineService {
     const done: string[] = [];
 
     if (input.action === "remind" && input.facts.dueDate) {
-      const runAt = zonedTimeToUtc(new Date(input.facts.dueDate), timezone, 9, 0);
+      const runAt = zonedTimeToUtc(
+        new Date(input.facts.dueDate),
+        timezone,
+        9,
+        0,
+      );
       const label = input.facts.serviceName ?? input.facts.person ?? "payment";
       await enqueueReminder({
         userId: input.userId,
@@ -271,6 +338,7 @@ export class EmailPipelineService {
     if (input.action === "watch") {
       await enqueueWatchReply({
         userId: input.userId,
+        accountId: input.accountId,
         threadId: input.threadId,
         baselineMessageCount: 1,
         fallbackMessage: `${honorific.charAt(0).toUpperCase() + honorific.slice(1)}, no reply yet from ${input.facts.person ?? "them"}. Should I follow up?`,
@@ -328,7 +396,9 @@ export class EmailPipelineService {
         source: "gmail",
         dedupeKey: `email-reminder:${input.userId}:${input.messageId}`,
       }).catch((e) =>
-        logger.warn("auto-remind enqueue failed", { error: e instanceof Error ? e.message : String(e) }),
+        logger.warn("auto-remind enqueue failed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
       );
       actionsScheduled.push("reminder_scheduled");
       await enqueueNotification({
@@ -365,10 +435,15 @@ export class EmailPipelineService {
     const morning = zonedTimeToUtc(new Date(meetingMs), timezone, 8, 0);
     const t30 = new Date(meetingMs - 30 * MIN);
 
-    const inferredEnd = meetingEndIso && !Number.isNaN(Date.parse(meetingEndIso))
-      ? meetingEndIso
-      : new Date(meetingMs + 60 * MIN).toISOString();
-    const meetingKey = canonicalMeetingKey({ title, start: meetingTimeIso, end: inferredEnd });
+    const inferredEnd =
+      meetingEndIso && !Number.isNaN(Date.parse(meetingEndIso))
+        ? meetingEndIso
+        : new Date(meetingMs + 60 * MIN).toISOString();
+    const meetingKey = canonicalMeetingKey({
+      title,
+      start: meetingTimeIso,
+      end: inferredEnd,
+    });
     const base = `meet:${userId}:${meetingKey}`;
 
     if (morning.getTime() > Date.now()) {
@@ -401,7 +476,9 @@ export class EmailPipelineService {
     if (!facts.meetingTime) return undefined;
     const startMs = Date.parse(facts.meetingTime);
     if (Number.isNaN(startMs)) return undefined;
-    const endMs = facts.meetingEndTime ? Date.parse(facts.meetingEndTime) : startMs + 60 * MIN;
+    const endMs = facts.meetingEndTime
+      ? Date.parse(facts.meetingEndTime)
+      : startMs + 60 * MIN;
     if (Number.isNaN(endMs)) return undefined;
 
     return this.availability.check({
@@ -435,9 +512,15 @@ export class EmailPipelineService {
       }
 
       case "meeting_request": {
-        const when = facts.meetingTime ? ` at ${fmt(facts.meetingTime, timezone)}` : "";
+        const when = facts.meetingTime
+          ? ` at ${fmt(facts.meetingTime, timezone)}`
+          : "";
 
-        const availability = await this.findMeetingConflict(input.userId, facts, timezone);
+        const availability = await this.findMeetingConflict(
+          input.userId,
+          facts,
+          timezone,
+        );
         if (availability && !availability.complete) {
           return `${prefix} ${gist}${when}, but I couldn't verify every connected calendar. I have not treated the time as free; should I retry the availability check?`;
         }
@@ -470,7 +553,10 @@ export class EmailPipelineService {
     }
   }
 
-  private async storeToMemory(input: ProcessEmailInput, facts: ExtractedEmailFacts) {
+  private async storeToMemory(
+    input: ProcessEmailInput,
+    facts: ExtractedEmailFacts,
+  ) {
     if (!env.BACKGROUND_AI_ENABLED) return;
     await this.memory
       .remember({
@@ -489,6 +575,9 @@ export class EmailPipelineService {
           serviceName: facts.serviceName ?? "",
           dueDate: facts.dueDate ?? "",
           action: facts.action ?? "",
+          priority: facts.priority ?? "LOW",
+          priorityReason: facts.priorityReason ?? "",
+          prioritySource: facts.prioritySource ?? "rules",
           requiresReply: facts.requiresReply ?? false,
           urgency: facts.urgency ?? "normal",
           riskLevel: facts.riskLevel ?? "low",
@@ -507,6 +596,54 @@ export class EmailPipelineService {
         }),
       );
   }
+}
+
+function alignFactsToCanonicalPriority(
+  facts: ExtractedEmailFacts,
+  assessment: CanonicalEmailAssessment,
+): ExtractedEmailFacts {
+  const lowCategory =
+    facts.category === "newsletter" || facts.category === "general_low";
+  if (assessment.priority === "LOW") {
+    return {
+      ...facts,
+      priority: "LOW",
+      priorityReason: assessment.reason,
+      prioritySource: assessment.source,
+      suggestedAction: "ignore",
+      urgency: "low",
+      riskLevel: "low",
+      requiresReply: false,
+      replyIntent: "ignore",
+    };
+  }
+
+  if (!lowCategory) {
+    return {
+      ...facts,
+      priority: assessment.priority,
+      priorityReason: assessment.reason,
+      prioritySource: assessment.source,
+    };
+  }
+
+  // Rich extraction is allowed to choose an action category, but it cannot
+  // reverse the canonical importance decision. This is the split-brain guard.
+  return {
+    ...facts,
+    priority: assessment.priority,
+    priorityReason: assessment.reason,
+    prioritySource: assessment.source,
+    category:
+      assessment.priority === "HIGH" ? "general_high" : "general_medium",
+    suggestedAction:
+      assessment.priority === "HIGH" ? "review_manually" : "notify",
+    urgency: assessment.priority === "HIGH" ? "urgent" : "normal",
+    riskLevel: assessment.priority === "HIGH" ? "high" : "medium",
+    reason: assessment.reason,
+    isMarketing: false,
+    replyIntent: facts.replyIntent === "ignore" ? "review" : facts.replyIntent,
+  };
 }
 
 function defaultActionFor(

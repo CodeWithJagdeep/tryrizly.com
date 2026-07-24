@@ -44,7 +44,7 @@ const SOCIAL_NOTIFICATION_PATTERN =
   /\b(?:you have (?:a )?new message|sent you a message|new notification|new answer (?:for|to)|people you may know|viewed your profile|started following you|upvoted your|new post from)\b/i;
 
 const PASSIVE_TRANSACTION_PATTERN =
-  /\b(?:receipt|order confirmation|order shipped|delivery update|statement is ready|terms of service(?: update)?|tos(?: update)?|privacy policy(?: update)?|monthly statement|weekly summary|activity summary)\b/i;
+  /\b(?:otp|one[ -]?time (?:password|code)|verification code|security code|magic link|receipt|order confirmation|order shipped|delivery update|statement is ready|terms of service(?: update)?|tos(?: update)?|privacy policy(?: update)?|monthly statement|weekly summary|activity summary)\b/i;
 
 const MARKETING_SUBJECT_PATTERN =
   /\b(?:register now|registration (?:is open|link)|reserve your spot|save your seat|join us|don'?t miss|offer|sale|deal|discount|learn how to|grow your|boost your|unlock|free trial)\b/i;

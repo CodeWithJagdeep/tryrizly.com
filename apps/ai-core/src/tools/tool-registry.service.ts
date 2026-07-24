@@ -51,6 +51,7 @@ import { scheduleReminderTool } from "./queue.tools";
 import { createTaskTool } from "./task.tools";
 import { createWatchForReplyTool } from "./watch.tools";
 import { EmailClassifierService } from "../email/email-classifier.service";
+import { EmailAssessmentService } from "../email/email-assessment.service";
 import { EmailPipelineService } from "../email/email-pipeline.service";
 import { EmailPreferencesRepository } from "../email/email-preferences.repository";
 import { ConnectorService } from "../connectors/connector.service";
@@ -138,6 +139,8 @@ export class ToolRegistryService {
     private readonly taskRepository: TaskRepository,
     @Inject(EmailClassifierService)
     private readonly emailClassifier: EmailClassifierService,
+    @Inject(EmailAssessmentService)
+    private readonly emailAssessments: EmailAssessmentService,
     @Inject(EmailPreferencesRepository)
     private readonly emailPreferences: EmailPreferencesRepository,
     @Inject(EmailPipelineService)
@@ -160,7 +163,7 @@ export class ToolRegistryService {
       createConnectorStatusTool(this.connectorService),
       createConnectGoogleTool(),
       createLookupContactTool(this.google, this.entityRepository),
-      createGmailTriageTool(this.google, this.llm),
+      createGmailTriageTool(this.google, this.emailAssessments),
       createReadEmailBodyTool(this.google, this.emailClassifier),
       createSetEmailPreferenceTool(this.emailPreferences),
       createEmailConfirmTool(this.emailPipeline),

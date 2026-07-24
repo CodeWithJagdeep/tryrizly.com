@@ -15,17 +15,28 @@ import {
 } from "@nestjs/common";
 import { APPROVAL_STORE, type ApprovalStore } from "./approval-store";
 import { AuthRepository } from "./auth/auth.repository";
-import { CONVERSATION_STORE, type ConversationStore } from "./conversation-store";
-import { GatewayService, upgradeRequiredResult } from "./gateway.service";
 import {
-  TelegramService,
-  type TelegramUpdate,
-} from "./telegram.service";
+  CONVERSATION_STORE,
+  type ConversationStore,
+} from "./conversation-store";
+import { GatewayService, upgradeRequiredResult } from "./gateway.service";
+import { TelegramService, type TelegramUpdate } from "./telegram.service";
 import { env } from "@heyriz/shared/env";
-import { sendTelegramMessage, setTelegramWebhook } from "@heyriz/shared/telegram";
-import { requireInternalSecret, safeEqual, sanitizeReturnPath } from "./internal-auth";
+import {
+  sendTelegramMessage,
+  setTelegramWebhook,
+} from "@heyriz/shared/telegram";
+import {
+  requireInternalSecret,
+  safeEqual,
+  sanitizeReturnPath,
+} from "./internal-auth";
 import { RedisThrottlerStorage } from "./throttler-redis.storage";
 import { appendActionAudit } from "@heyriz/shared/action-audit";
+import {
+  GmailPushAuthService,
+  type PubSubPushEnvelope,
+} from "./gmail-push-auth.service";
 
 type ProxyPayload = Record<string, unknown>;
 type ChatHttpBody = {
@@ -40,7 +51,11 @@ type ChatResult = {
   reply: string;
   error?: string;
   upgradeRequired?: boolean;
-  pendingApproval?: { tool: string; payload: Record<string, unknown>; preview: string };
+  pendingApproval?: {
+    tool: string;
+    payload: Record<string, unknown>;
+    preview: string;
+  };
   [key: string]: unknown;
 };
 type RedirectResponse = {
@@ -66,19 +81,25 @@ export class GatewayController {
     private readonly approvals: ApprovalStore,
     @Inject(RedisThrottlerStorage)
     private readonly throttlerStorage: RedisThrottlerStorage,
+    @Inject(GmailPushAuthService)
+    private readonly gmailPushAuth: GmailPushAuthService,
   ) {}
 
   @Post("api/public/rate-limit")
   async publicRateLimit(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: { name?: string; key?: string; limit?: number; windowMs?: number },
+    @Body()
+    body: { name?: string; key?: string; limit?: number; windowMs?: number },
   ) {
     this.requireInternal(secret);
     if (!body.name?.match(/^[a-z0-9_-]{1,40}$/) || !body.key) {
       throw new BadRequestException("valid name and key are required");
     }
     const limit = Math.min(100, Math.max(1, Math.trunc(body.limit ?? 5)));
-    const windowMs = Math.min(24 * 60 * 60_000, Math.max(1_000, Math.trunc(body.windowMs ?? 60_000)));
+    const windowMs = Math.min(
+      24 * 60 * 60_000,
+      Math.max(1_000, Math.trunc(body.windowMs ?? 60_000)),
+    );
     const record = await this.throttlerStorage.increment(
       body.key.slice(0, 200),
       windowMs,
@@ -88,7 +109,9 @@ export class GatewayController {
     );
     return {
       allowed: !record.isBlocked,
-      retryAfter: record.isBlocked ? record.timeToBlockExpire || record.timeToExpire : 0,
+      retryAfter: record.isBlocked
+        ? record.timeToBlockExpire || record.timeToExpire
+        : 0,
     };
   }
 
@@ -104,11 +127,38 @@ export class GatewayController {
     if (env.NODE_ENV === "production" && !env.TELEGRAM_WEBHOOK_SECRET) {
       return { ok: false };
     }
-    if (env.TELEGRAM_WEBHOOK_SECRET && !safeEqual(secret, env.TELEGRAM_WEBHOOK_SECRET)) {
+    if (
+      env.TELEGRAM_WEBHOOK_SECRET &&
+      !safeEqual(secret, env.TELEGRAM_WEBHOOK_SECRET)
+    ) {
       return { ok: false };
     }
     await this.telegramService.handleUpdate(body);
     return { ok: true };
+  }
+
+  /**
+   * Authenticated Google Pub/Sub push endpoint. Returning success means the
+   * notification has reached a durable BullMQ queue; downstream processing can
+   * then retry independently without asking Pub/Sub to redeliver it.
+   */
+  @Post("api/gmail/push")
+  @HttpCode(200)
+  async gmailPushWebhook(
+    @Headers("authorization") authorization: string | undefined,
+    @Query("token") verificationToken: string | undefined,
+    @Body() body: PubSubPushEnvelope,
+  ) {
+    const notification = await this.gmailPushAuth.verify(
+      authorization,
+      verificationToken,
+      body,
+    );
+    const result = await this.gatewayService.sendToAiCore<{
+      matched: number;
+      queued: number;
+    }>("gmail.push.enqueue", notification);
+    return { ok: true, queued: result.queued };
   }
 
   @Post("api/telegram/set-webhook")
@@ -146,7 +196,11 @@ export class GatewayController {
     if (body.approve && body.pendingApprovalId) {
       const pending = await this.approvals.get(userId, body.pendingApprovalId);
       if (pending) {
-        approval = { id: pending.id, tool: pending.tool, payload: pending.payload };
+        approval = {
+          id: pending.id,
+          tool: pending.tool,
+          payload: pending.payload,
+        };
         await this.approvals.remove(userId, body.pendingApprovalId);
         await appendActionAudit({
           userId,
@@ -170,7 +224,10 @@ export class GatewayController {
 
     if ("pendingApproval" in result && result.pendingApproval) {
       const record = await this.approvals.add(userId, result.pendingApproval);
-      return { ...result, pendingApproval: { id: record.id, preview: record.preview } };
+      return {
+        ...result,
+        pendingApproval: { id: record.id, preview: record.preview },
+      };
     }
     return result;
   }
@@ -184,7 +241,10 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     if (!body.userId) throw new BadRequestException("userId is required");
-    return this.gatewayService.sendToAiCore("task.markDone", { id, userId: body.userId });
+    return this.gatewayService.sendToAiCore("task.markDone", {
+      id,
+      userId: body.userId,
+    });
   }
 
   @Delete("api/reminders/:id")
@@ -221,7 +281,10 @@ export class GatewayController {
     @Body() body: { userId?: string; instructions?: string },
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("email.draftReply", { ...body, messageId });
+    return this.gatewayService.sendToAiCore("email.draftReply", {
+      ...body,
+      messageId,
+    });
   }
 
   @Post("api/events")
@@ -334,7 +397,10 @@ export class GatewayController {
     @Body()
     body: {
       userId?: string;
-      subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+      subscription?: {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
     },
   ) {
     this.requireInternal(secret);
@@ -389,7 +455,9 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     if (!userId) return { connected: false, eventTypes: [] };
-    return this.gatewayService.sendToAiCore("automation.calcom.eventTypes", { userId });
+    return this.gatewayService.sendToAiCore("automation.calcom.eventTypes", {
+      userId,
+    });
   }
 
   /** Slack analog of resolveTelegramChatId — used by the automation-run worker's Slack action. */
@@ -439,10 +507,17 @@ export class GatewayController {
   @Post("api/notifications/log")
   logNotification(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: { userId?: string; message?: string; source?: string; sentAt?: string },
+    @Body()
+    body: {
+      userId?: string;
+      message?: string;
+      source?: string;
+      sentAt?: string;
+    },
   ) {
     this.requireInternal(secret);
-    if (!body.userId || !body.message) return { ok: false, error: "userId and message required" };
+    if (!body.userId || !body.message)
+      return { ok: false, error: "userId and message required" };
     return this.gatewayService.sendToAiCore("notification.log", {
       userId: body.userId,
       message: body.message,
@@ -524,7 +599,10 @@ export class GatewayController {
     @Query("userId") userId = "default",
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("gmail.getMessage", { userId, messageId });
+    return this.gatewayService.sendToAiCore("gmail.getMessage", {
+      userId,
+      messageId,
+    });
   }
 
   @Get("api/usage")
@@ -547,15 +625,25 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
 
-    const adminEmail = (env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim()).filter(Boolean)[0];
-    if (!adminEmail) return { ok: false, reason: "ADMIN_EMAILS not configured" };
+    const adminEmail = (env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean)[0];
+    if (!adminEmail)
+      return { ok: false, reason: "ADMIN_EMAILS not configured" };
 
     const chatId = await this.authRepo.findTelegramChatIdByUserId(adminEmail);
-    if (!chatId) return { ok: false, reason: "admin has no linked Telegram chat" };
+    if (!chatId)
+      return { ok: false, reason: "admin has no linked Telegram chat" };
 
     const summary = await this.gatewayService.sendToAiCore<{
       sinceDays: number;
-      users: Array<{ userId: string; calls: number; spendUsd: number; credits: number }>;
+      users: Array<{
+        userId: string;
+        calls: number;
+        spendUsd: number;
+        credits: number;
+      }>;
     }>("usage.listAll", { sinceDays: 1 });
 
     const text = renderAdminUsageDigest(summary);
@@ -588,10 +676,10 @@ export class GatewayController {
     @Query("userId") userId = "default",
   ) {
     this.requireInternal(secret);
-    const result = await this.gatewayService.sendToAiCore<{ ok: boolean; provider?: string }>(
-      "connector.deleteById",
-      { userId, id },
-    );
+    const result = await this.gatewayService.sendToAiCore<{
+      ok: boolean;
+      provider?: string;
+    }>("connector.deleteById", { userId, id });
     // Removing the Telegram connector must also release the chat claim, or no
     // other account (including this one, re-onboarding) can ever link that chat.
     if (result?.ok && result.provider === "telegram") {
@@ -623,7 +711,10 @@ export class GatewayController {
   ) {
     this.requireInternal(secret);
     if (!userId || !provider) return { enabled: true };
-    return this.gatewayService.sendToAiCore("connector.notification.check", { userId, provider });
+    return this.gatewayService.sendToAiCore("connector.notification.check", {
+      userId,
+      provider,
+    });
   }
 
   @Delete("api/connectors/:provider")
@@ -679,7 +770,9 @@ export class GatewayController {
     this.requireInternal(secret);
     const oauthProvider = this.requireConnectorOAuthProvider(provider);
     if (oauthProvider !== "calcom") {
-      throw new BadRequestException(`Custom OAuth credentials are not supported for ${provider}`);
+      throw new BadRequestException(
+        `Custom OAuth credentials are not supported for ${provider}`,
+      );
     }
     return this.gatewayService.sendToAiCore<{
       status: string;
@@ -867,7 +960,14 @@ export class GatewayController {
   private requireConnectorOAuthProvider(
     provider: string,
   ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" {
-    if (provider === "gmail" || provider === "calendar" || provider === "calcom" || provider === "notion" || provider === "github" || provider === "stripe") {
+    if (
+      provider === "gmail" ||
+      provider === "calendar" ||
+      provider === "calcom" ||
+      provider === "notion" ||
+      provider === "github" ||
+      provider === "stripe"
+    ) {
       return provider;
     }
     throw new BadRequestException(`Unsupported OAuth provider: ${provider}`);
@@ -880,7 +980,12 @@ export class GatewayController {
 
 function renderAdminUsageDigest(summary: {
   sinceDays: number;
-  users: Array<{ userId: string; calls: number; spendUsd: number; credits: number }>;
+  users: Array<{
+    userId: string;
+    calls: number;
+    spendUsd: number;
+    credits: number;
+  }>;
 }): string {
   const users = summary.users;
   if (users.length === 0) {
@@ -890,12 +995,18 @@ function renderAdminUsageDigest(summary: {
   const totalCalls = users.reduce((sum, u) => sum + u.calls, 0);
   const lines = users
     .slice(0, 20)
-    .map((u) => `${u.userId} — ${u.credits.toLocaleString()} credits (${u.calls} calls)`);
-  const more = users.length > 20 ? `\n…and ${users.length - 20} more users` : "";
-  return [
-    `AI usage digest (last ${summary.sinceDays}d)`,
-    `${users.length} active users, ${totalCredits.toLocaleString()} credits, ${totalCalls} calls total`,
-    "",
-    ...lines,
-  ].join("\n") + more;
+    .map(
+      (u) =>
+        `${u.userId} — ${u.credits.toLocaleString()} credits (${u.calls} calls)`,
+    );
+  const more =
+    users.length > 20 ? `\n…and ${users.length - 20} more users` : "";
+  return (
+    [
+      `AI usage digest (last ${summary.sinceDays}d)`,
+      `${users.length} active users, ${totalCredits.toLocaleString()} credits, ${totalCalls} calls total`,
+      "",
+      ...lines,
+    ].join("\n") + more
+  );
 }

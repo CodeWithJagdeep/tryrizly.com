@@ -14,7 +14,9 @@ export function getEmailEventQueue() {
 }
 
 export async function enqueueEmailEvent(data: EmailEventJobData) {
-  const jobId = safeJobId(`email-event:${data.userId}:${data.messageId}`);
+  const jobId = safeJobId(
+    `email-event:${data.userId}:${data.accountId ?? "primary"}:${data.messageId}`,
+  );
 
   const job = await getEmailEventQueue().add("email-event", data, {
     attempts: 2,

@@ -7,9 +7,11 @@ import { queueNames } from "@heyriz/shared/queue/names";
 import type { AutomationRunJobData } from "@heyriz/shared/queue/automation-runs";
 import type {
   AutomationFlow,
+  AutomationRunAuditEvent,
   AutomationRunStepResult,
   AutomationStepEvidence,
 } from "@heyriz/shared/automations/types";
+import { auditEventForAutomationStepResult } from "@heyriz/shared/automations/types";
 import {
   validateAutomationFlowForActivation,
   validateAutomationReleasePolicy,
@@ -124,14 +126,23 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
     // A "Delay" resume carries the same runId so the flow-builder's Test tab
     // shows one entry for the whole run, not one per delay segment.
     let runId = data.runId;
+    let createdAuditTrail: AutomationRunAuditEvent[] = [];
     if (!runId) {
       const runRes = await fetch(`${gatewayUrl}/api/automations/_internal/runs`, {
         method: "POST",
         headers: this.gatewayHeaders(true),
-        body: JSON.stringify({ flowId: flow.id, userId: flow.userId, triggerPayload: data.triggerPayload }),
+        body: JSON.stringify({
+          flowId: flow.id,
+          userId: flow.userId,
+          triggerItemId: data.triggerItemId,
+          triggerPayload: data.triggerPayload,
+        }),
       });
-      const runData = (await runRes.json().catch(() => ({}))) as { run?: { id: string } };
+      const runData = (await runRes.json().catch(() => ({}))) as {
+        run?: { id: string; auditTrail?: AutomationRunAuditEvent[] };
+      };
       runId = runData.run?.id;
+      createdAuditTrail = runData.run?.auditTrail ?? [];
     }
     if (!runId) {
       // Never touch an external provider unless there is already a durable run
@@ -144,6 +155,33 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       throw new Error(`automation_step_budget_exceeded:${actions.length}/${env.AUTOMATION_MAX_STEPS}`);
     }
     const results: AutomationRunStepResult[] = [...(data.priorResults ?? [])];
+    const auditTrail: AutomationRunAuditEvent[] = [
+      ...(data.priorAuditTrail ?? createdAuditTrail),
+    ];
+    const recordResult = (
+      result: AutomationRunStepResult,
+      skippedReason?: string,
+    ) => {
+      results.push(result);
+      auditTrail.push(
+        auditEventForAutomationStepResult({
+          runId,
+          result,
+          at: new Date().toISOString(),
+          revision: latestAuditRevision(auditTrail),
+          sequence: auditTrail.length,
+          skippedReason,
+        }),
+      );
+    };
+    const skipRemaining = (remainingSteps: typeof actions, reason: string) => {
+      for (const remaining of remainingSteps) {
+        recordResult(
+          { stepId: remaining.id, app: remaining.app, status: "skipped" },
+          reason,
+        );
+      }
+    };
     let outcome: "success" | "failed" = "success";
     // Mutable — an "Extract with AI" step writes its output back in here so
     // later steps can {{interpolate}} it, same as any other trigger field.
@@ -156,6 +194,22 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       if (step.app === "delay") {
         const delayMinutes = Number(config.delayMinutes) || 1;
         try {
+          const delayResult: AutomationRunStepResult = {
+            stepId: step.id,
+            app: step.app,
+            status: "success",
+            evidence: ack("bullmq", {
+              resourceId: `${flow.id}:${data.triggerItemId}:resume:${i + 1}`,
+              metadata: { delayMinutes },
+            }),
+          };
+          const delayEvent = auditEventForAutomationStepResult({
+            runId,
+            result: delayResult,
+            at: new Date().toISOString(),
+            revision: latestAuditRevision(auditTrail),
+            sequence: auditTrail.length,
+          });
           const queued = await enqueueAutomationRun(
             {
               flowId: flow.id,
@@ -164,18 +218,8 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
               triggerPayload: payload,
               runId,
               resumeFromIndex: i + 1,
-              priorResults: [
-                ...results,
-                {
-                  stepId: step.id,
-                  app: step.app,
-                  status: "success",
-                  evidence: ack("bullmq", {
-                    resourceId: `${flow.id}:${data.triggerItemId}:resume:${i + 1}`,
-                    metadata: { delayMinutes },
-                  }),
-                },
-              ],
+              priorResults: [...results, delayResult],
+              priorAuditTrail: [...auditTrail, delayEvent],
             },
             {
               delayMs: delayMinutes * 60_000,
@@ -187,15 +231,13 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           return;
         } catch (error) {
           outcome = "failed";
-          results.push({
+          recordResult({
             stepId: step.id,
             app: step.app,
             status: "failed",
             error: error instanceof Error ? error.message : String(error),
           });
-          for (const remaining of actions.slice(i + 1)) {
-            results.push({ stepId: remaining.id, app: remaining.app, status: "skipped" });
-          }
+          skipRemaining(actions.slice(i + 1), "Skipped because the delay could not be scheduled.");
           break;
         }
       }
@@ -207,18 +249,19 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           value: String(config.value ?? ""),
         };
         const passed = evaluateFilter(filterConfig, payload);
-        results.push({
-          stepId: step.id,
-          app: step.app,
-          status: passed ? "success" : "skipped",
-          ...(passed
-            ? { evidence: ack("filter", { metadata: { matched: true } }) }
-            : {}),
-        });
+        recordResult(
+          {
+            stepId: step.id,
+            app: step.app,
+            status: passed ? "success" : "skipped",
+            ...(passed
+              ? { evidence: ack("filter", { metadata: { matched: true } }) }
+              : {}),
+          },
+          "The filter condition did not match.",
+        );
         if (!passed) {
-          for (const remaining of actions.slice(i + 1)) {
-            results.push({ stepId: remaining.id, app: remaining.app, status: "skipped" });
-          }
+          skipRemaining(actions.slice(i + 1), "Skipped because the filter condition did not match.");
           break;
         }
         continue;
@@ -229,18 +272,16 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           const { output, evidence } = await this.runAiExtract(flow.userId, config, payload);
           const outputField = String(config.outputField ?? "").trim() || "ai_output";
           payload = { ...payload, [outputField]: output };
-          results.push({ stepId: step.id, app: step.app, status: "success", evidence });
+          recordResult({ stepId: step.id, app: step.app, status: "success", evidence });
         } catch (error) {
           outcome = "failed";
-          results.push({
+          recordResult({
             stepId: step.id,
             app: step.app,
             status: "failed",
             error: error instanceof Error ? error.message : String(error),
           });
-          for (const remaining of actions.slice(i + 1)) {
-            results.push({ stepId: remaining.id, app: remaining.app, status: "skipped" });
-          }
+          skipRemaining(actions.slice(i + 1), "Skipped because the Riz Agent step failed.");
           break;
         }
         continue;
@@ -254,7 +295,7 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
               : await this.runMongoFind(flow.userId, config, payload);
           const outputField = String(config.outputField ?? "").trim() || "query_result";
           payload = { ...payload, [`${outputField}_count`]: output.length, [outputField]: JSON.stringify(output).slice(0, 4000) };
-          results.push({
+          recordResult({
             stepId: step.id,
             app: step.app,
             status: "success",
@@ -265,15 +306,13 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           });
         } catch (error) {
           outcome = "failed";
-          results.push({
+          recordResult({
             stepId: step.id,
             app: step.app,
             status: "failed",
             error: error instanceof Error ? error.message : String(error),
           });
-          for (const remaining of actions.slice(i + 1)) {
-            results.push({ stepId: remaining.id, app: remaining.app, status: "skipped" });
-          }
+          skipRemaining(actions.slice(i + 1), `Skipped because the ${step.app} read failed.`);
           break;
         }
         continue;
@@ -289,10 +328,10 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           config,
           payload,
         });
-        results.push({ stepId: step.id, app: step.app, status: "success", evidence });
+        recordResult({ stepId: step.id, app: step.app, status: "success", evidence });
       } catch (error) {
         outcome = "failed";
-        results.push({
+        recordResult({
           stepId: step.id,
           app: step.app,
           status: "failed",
@@ -304,9 +343,7 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
           app: step.app,
           error: error instanceof Error ? error.message : String(error),
         });
-        for (const remaining of actions.slice(i + 1)) {
-          results.push({ stepId: remaining.id, app: remaining.app, status: "skipped" });
-        }
+        skipRemaining(actions.slice(i + 1), `Skipped because ${step.app} failed earlier in the run.`);
         break;
       }
     }
@@ -314,7 +351,12 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
     const finishRes = await fetch(`${gatewayUrl}/api/automations/_internal/runs/${runId}/finish`, {
       method: "POST",
       headers: this.gatewayHeaders(true),
-      body: JSON.stringify({ status: outcome, stepResults: results, userId: flow.userId }),
+      body: JSON.stringify({
+        status: outcome,
+        stepResults: results,
+        auditTrail,
+        userId: flow.userId,
+      }),
     });
     const finishBody = (await finishRes.json().catch(() => ({}))) as { ok?: boolean };
     if (!finishRes.ok || finishBody.ok !== true) {
@@ -813,6 +855,13 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       });
     }
   }
+}
+
+function latestAuditRevision(events: AutomationRunAuditEvent[]): number {
+  return events.reduce(
+    (latest, event) => Math.max(latest, event.revision),
+    1,
+  );
 }
 
 function requiredInterpolated(

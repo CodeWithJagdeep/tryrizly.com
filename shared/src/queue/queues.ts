@@ -6,6 +6,7 @@ import { safeJobId } from "./job-id";
 export { safeJobId } from "./job-id";
 import type { NotificationJobData, ReminderRequest } from "./types";
 import { getEmailEventQueue } from "./email-events";
+import { getGmailPushQueue } from "./gmail-push";
 import { getOutboundEmailQueue } from "./outbound-email";
 import { getSpineQueue } from "./spine";
 import { getWatchReplyQueue } from "./watch-replies";
@@ -22,7 +23,9 @@ export function getNotificationQueue() {
 
 /** Queue an immediate notification. Delivery resolves destinations by userId. */
 export async function enqueueNotification(
-  request: Omit<NotificationJobData, "source"> & { source?: NotificationJobData["source"] },
+  request: Omit<NotificationJobData, "source"> & {
+    source?: NotificationJobData["source"];
+  },
 ) {
   const job = await getNotificationQueue().add(
     "telegram-notification",
@@ -138,7 +141,9 @@ export type ScheduledReminder = {
  * Lists this user's reminders from BullMQ: upcoming (delayed/waiting),
  * recently fired (completed, kept 24 h), failed, and recurring schedulers.
  */
-export async function listReminders(userId: string): Promise<ScheduledReminder[]> {
+export async function listReminders(
+  userId: string,
+): Promise<ScheduledReminder[]> {
   const queue = getNotificationQueue();
   const [delayed, waiting, completed, failed, schedulers] = await Promise.all([
     queue.getJobs(["delayed"]),
@@ -148,7 +153,12 @@ export async function listReminders(userId: string): Promise<ScheduledReminder[]
     queue.getJobSchedulers(),
   ]);
 
-  type JobData = { userId?: string; message?: string; source?: string; metadata?: Record<string, unknown> };
+  type JobData = {
+    userId?: string;
+    message?: string;
+    source?: string;
+    metadata?: Record<string, unknown>;
+  };
 
   const upcoming: ScheduledReminder[] = [...delayed, ...waiting]
     .filter((job) => (job.data as JobData).userId === userId)
@@ -176,7 +186,9 @@ export async function listReminders(userId: string): Promise<ScheduledReminder[]
         job.opts?.delay != null
           ? new Date(job.timestamp + job.opts.delay).toISOString()
           : undefined,
-      firedAt: job.finishedOn ? new Date(job.finishedOn).toISOString() : undefined,
+      firedAt: job.finishedOn
+        ? new Date(job.finishedOn).toISOString()
+        : undefined,
       source: (job.data as JobData).source,
       metadata: (job.data as JobData).metadata,
     }));
@@ -213,7 +225,10 @@ export async function listReminders(userId: string): Promise<ScheduledReminder[]
 }
 
 /** Cancel a pending one-time reminder (BullMQ job) or recurring scheduler by id, scoped to its owner. */
-export async function cancelReminder(id: string, userId: string): Promise<boolean> {
+export async function cancelReminder(
+  id: string,
+  userId: string,
+): Promise<boolean> {
   const queue = getNotificationQueue();
   const job = await queue.getJob(id);
   if (job) {
@@ -222,19 +237,25 @@ export async function cancelReminder(id: string, userId: string): Promise<boolea
     return true;
   }
   const schedulers = await queue.getJobSchedulers();
-  const scheduler = schedulers.find((candidate) => (candidate.id ?? candidate.key) === id);
+  const scheduler = schedulers.find(
+    (candidate) => (candidate.id ?? candidate.key) === id,
+  );
   if (!scheduler) return false;
-  const owner = (scheduler.template?.data as { userId?: string } | undefined)?.userId;
+  const owner = (scheduler.template?.data as { userId?: string } | undefined)
+    ?.userId;
   if (owner !== userId) return false;
   const removed = await queue.removeJobScheduler(id).catch(() => false);
   return Boolean(removed);
 }
 
 /** Removes queued payloads owned by a deleted account from every user-data queue. */
-export async function removeUserQueueData(userId: string): Promise<{ removed: number }> {
+export async function removeUserQueueData(
+  userId: string,
+): Promise<{ removed: number }> {
   const queues: Queue[] = [
     getNotificationQueue(),
     getEmailEventQueue(),
+    getGmailPushQueue(),
     getOutboundEmailQueue(),
     getSpineQueue(),
     getWatchReplyQueue(),
@@ -243,7 +264,11 @@ export async function removeUserQueueData(userId: string): Promise<{ removed: nu
   let removed = 0;
   for (const queue of queues) {
     const active = await queue.getJobs(["active"]);
-    if (active.some((job: Job) => (job.data as { userId?: string }).userId === userId)) {
+    if (
+      active.some(
+        (job: Job) => (job.data as { userId?: string }).userId === userId,
+      )
+    ) {
       throw new Error(`account_deletion_jobs_active:${queue.name}`);
     }
     const jobs = await queue.getJobs([
@@ -255,18 +280,34 @@ export async function removeUserQueueData(userId: string): Promise<{ removed: nu
       "failed",
       "waiting-children",
     ]);
-    const owned = jobs.filter((job: Job) => (job.data as { userId?: string }).userId === userId);
+    const owned = jobs.filter(
+      (job: Job) => (job.data as { userId?: string }).userId === userId,
+    );
     for (const job of owned) {
-      if (await job.remove().then(() => true).catch(() => false)) removed += 1;
+      if (
+        await job
+          .remove()
+          .then(() => true)
+          .catch(() => false)
+      )
+        removed += 1;
     }
   }
 
   const notificationQueue = getNotificationQueue();
   const schedulers = await notificationQueue.getJobSchedulers();
   for (const scheduler of schedulers) {
-    if ((scheduler.template?.data as { userId?: string } | undefined)?.userId !== userId) continue;
+    if (
+      (scheduler.template?.data as { userId?: string } | undefined)?.userId !==
+      userId
+    )
+      continue;
     const id = scheduler.id ?? scheduler.key;
-    if (id && (await notificationQueue.removeJobScheduler(id).catch(() => false))) removed += 1;
+    if (
+      id &&
+      (await notificationQueue.removeJobScheduler(id).catch(() => false))
+    )
+      removed += 1;
   }
 
   return { removed };

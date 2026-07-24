@@ -39,6 +39,8 @@ export type GmailThreadSummary = {
   subject: string;
   snippet: string;
   date?: string;
+  /** Gmail's trusted receive timestamp in epoch milliseconds. */
+  internalDate?: string;
   labelIds: string[];
 };
 
@@ -48,6 +50,18 @@ export type GmailMessage = GmailThreadSummary & {
   /** Raw text/html part with inline (cid:) images resolved to data URIs, when present. */
   bodyHtml?: string;
   messageIdHeader?: string;
+};
+
+export type GmailWatch = {
+  historyId: string;
+  /** Epoch milliseconds represented as a string by the Gmail API. */
+  expiration: string;
+};
+
+export type GmailHistory = {
+  messageIds: string[];
+  historyId: string;
+  historyExpired: boolean;
 };
 
 export type SendOrDraftInput = {

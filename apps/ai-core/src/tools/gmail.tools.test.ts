@@ -46,10 +46,11 @@ describe("gmail_triage result contract", () => {
         },
       })),
     };
-    const classifyPriority = vi.fn(
-      async (input: { subject?: string }): Promise<PriorityClassification> => {
+    const assess = vi.fn(
+      async (input: { subject?: string }) => {
+        let classification: PriorityClassification;
         if (input.subject === "Security alert") {
-          return {
+          classification = {
             priority: "HIGH",
             reason: "Concrete account security risk.",
             source: "rules",
@@ -57,9 +58,8 @@ describe("gmail_triage result contract", () => {
             requiresAction: true,
             confidence: "high",
           };
-        }
-        if (input.subject === "Project update") {
-          return {
+        } else if (input.subject === "Project update") {
+          classification = {
             priority: "MEDIUM",
             reason: "Useful personal update.",
             source: "llm",
@@ -67,20 +67,34 @@ describe("gmail_triage result contract", () => {
             requiresAction: false,
             confidence: "medium",
           };
+        } else {
+          classification = {
+            priority: "LOW",
+            reason: "Automated digest.",
+            source: "rules",
+            category: "bulk_noise",
+            requiresAction: false,
+            confidence: "high",
+          };
         }
         return {
-          priority: "LOW",
-          reason: "Automated digest.",
-          source: "rules",
-          category: "bulk_noise",
-          requiresAction: false,
-          confidence: "high",
+          ...classification,
+          cacheStatus: "miss" as const,
+          evidenceLevel: input.subject ? ("metadata" as const) : ("body" as const),
+          assessedAt: "2026-07-23T00:00:00.000Z",
+          policyVersion: "test",
         };
       },
     );
+    const assessments = {
+      assess,
+      assessBatch: vi.fn(async (inputs: Array<{ subject?: string }>) =>
+        Promise.all(inputs.map((input) => assess(input))),
+      ),
+    };
     const tool = createGmailTriageTool(
       google as never,
-      { classifyPriority } as never,
+      assessments as never,
     );
 
     const result = await tool.execute({
@@ -137,28 +151,40 @@ describe("gmail_triage result contract", () => {
         },
       })),
     };
-    const llm = {
-      classifyPriority: vi.fn(async ({ subject }: { subject?: string }) =>
+    const assess = vi.fn(async ({ subject }: { subject?: string }) => {
+      const classification =
         subject === "Security alert"
-          ? ({
+          ? {
               priority: "HIGH",
               reason: "Concrete account security risk.",
               source: "rules",
               category: "critical_action",
               requiresAction: true,
               confidence: "high",
-            } satisfies PriorityClassification)
-          : ({
+            }
+          : {
               priority: "LOW",
               reason: "Automated digest.",
               source: "rules",
               category: "bulk_noise",
               requiresAction: false,
               confidence: "high",
-            } satisfies PriorityClassification),
+            };
+      return {
+        ...classification,
+        cacheStatus: "miss" as const,
+        evidenceLevel: "metadata" as const,
+        assessedAt: "2026-07-23T00:00:00.000Z",
+        policyVersion: "test",
+      };
+    });
+    const assessments = {
+      assess,
+      assessBatch: vi.fn(async (inputs: Array<{ subject?: string }>) =>
+        Promise.all(inputs.map((input) => assess(input))),
       ),
     };
-    const tool = createGmailTriageTool(google as never, llm as never);
+    const tool = createGmailTriageTool(google as never, assessments as never);
 
     const result = await tool.execute({
       userId: "user-1",

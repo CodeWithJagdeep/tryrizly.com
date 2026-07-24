@@ -5,6 +5,7 @@ import { removeUserQueueData } from "@heyriz/shared/queue/queues";
 import { ConnectorRepository } from "../connectors/connector.repository";
 import { ConnectorVaultService } from "../connectors/connector-vault.service";
 import { EmailPreferencesRepository } from "../email/email-preferences.repository";
+import { EmailAssessmentRepository } from "../email/email-assessment.repository";
 import { VectorMemoryService } from "../memory/vector-memory.service";
 
 const USER_TABLES = [
@@ -15,6 +16,7 @@ const USER_TABLES = [
   "llm_usage_log",
   "ai_credit_rollovers",
   "user_preferences",
+  "email_assessments",
   "memories",
   "decisions",
   "events",
@@ -29,6 +31,7 @@ export class AccountDeletionService implements OnModuleDestroy {
     private readonly connectors: ConnectorRepository,
     private readonly vault: ConnectorVaultService,
     private readonly emailPreferences: EmailPreferencesRepository,
+    private readonly emailAssessments: EmailAssessmentRepository,
     private readonly memories: VectorMemoryService,
   ) {
     if (env.DATABASE_URL) this.pool = new Pool({ connectionString: env.DATABASE_URL });
@@ -43,6 +46,7 @@ export class AccountDeletionService implements OnModuleDestroy {
       this.connectors.deleteAll(userId),
       this.memories.forgetAll(userId),
       this.emailPreferences.deleteAll(userId),
+      this.emailAssessments.deleteAll(userId),
     ]);
 
     const databaseRows = this.pool ? await this.deletePostgresRows(userId) : 0;

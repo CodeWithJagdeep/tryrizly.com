@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { AgentService } from "./agent.service";
 import type { HeyRizRuntimeContext } from "../context/context.types";
-import type { AgentPlan, AgentPlanRepository } from "../planning/agent-plan.repository";
+import {
+  completePlanWithEvidence,
+  revisePlanWithPatch,
+  type AgentPlan,
+  type AgentPlanRepository,
+} from "../planning/agent-plan.repository";
 import { AgentSkillRegistryService } from "../skills/agent-skill-registry.service";
 import { PromptAssemblerService } from "../prompt/prompt-assembler.service";
+import { AgentPlanSupervisorService } from "../planning/agent-plan-supervisor.service";
+import { AgentFinalVerifierService } from "./agent-final-verifier.service";
+import { AgentGuardrailService } from "./agent-guardrail.service";
 
 const context: HeyRizRuntimeContext = {
   userId: "owner@example.com",
@@ -36,8 +44,16 @@ describe("AgentService planning", () => {
         plan: {
           goal: "Find and explain the latest announcement",
           steps: [
-            { id: "search", task: "Search connected sources", tool: "source_updates" },
-            { id: "answer", task: "Compare timestamps and explain the latest", tool: null },
+            {
+              id: "search",
+              task: "Search connected sources",
+              tool: "source_updates",
+            },
+            {
+              id: "answer",
+              task: "Compare timestamps and explain the latest",
+              tool: null,
+            },
           ],
         },
         plan_step_id: "search",
@@ -60,7 +76,11 @@ describe("AgentService planning", () => {
     const llm = {
       getActiveProviderName: () => "grok",
       hasProvider: () => true,
-      complete: async ({ messages }: { messages: Array<{ role: string; content: string }> }) => {
+      complete: async ({
+        messages,
+      }: {
+        messages: Array<{ role: string; content: string }>;
+      }) => {
         llmMessages.push(messages);
         return script.shift();
       },
@@ -80,7 +100,10 @@ describe("AgentService planning", () => {
         approvalRequired: false,
         sensitiveDataPolicy: "live_fetch_only",
       }),
-      validatePayload: (_name: string, payload: unknown) => ({ ok: true as const, value: payload }),
+      validatePayload: (_name: string, payload: unknown) => ({
+        ok: true as const,
+        value: payload,
+      }),
       execute: async () => ({
         tool: "source_updates",
         status: "ok" as const,
@@ -90,7 +113,14 @@ describe("AgentService planning", () => {
     let storedPlan: AgentPlan | undefined;
     const plans = {
       getActive: async () => undefined,
-      start: async (userId: string, request: string, proposed: { goal: string; steps: Array<{ id: string; task: string; tool?: string }> }) => {
+      start: async (
+        userId: string,
+        request: string,
+        proposed: {
+          goal: string;
+          steps: Array<{ id: string; task: string; tool?: string }>;
+        },
+      ) => {
         const now = new Date().toISOString();
         storedPlan = {
           id: "plan-1",
@@ -98,7 +128,10 @@ describe("AgentService planning", () => {
           request,
           goal: proposed.goal,
           status: "active",
-          steps: proposed.steps.map((step) => ({ ...step, status: "pending" as const })),
+          steps: proposed.steps.map((step) => ({
+            ...step,
+            status: "pending" as const,
+          })),
           createdAt: now,
           updatedAt: now,
         };
@@ -124,6 +157,7 @@ describe("AgentService planning", () => {
     const budget = { check: async () => ({ state: "ok" as const }) };
     const skills = new AgentSkillRegistryService();
     const prompts = new PromptAssemblerService(skills);
+    const supervisor = new AgentPlanSupervisorService();
     const agent = new AgentService(
       tools as never,
       llm as never,
@@ -131,6 +165,9 @@ describe("AgentService planning", () => {
       plans,
       skills,
       prompts,
+      supervisor,
+      new AgentFinalVerifierService(llm as never, supervisor),
+      new AgentGuardrailService(llm as never),
     );
 
     const result = await agent.run({
@@ -143,7 +180,9 @@ describe("AgentService planning", () => {
     expect(result.steps).toEqual([
       expect.objectContaining({ tool: "source_updates", status: "ok" }),
     ]);
-    expect(llmMessages[1]?.at(-1)?.content).toContain("UNTRUSTED EXTERNAL DATA");
+    expect(llmMessages[1]?.at(-1)?.content).toContain(
+      "UNTRUSTED EXTERNAL DATA",
+    );
   });
 
   it("loads a registered skill as a bounded loop action before exposing its tools", async () => {
@@ -169,7 +208,11 @@ describe("AgentService planning", () => {
     const llm = {
       getActiveProviderName: () => "grok",
       hasProvider: () => true,
-      complete: async ({ messages }: { messages: Array<{ role: string; content: string }> }) => {
+      complete: async ({
+        messages,
+      }: {
+        messages: Array<{ role: string; content: string }>;
+      }) => {
         systemPrompts.push(messages[0]?.content ?? "");
         return script.shift();
       },
@@ -208,6 +251,7 @@ describe("AgentService planning", () => {
     const budget = { check: async () => ({ state: "ok" as const }) };
     const skills = new AgentSkillRegistryService();
     const prompts = new PromptAssemblerService(skills);
+    const supervisor = new AgentPlanSupervisorService();
     const agent = new AgentService(
       tools as never,
       llm as never,
@@ -215,6 +259,9 @@ describe("AgentService planning", () => {
       plans,
       skills,
       prompts,
+      supervisor,
+      new AgentFinalVerifierService(llm as never, supervisor),
+      new AgentGuardrailService(llm as never),
     );
 
     const result = await agent.run({
@@ -281,6 +328,7 @@ describe("AgentService planning", () => {
       getActive: async () => undefined,
     } as unknown as AgentPlanRepository;
     const skills = new AgentSkillRegistryService();
+    const supervisor = new AgentPlanSupervisorService();
     const agent = new AgentService(
       tools as never,
       llm as never,
@@ -288,6 +336,9 @@ describe("AgentService planning", () => {
       plans,
       skills,
       new PromptAssemblerService(skills),
+      supervisor,
+      new AgentFinalVerifierService(llm as never, supervisor),
+      new AgentGuardrailService(llm as never),
     );
 
     const result = await agent.run({
@@ -300,11 +351,262 @@ describe("AgentService planning", () => {
     expect(executions).toBe(0);
     expect(result.steps).toEqual([]);
   });
+
+  it("pivots a failed plan, preserves history, and completes the replacement path", async () => {
+    const llmMessages: Array<Array<{ role: string; content: string }>> = [];
+    const script = [
+      JSON.stringify({
+        action: "tool",
+        plan: {
+          goal: "Produce a current business update",
+          steps: [
+            {
+              id: "source",
+              task: "Read the primary connected source",
+              tool: "source_updates",
+            },
+            { id: "answer", task: "Summarize the verified result" },
+          ],
+        },
+        plan_step_id: "source",
+        tool_name: "source_updates",
+        tool_input: { query: "revenue" },
+      }),
+      JSON.stringify({
+        action: "tool",
+        plan: {
+          goal: "Silently replace the original goal",
+          steps: [
+            {
+              id: "replacement",
+              task: "Skip recovery history",
+              tool: "business_snapshot",
+            },
+            { id: "replacement-answer", task: "Claim success" },
+          ],
+        },
+        plan_step_id: "replacement",
+        tool_name: "business_snapshot",
+        tool_input: {},
+      }),
+      "The primary source is unavailable, so I could not finish the update.",
+      JSON.stringify({
+        action: "revise_plan",
+        plan_patch: {
+          reason: "The connected source is temporarily unavailable",
+          supersedeStepIds: ["source"],
+          steps: [
+            {
+              id: "business-fallback",
+              task: "Read the business snapshot fallback",
+              tool: "business_snapshot",
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        action: "tool",
+        plan_step_id: "business-fallback",
+        tool_name: "business_snapshot",
+        tool_input: {},
+      }),
+      JSON.stringify({
+        action: "final",
+        plan_step_id: "answer",
+        plan_complete: true,
+        say: "The fallback snapshot returned verified current revenue, boss.",
+      }),
+    ];
+    const llm = {
+      getActiveProviderName: () => "grok",
+      hasProvider: () => true,
+      complete: async ({
+        messages,
+      }: {
+        messages: Array<{ role: string; content: string }>;
+      }) => {
+        llmMessages.push(messages);
+        return script.shift();
+      },
+    };
+    const executions: string[] = [];
+    const tools = {
+      list: () =>
+        ["source_updates", "business_snapshot"].map((name) => ({
+          name,
+          category: "business",
+          description: name,
+          approvalRequired: false,
+          sensitiveDataPolicy: "live_fetch_only",
+        })),
+      get: (name: string) => ({
+        name,
+        approvalRequired: false,
+        sensitiveDataPolicy: "live_fetch_only",
+      }),
+      validatePayload: (_name: string, payload: unknown) => ({
+        ok: true as const,
+        value: payload,
+      }),
+      execute: async ({ name }: { name: string }) => {
+        executions.push(name);
+        return name === "source_updates"
+          ? {
+              tool: name,
+              status: "transient_error" as const,
+              message: "Primary source timed out.",
+            }
+          : {
+              tool: name,
+              status: "ok" as const,
+              message: "Current revenue is ₹10 lakh.",
+            };
+      },
+    };
+    const memory = inMemoryPlans();
+    const skills = new AgentSkillRegistryService();
+    const supervisor = new AgentPlanSupervisorService();
+    const agent = new AgentService(
+      tools as never,
+      llm as never,
+      { check: async () => ({ state: "ok" as const }) } as never,
+      memory.repository,
+      skills,
+      new PromptAssemblerService(skills),
+      supervisor,
+      new AgentFinalVerifierService(llm as never, supervisor),
+      new AgentGuardrailService(llm as never),
+    );
+
+    const result = await agent.run({
+      userId: context.userId,
+      message: "Give me a current business update",
+      context,
+    });
+
+    expect(executions).toEqual(["source_updates", "business_snapshot"]);
+    expect(result.plan).toMatchObject({
+      status: "completed",
+      revision: 2,
+      pivotCount: 1,
+      goal: "Produce a current business update",
+    });
+    expect(
+      result.plan?.steps.find((step) => step.id === "source")?.status,
+    ).toBe("superseded");
+    expect(
+      result.plan?.steps.find((step) => step.id === "business-fallback"),
+    ).toMatchObject({ status: "completed", evidence: "business_snapshot: ok" });
+    expect(
+      llmMessages.some((messages) =>
+        messages.some((message) =>
+          message.content.includes("RECOVERY CHECKPOINT"),
+        ),
+      ),
+    ).toBe(true);
+  });
 });
 
-function update(plan: AgentPlan, id: string, status: "in_progress" | "completed"): AgentPlan {
+function update(
+  plan: AgentPlan,
+  id: string,
+  status: "in_progress" | "completed",
+): AgentPlan {
   return {
     ...plan,
-    steps: plan.steps.map((step) => (step.id === id ? { ...step, status } : step)),
+    steps: plan.steps.map((step) =>
+      step.id === id ? { ...step, status } : step,
+    ),
   };
+}
+
+function inMemoryPlans(): {
+  repository: AgentPlanRepository;
+  current: () => AgentPlan | undefined;
+} {
+  let stored: AgentPlan | undefined;
+  const repository = {
+    getActive: async () => stored,
+    start: async (
+      userId: string,
+      request: string,
+      proposed: {
+        goal: string;
+        steps: Array<{ id: string; task: string; tool?: string }>;
+      },
+    ) => {
+      const now = "2026-01-01T00:00:00.000Z";
+      stored = {
+        id: "adaptive-plan",
+        userId,
+        request,
+        goal: proposed.goal,
+        status: "active",
+        steps: proposed.steps.map((step) => ({
+          ...step,
+          status: "pending" as const,
+          attempts: 0,
+        })),
+        revision: 1,
+        pivotCount: 0,
+        revisions: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      return stored;
+    },
+    markRunning: async (plan: AgentPlan, stepId: string) => {
+      stored = {
+        ...plan,
+        steps: plan.steps.map((step) =>
+          step.id === stepId
+            ? {
+                ...step,
+                status: "in_progress" as const,
+                attempts: (step.attempts ?? 0) + 1,
+              }
+            : step,
+        ),
+      };
+      return stored;
+    },
+    recordResult: async (
+      plan: AgentPlan,
+      stepId: string,
+      result: { tool: string; status: string },
+    ) => {
+      stored = {
+        ...plan,
+        steps: plan.steps.map((step) =>
+          step.id === stepId
+            ? {
+                ...step,
+                status:
+                  result.status === "ok"
+                    ? ("completed" as const)
+                    : ("blocked" as const),
+                evidence: `${result.tool}: ${result.status}`,
+              }
+            : step,
+        ),
+      };
+      return stored;
+    },
+    revise: async (
+      plan: AgentPlan,
+      patch: Parameters<typeof revisePlanWithPatch>[1],
+    ) => {
+      stored = revisePlanWithPatch(plan, patch, "2026-01-01T00:01:00.000Z");
+      return stored;
+    },
+    complete: async (plan: AgentPlan) => {
+      stored = completePlanWithEvidence(plan);
+      return stored;
+    },
+    fail: async (plan: AgentPlan) => {
+      stored = { ...plan, status: "failed" };
+      return stored;
+    },
+  } as unknown as AgentPlanRepository;
+  return { repository, current: () => stored };
 }

@@ -8,10 +8,18 @@ import type { ToolExecutionResult } from "../tools/tool.types";
 import type { AgentPlanRepository } from "../planning/agent-plan.repository";
 import { AgentSkillRegistryService } from "../skills/agent-skill-registry.service";
 import { PromptAssemblerService } from "../prompt/prompt-assembler.service";
+import { AgentPlanSupervisorService } from "../planning/agent-plan-supervisor.service";
+import { AgentFinalVerifierService } from "../agent/agent-final-verifier.service";
+import { AgentGuardrailService } from "../agent/agent-guardrail.service";
 
 // Always-ok budget gate — these scenarios test tool-loop behavior, not billing.
 const fakeBudgetGate = {
-  check: async () => ({ state: "ok" as const, spendUsd: 0, budgetUsd: Number.POSITIVE_INFINITY, ratio: 0 }),
+  check: async () => ({
+    state: "ok" as const,
+    spendUsd: 0,
+    budgetUsd: Number.POSITIVE_INFINITY,
+    ratio: 0,
+  }),
   consumeWarnOnce: () => false,
 } as unknown as BudgetGateService;
 
@@ -33,36 +41,122 @@ function fakeLlm(script: string[]): LlmRouterService {
   return {
     getActiveProviderName: () => "grok",
     hasProvider: () => true,
-    complete: async () => script[i++] ?? '{"action":"final","say":"Done, sir."}',
+    complete: async () =>
+      script[i++] ?? '{"action":"final","say":"Done, sir."}',
   } as unknown as LlmRouterService;
+}
+
+function buildAgent(
+  tools: ToolRegistryService,
+  llm: LlmRouterService,
+): AgentService {
+  const supervisor = new AgentPlanSupervisorService();
+  return new AgentService(
+    tools,
+    llm,
+    fakeBudgetGate,
+    fakePlans,
+    fakeSkills,
+    fakePrompts,
+    supervisor,
+    new AgentFinalVerifierService(llm, supervisor),
+    new AgentGuardrailService(llm),
+  );
 }
 
 const fakeTools = {
   list: () => [
-    { name: "calendar_briefing", category: "calendar", description: "today's schedule", approvalRequired: false, sensitiveDataPolicy: "live_fetch_only" },
-    { name: "draft_email_reply", category: "gmail", description: "draft a reply", approvalRequired: false, sensitiveDataPolicy: "live_fetch_only" },
-    { name: "send_email", category: "gmail", description: "send", approvalRequired: true, sensitiveDataPolicy: "live_fetch_only" },
-    { name: "check_calendar_conflict", category: "calendar", description: "check for a clash", approvalRequired: false, sensitiveDataPolicy: "live_fetch_only" },
-    { name: "reschedule_calendar_event", category: "calendar", description: "move an event", approvalRequired: true, sensitiveDataPolicy: "live_fetch_only" },
+    {
+      name: "calendar_briefing",
+      category: "calendar",
+      description: "today's schedule",
+      approvalRequired: false,
+      sensitiveDataPolicy: "live_fetch_only",
+    },
+    {
+      name: "draft_email_reply",
+      category: "gmail",
+      description: "draft a reply",
+      approvalRequired: false,
+      sensitiveDataPolicy: "live_fetch_only",
+    },
+    {
+      name: "send_email",
+      category: "gmail",
+      description: "send",
+      approvalRequired: true,
+      sensitiveDataPolicy: "live_fetch_only",
+    },
+    {
+      name: "check_calendar_conflict",
+      category: "calendar",
+      description: "check for a clash",
+      approvalRequired: false,
+      sensitiveDataPolicy: "live_fetch_only",
+    },
+    {
+      name: "reschedule_calendar_event",
+      category: "calendar",
+      description: "move an event",
+      approvalRequired: true,
+      sensitiveDataPolicy: "live_fetch_only",
+    },
   ],
-  get: (name: string) => ({ name, approvalRequired: name === "send_email" || name === "reschedule_calendar_event" }),
-  validatePayload: (_name: string, payload: unknown) => ({ ok: true, value: payload }),
+  get: (name: string) => ({
+    name,
+    approvalRequired:
+      name === "send_email" || name === "reschedule_calendar_event",
+  }),
+  validatePayload: (_name: string, payload: unknown) => ({
+    ok: true,
+    value: payload,
+  }),
   execute: async ({ name }: { name: string }): Promise<ToolExecutionResult> => {
     if (name === "calendar_briefing")
-      return { tool: name, status: "ok", message: "2 meetings today; next: Naman 15:00." };
+      return {
+        tool: name,
+        status: "ok",
+        message: "2 meetings today; next: Naman 15:00.",
+      };
     if (name === "draft_email_reply")
-      return { tool: name, status: "ok", message: "Draft ready.", data: { sendPayload: { to: "naman@x.com", subject: "Re: Proposal", body: "Sounds good." } } };
+      return {
+        tool: name,
+        status: "ok",
+        message: "Draft ready.",
+        data: {
+          sendPayload: {
+            to: "naman@x.com",
+            subject: "Re: Proposal",
+            body: "Sounds good.",
+          },
+        },
+      };
     if (name === "send_email")
-      return { tool: name, status: "ok", message: "Sent, sir — on its way to Naman." };
+      return {
+        tool: name,
+        status: "ok",
+        message: "Sent, sir — on its way to Naman.",
+      };
     if (name === "check_calendar_conflict")
       return {
         tool: name,
         status: "conflict",
         message: 'That clashes with "Naman sync" at 16:00, sir.',
-        data: { conflict: { id: "evt_naman_1", title: "Naman sync", start: "2026-06-22T16:00:00Z", end: "2026-06-22T16:30:00Z" } },
+        data: {
+          conflict: {
+            id: "evt_naman_1",
+            title: "Naman sync",
+            start: "2026-06-22T16:00:00Z",
+            end: "2026-06-22T16:30:00Z",
+          },
+        },
       };
     if (name === "reschedule_calendar_event")
-      return { tool: name, status: "ok", message: '"Naman sync" is now at 17:00 and they\'ve been notified.' };
+      return {
+        tool: name,
+        status: "ok",
+        message: '"Naman sync" is now at 17:00 and they\'ve been notified.',
+      };
     return { tool: name, status: "not_implemented", message: "n/a" };
   },
 } as unknown as ToolRegistryService;
@@ -90,59 +184,66 @@ const context: HeyRizRuntimeContext = {
 
 async function main() {
   // Scenario A: read calendar -> draft -> propose send -> PAUSE for approval.
-  const agentA = new AgentService(
+  const agentA = buildAgent(
     fakeTools,
     fakeLlm([
       '{"thought":"check day","action":"tool","tool_name":"calendar_briefing","tool_input":{}}',
       '{"thought":"draft reply","action":"tool","tool_name":"draft_email_reply","tool_input":{"messageId":"m1","instructions":"accept, propose Tue 3pm"}}',
       '{"thought":"send it","action":"tool","tool_name":"send_email","tool_input":{"to":"naman@x.com","subject":"Re: Proposal","body":"Sounds good."}}',
     ]),
-    fakeBudgetGate,
-    fakePlans,
-    fakeSkills,
-    fakePrompts,
   );
-  const a = await agentA.run({ userId: "default", message: "Reply to Naman accepting", context });
+  const a = await agentA.run({
+    userId: "default",
+    message: "Reply to Naman accepting",
+    context,
+  });
   console.log("SCENARIO_A_steps:", a.steps.map((s) => s.tool).join(" -> "));
   console.log("SCENARIO_A_pendingApproval:", JSON.stringify(a.pendingApproval));
 
   // Scenario B: the principal approves -> the gated tool actually runs.
-  const agentB = new AgentService(
+  const agentB = buildAgent(
     fakeTools,
-    fakeLlm(['{"action":"final","say":"Sent, sir — your reply is on its way to Naman."}']),
-    fakeBudgetGate,
-    fakePlans,
-    fakeSkills,
-    fakePrompts,
+    fakeLlm([
+      '{"action":"final","say":"Sent, sir — your reply is on its way to Naman."}',
+    ]),
   );
   const b = await agentB.run({
     userId: "default",
     message: "yes send it",
     context,
-    approval: { tool: "send_email", payload: { to: "naman@x.com", subject: "Re: Proposal", body: "Sounds good." } },
+    approval: {
+      tool: "send_email",
+      payload: {
+        to: "naman@x.com",
+        subject: "Re: Proposal",
+        body: "Sounds good.",
+      },
+    },
   });
-  console.log("SCENARIO_B_executed:", b.steps.map((s) => `${s.tool}:${s.status}`).join(", "));
+  console.log(
+    "SCENARIO_B_executed:",
+    b.steps.map((s) => `${s.tool}:${s.status}`).join(", "),
+  );
   console.log("SCENARIO_B_reply:", b.reply);
 
   // Scenario C: check for a conflict -> see one -> propose moving the clashing
   // event -> PAUSE for approval (the negotiation flow from a 3pm meeting ask).
-  const agentC = new AgentService(
+  const agentC = buildAgent(
     fakeTools,
     fakeLlm([
       '{"thought":"check 3pm window","action":"tool","tool_name":"check_calendar_conflict","tool_input":{"start":"2026-06-22T16:00:00Z","end":"2026-06-22T16:30:00Z"}}',
       '{"thought":"move the clashing event instead","action":"tool","tool_name":"reschedule_calendar_event","tool_input":{"eventId":"evt_naman_1","newStart":"2026-06-22T17:00:00Z","newEnd":"2026-06-22T17:30:00Z"}}',
     ]),
-    fakeBudgetGate,
-    fakePlans,
-    fakeSkills,
-    fakePrompts,
   );
   const c = await agentC.run({
     userId: "default",
     message: "reschedule with Naman to 4pm",
     context,
   });
-  console.log("SCENARIO_C_steps:", c.steps.map((s) => `${s.tool}:${s.status}`).join(", "));
+  console.log(
+    "SCENARIO_C_steps:",
+    c.steps.map((s) => `${s.tool}:${s.status}`).join(", "),
+  );
   console.log("SCENARIO_C_pendingApproval:", JSON.stringify(c.pendingApproval));
 
   // Scenario D: obvious read-only calendar date questions bypass the LLM, so
@@ -152,36 +253,45 @@ async function main() {
   const dateTools = {
     list: () => fakeTools.list(),
     get: (name: string) => ({ name, approvalRequired: false }),
-    validatePayload: (_name: string, payload: unknown) => ({ ok: true, value: payload }),
-    execute: async ({ name, payload }: { name: string; payload: Record<string, unknown> }): Promise<ToolExecutionResult> => {
+    validatePayload: (_name: string, payload: unknown) => ({
+      ok: true,
+      value: payload,
+    }),
+    execute: async ({
+      name,
+      payload,
+    }: {
+      name: string;
+      payload: Record<string, unknown>;
+    }): Promise<ToolExecutionResult> => {
       if (name === "calendar_briefing") {
         dPayload = payload;
-        return { tool: name, status: "ok", message: "Your calendar is clear tomorrow, sir." };
+        return {
+          tool: name,
+          status: "ok",
+          message: "Your calendar is clear tomorrow, sir.",
+        };
       }
       return { tool: name, status: "not_implemented", message: "n/a" };
     },
   } as unknown as ToolRegistryService;
-  const agentD = new AgentService(
-    dateTools,
-    {
-      getActiveProviderName: () => "grok",
-      hasProvider: () => true,
-      complete: async () => {
-        dLlmCalls += 1;
-        return '{"action":"final","say":"Your calendar is clear today, sir."}';
-      },
-    } as unknown as LlmRouterService,
-    fakeBudgetGate,
-    fakePlans,
-    fakeSkills,
-    fakePrompts,
-  );
+  const agentD = buildAgent(dateTools, {
+    getActiveProviderName: () => "grok",
+    hasProvider: () => true,
+    complete: async () => {
+      dLlmCalls += 1;
+      return '{"action":"final","say":"Your calendar is clear today, sir."}';
+    },
+  } as unknown as LlmRouterService);
   const d = await agentD.run({
     userId: "default",
     message: "Whats about tommorrow?",
     context,
   });
-  console.log("SCENARIO_D_steps:", d.steps.map((s) => `${s.tool}:${s.status}`).join(", "));
+  console.log(
+    "SCENARIO_D_steps:",
+    d.steps.map((s) => `${s.tool}:${s.status}`).join(", "),
+  );
   console.log("SCENARIO_D_payload:", JSON.stringify(dPayload));
   console.log("SCENARIO_D_llmCalls:", dLlmCalls);
 

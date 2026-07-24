@@ -1,10 +1,7 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { Pool } from "pg";
 import { env } from "@heyriz/shared/env";
-import type {
-  ConnectedAccount,
-  ConnectorProvider,
-} from "./connector.types";
+import type { ConnectedAccount, ConnectorProvider } from "./connector.types";
 
 const inMemoryAccounts = new Map<string, ConnectedAccount>();
 const inMemoryOAuthStates = new Map<
@@ -44,7 +41,9 @@ export class ConnectorRepository implements OnModuleDestroy {
     const now = new Date().toISOString();
     const existing = opts?.externalId
       ? (await this.findAll(account.userId, account.provider)).find(
-          (a) => (a.metadata?.accountEmail as string | undefined) === opts.externalId,
+          (a) =>
+            (a.metadata?.accountEmail as string | undefined) ===
+            opts.externalId,
         )
       : await this.find(account.userId, account.provider);
     const next: ConnectedAccount = {
@@ -56,7 +55,10 @@ export class ConnectorRepository implements OnModuleDestroy {
 
     if (!this.pool) {
       // Multi-account rows are keyed by id; single-provider rows by (userId, provider).
-      inMemoryAccounts.set(opts?.externalId ? next.id : this.key(account.userId, account.provider), next);
+      inMemoryAccounts.set(
+        opts?.externalId ? next.id : this.key(account.userId, account.provider),
+        next,
+      );
       return next;
     }
 
@@ -109,9 +111,15 @@ export class ConnectorRepository implements OnModuleDestroy {
   }
 
   /** Insert a new named account (for manual multi-account DB connectors). */
-  async insert(account: Omit<ConnectedAccount, "createdAt" | "updatedAt">): Promise<ConnectedAccount> {
+  async insert(
+    account: Omit<ConnectedAccount, "createdAt" | "updatedAt">,
+  ): Promise<ConnectedAccount> {
     const now = new Date().toISOString();
-    const next: ConnectedAccount = { ...account, createdAt: now, updatedAt: now };
+    const next: ConnectedAccount = {
+      ...account,
+      createdAt: now,
+      updatedAt: now,
+    };
 
     if (!this.pool) {
       inMemoryAccounts.set(next.id, next);
@@ -132,20 +140,37 @@ export class ConnectorRepository implements OnModuleDestroy {
         created_at as "createdAt", updated_at as "updatedAt"
       `,
       [
-        next.id, next.userId, next.provider, next.authType, next.label,
-        next.status, next.encryptedPayload, JSON.stringify(next.scopes),
-        JSON.stringify(next.metadata), next.createdAt, next.updatedAt,
+        next.id,
+        next.userId,
+        next.provider,
+        next.authType,
+        next.label,
+        next.status,
+        next.encryptedPayload,
+        JSON.stringify(next.scopes),
+        JSON.stringify(next.metadata),
+        next.createdAt,
+        next.updatedAt,
       ],
     );
     return row.rows[0];
   }
 
   /** Update an existing account by id. */
-  async updateById(id: string, patch: Partial<Pick<ConnectedAccount, "label" | "status" | "encryptedPayload" | "metadata">>): Promise<void> {
+  async updateById(
+    id: string,
+    patch: Partial<
+      Pick<
+        ConnectedAccount,
+        "label" | "status" | "encryptedPayload" | "metadata"
+      >
+    >,
+  ): Promise<void> {
     const now = new Date().toISOString();
     if (!this.pool) {
       const existing = [...inMemoryAccounts.values()].find((a) => a.id === id);
-      if (existing) inMemoryAccounts.set(id, { ...existing, ...patch, updatedAt: now });
+      if (existing)
+        inMemoryAccounts.set(id, { ...existing, ...patch, updatedAt: now });
       return;
     }
     await this.ensureTable();
@@ -157,8 +182,14 @@ export class ConnectorRepository implements OnModuleDestroy {
         metadata = coalesce($5::jsonb, metadata),
         updated_at = $6
        where id = $1`,
-      [id, patch.label ?? null, patch.status ?? null, patch.encryptedPayload ?? null,
-       patch.metadata ? JSON.stringify(patch.metadata) : null, now],
+      [
+        id,
+        patch.label ?? null,
+        patch.status ?? null,
+        patch.encryptedPayload ?? null,
+        patch.metadata ? JSON.stringify(patch.metadata) : null,
+        now,
+      ],
     );
   }
 
@@ -167,12 +198,24 @@ export class ConnectorRepository implements OnModuleDestroy {
     id: string,
     userId: string,
     provider: ConnectorProvider,
-    patch: Partial<Pick<ConnectedAccount, "label" | "status" | "encryptedPayload" | "metadata">>,
+    patch: Partial<
+      Pick<
+        ConnectedAccount,
+        "label" | "status" | "encryptedPayload" | "metadata"
+      >
+    >,
   ): Promise<ConnectedAccount | undefined> {
     const now = new Date().toISOString();
     if (!this.pool) {
-      const existing = [...inMemoryAccounts.values()].find((account) => account.id === id);
-      if (!existing || existing.userId !== userId || existing.provider !== provider) return undefined;
+      const existing = [...inMemoryAccounts.values()].find(
+        (account) => account.id === id,
+      );
+      if (
+        !existing ||
+        existing.userId !== userId ||
+        existing.provider !== provider
+      )
+        return undefined;
       const updated = { ...existing, ...patch, updatedAt: now };
       inMemoryAccounts.set(id, updated);
       return updated;
@@ -237,10 +280,13 @@ export class ConnectorRepository implements OnModuleDestroy {
 
   async find(userId: string, provider: ConnectorProvider) {
     if (!this.pool) {
-      return inMemoryAccounts.get(this.key(userId, provider))
-        ?? [...inMemoryAccounts.values()].find(
-          (account) => account.userId === userId && account.provider === provider,
-        );
+      return (
+        inMemoryAccounts.get(this.key(userId, provider)) ??
+        [...inMemoryAccounts.values()].find(
+          (account) =>
+            account.userId === userId && account.provider === provider,
+        )
+      );
     }
 
     await this.ensureTable();
@@ -270,7 +316,10 @@ export class ConnectorRepository implements OnModuleDestroy {
   }
 
   /** Find all accounts for a given provider (e.g. multiple Postgres connections). */
-  async findAll(userId: string, provider: ConnectorProvider): Promise<ConnectedAccount[]> {
+  async findAll(
+    userId: string,
+    provider: ConnectorProvider,
+  ): Promise<ConnectedAccount[]> {
     if (!this.pool) {
       return [...inMemoryAccounts.values()].filter(
         (a) => a.userId === userId && a.provider === provider,
@@ -287,6 +336,160 @@ export class ConnectorRepository implements OnModuleDestroy {
       [userId, provider],
     );
     return result.rows;
+  }
+
+  async findGmailAccountsByEmail(
+    emailAddress: string,
+  ): Promise<ConnectedAccount[]> {
+    const normalized = emailAddress.trim().toLowerCase();
+    if (!normalized) return [];
+    if (!this.pool) {
+      return [...inMemoryAccounts.values()].filter(
+        (account) =>
+          account.provider === "gmail" &&
+          account.status === "connected" &&
+          String(account.metadata.accountEmail ?? "").toLowerCase() ===
+            normalized,
+      );
+    }
+    await this.ensureTable();
+    const result = await this.pool.query<ConnectedAccount>(
+      `select id, user_id as "userId", provider, auth_type as "authType", label,
+              status, encrypted_payload as "encryptedPayload", scopes, metadata,
+              created_at as "createdAt", updated_at as "updatedAt"
+         from connected_accounts
+        where provider = 'gmail'
+          and status = 'connected'
+          and lower(metadata->>'accountEmail') = $1`,
+      [normalized],
+    );
+    return result.rows;
+  }
+
+  /**
+   * Advances the Gmail history cursor atomically and monotonically. Pub/Sub may
+   * deliver notifications concurrently or out of order; an older job must
+   * never move the cursor backwards and create a synchronization gap.
+   */
+  async advanceGmailHistoryCursor(
+    id: string,
+    userId: string,
+    historyId: string,
+  ): Promise<boolean> {
+    if (!/^\d+$/.test(historyId)) return false;
+    const now = new Date().toISOString();
+    if (!this.pool) {
+      const existing = [...inMemoryAccounts.values()].find(
+        (account) =>
+          account.id === id &&
+          account.userId === userId &&
+          account.provider === "gmail",
+      );
+      if (!existing) return false;
+      const current = String(existing.metadata.gmailWatchHistoryId ?? "0");
+      if (/^\d+$/.test(current) && BigInt(current) >= BigInt(historyId)) {
+        return false;
+      }
+      inMemoryAccounts.set(id, {
+        ...existing,
+        metadata: {
+          ...existing.metadata,
+          gmailWatchHistoryId: historyId,
+          gmailLastPushAt: now,
+        },
+        updatedAt: now,
+      });
+      return true;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query(
+      `update connected_accounts
+          set metadata = metadata || jsonb_build_object(
+                'gmailWatchHistoryId', $3::text,
+                'gmailLastPushAt', $4::text
+              ),
+              updated_at = $4
+        where id = $1
+          and user_id = $2
+          and provider = 'gmail'
+          and coalesce(
+            case
+              when metadata->>'gmailWatchHistoryId' ~ '^[0-9]+$'
+                then (metadata->>'gmailWatchHistoryId')::numeric
+              else 0
+            end,
+            0
+          ) < $3::numeric`,
+      [id, userId, historyId, now],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Records a renewed Gmail watch without replacing unrelated connector
+   * metadata. The cursor is monotonic because an immediate Pub/Sub delivery
+   * may race the users.watch response.
+   */
+  async recordGmailWatch(
+    id: string,
+    userId: string,
+    historyId: string,
+    expiration: string,
+  ): Promise<boolean> {
+    if (!/^\d+$/.test(historyId) || !/^\d+$/.test(expiration)) return false;
+    const now = new Date().toISOString();
+    if (!this.pool) {
+      const existing = [...inMemoryAccounts.values()].find(
+        (account) =>
+          account.id === id &&
+          account.userId === userId &&
+          account.provider === "gmail",
+      );
+      if (!existing) return false;
+      const current = String(existing.metadata.gmailWatchHistoryId ?? "0");
+      const nextHistoryId =
+        /^\d+$/.test(current) && BigInt(current) > BigInt(historyId)
+          ? current
+          : historyId;
+      inMemoryAccounts.set(id, {
+        ...existing,
+        metadata: {
+          ...existing.metadata,
+          gmailWatchHistoryId: nextHistoryId,
+          gmailWatchExpiration: expiration,
+          gmailWatchRenewedAt: now,
+        },
+        updatedAt: now,
+      });
+      return true;
+    }
+    await this.ensureTable();
+    const result = await this.pool.query(
+      `update connected_accounts
+          set metadata = metadata || jsonb_build_object(
+                'gmailWatchHistoryId',
+                case
+                  when coalesce(
+                    case
+                      when metadata->>'gmailWatchHistoryId' ~ '^[0-9]+$'
+                        then (metadata->>'gmailWatchHistoryId')::numeric
+                      else 0
+                    end,
+                    0
+                  ) > $3::numeric
+                    then metadata->>'gmailWatchHistoryId'
+                  else $3::text
+                end,
+                'gmailWatchExpiration', $4::text,
+                'gmailWatchRenewedAt', $5::text
+              ),
+              updated_at = $5
+        where id = $1
+          and user_id = $2
+          and provider = 'gmail'`,
+      [id, userId, historyId, expiration, now],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async findById(id: string): Promise<ConnectedAccount | undefined> {
@@ -336,8 +539,14 @@ export class ConnectorRepository implements OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      await client.query("delete from connector_oauth_states where user_id = $1", [userId]);
-      const result = await client.query("delete from connected_accounts where user_id = $1", [userId]);
+      await client.query(
+        "delete from connector_oauth_states where user_id = $1",
+        [userId],
+      );
+      const result = await client.query(
+        "delete from connected_accounts where user_id = $1",
+        [userId],
+      );
       await client.query("commit");
       return result.rowCount ?? 0;
     } catch (error) {
@@ -360,13 +569,19 @@ export class ConnectorRepository implements OnModuleDestroy {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async listUserIds(provider?: ConnectorProvider | ConnectorProvider[]): Promise<string[]> {
-    const providers = provider === undefined ? undefined : ([] as ConnectorProvider[]).concat(provider);
+  async listUserIds(
+    provider?: ConnectorProvider | ConnectorProvider[],
+  ): Promise<string[]> {
+    const providers =
+      provider === undefined
+        ? undefined
+        : ([] as ConnectorProvider[]).concat(provider);
 
     if (!this.pool) {
       const accounts = [...inMemoryAccounts.values()].filter(
         (account) =>
-          account.status === "connected" && (!providers || providers.includes(account.provider)),
+          account.status === "connected" &&
+          (!providers || providers.includes(account.provider)),
       );
       return [...new Set(accounts.map((account) => account.userId))];
     }
@@ -413,11 +628,17 @@ export class ConnectorRepository implements OnModuleDestroy {
   async consumeOAuthState(
     stateId: string,
     provider: ConnectorProvider,
-  ): Promise<{ userId: string; returnTo?: string; encryptedPayload?: string } | undefined> {
+  ): Promise<
+    { userId: string; returnTo?: string; encryptedPayload?: string } | undefined
+  > {
     if (!this.pool) {
       const record = inMemoryOAuthStates.get(stateId);
       inMemoryOAuthStates.delete(stateId);
-      if (!record || record.provider !== provider || record.expiresAt.getTime() < Date.now()) {
+      if (
+        !record ||
+        record.provider !== provider ||
+        record.expiresAt.getTime() < Date.now()
+      ) {
         return undefined;
       }
       return {
@@ -428,7 +649,9 @@ export class ConnectorRepository implements OnModuleDestroy {
     }
 
     await this.ensureTable();
-    await this.pool.query("delete from connector_oauth_states where expires_at < now()");
+    await this.pool.query(
+      "delete from connector_oauth_states where expires_at < now()",
+    );
     const result = await this.pool.query<{
       userId: string;
       returnTo: string | null;

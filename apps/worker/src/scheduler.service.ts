@@ -8,7 +8,11 @@ import { Queue, Worker } from "bullmq";
 import { firstValueFrom } from "rxjs";
 import { createRedisConnection } from "@heyriz/shared/queue/connection";
 import { queueNames } from "@heyriz/shared/queue/names";
-import { enqueueNotification, getNotificationQueue, safeJobId } from "@heyriz/shared/queue/queues";
+import {
+  enqueueNotification,
+  getNotificationQueue,
+  safeJobId,
+} from "@heyriz/shared/queue/queues";
 import { enqueueEmailEvent } from "@heyriz/shared/queue/email-events";
 import { enqueueAutomationRun } from "@heyriz/shared/queue/automation-runs";
 import { env } from "@heyriz/shared/env";
@@ -19,6 +23,11 @@ import {
   validateAutomationFlowForActivation,
   validateAutomationReleasePolicy,
 } from "@heyriz/shared/automations/schemas";
+import {
+  selectNewGmailTriggerItems,
+  shouldPollAutomationFlow,
+  type AutomationPollMode,
+} from "./automation-trigger-dedupe";
 
 /**
  * The cron heartbeat. It owns no intelligence: on each tick it asks ai-core to
@@ -52,17 +61,39 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     );
     await this.queue.upsertJobScheduler(
       "meeting-sync",
-      { pattern: `*/${env.MEETING_SYNC_MINUTES} * * * *`, tz: env.DEFAULT_TIMEZONE },
+      {
+        pattern: `*/${env.MEETING_SYNC_MINUTES} * * * *`,
+        tz: env.DEFAULT_TIMEZONE,
+      },
       { name: "meeting-sync", data: {} },
     );
     await this.queue.upsertJobScheduler(
       "email-poll",
-      { pattern: `*/${env.EMAIL_POLL_MINUTES} * * * *`, tz: env.DEFAULT_TIMEZONE },
+      {
+        pattern: `*/${env.EMAIL_POLL_MINUTES} * * * *`,
+        tz: env.DEFAULT_TIMEZONE,
+      },
       { name: "email-poll", data: {} },
+    );
+    // Gmail watches expire within seven days. Renew daily with a generous
+    // margin, and reconcile hourly because Google documents that individual
+    // push notifications can occasionally be delayed or dropped.
+    await this.queue.upsertJobScheduler(
+      "gmail-watch-renew",
+      { pattern: "17 2 * * *", tz: "UTC" },
+      { name: "gmail-watch-renew", data: {} },
+    );
+    await this.queue.upsertJobScheduler(
+      "email-reconcile",
+      { pattern: "11 * * * *", tz: "UTC" },
+      { name: "email-reconcile", data: {} },
     );
     await this.queue.upsertJobScheduler(
       "automation-poll",
-      { pattern: `*/${env.AUTOMATION_POLL_MINUTES} * * * *`, tz: env.DEFAULT_TIMEZONE },
+      {
+        pattern: `*/${env.AUTOMATION_POLL_MINUTES} * * * *`,
+        tz: env.DEFAULT_TIMEZONE,
+      },
       { name: "automation-poll", data: {} },
     );
     // Away/Vacation return sweep — every 30 min, deliver the held-email priority
@@ -111,7 +142,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
                 briefHour: env.MORNING_BRIEF_HOUR,
               }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, result });
+            logger.info("scheduler tick handled", {
+              job: job.name,
+              userId,
+              result,
+            });
           });
           return;
         }
@@ -119,26 +154,50 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         if (job.name === "meeting-sync") {
           await this.forEachActiveUser("calendar", async (userId) => {
             const result = await firstValueFrom(
-              this.aiCore.send("proactive.sync", { userId, source: "calendar" }),
+              this.aiCore.send("proactive.sync", {
+                userId,
+                source: "calendar",
+              }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, source: "calendar", result });
+            logger.info("scheduler tick handled", {
+              job: job.name,
+              userId,
+              source: "calendar",
+              result,
+            });
           });
           await this.forEachActiveUser("calcom", async (userId) => {
             const result = await firstValueFrom(
               this.aiCore.send("proactive.sync", { userId, source: "calcom" }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, source: "calcom", result });
+            logger.info("scheduler tick handled", {
+              job: job.name,
+              userId,
+              source: "calcom",
+              result,
+            });
           });
           return;
         }
 
         if (job.name === "email-poll") {
-          await this.pollInbox();
+          await this.pollInbox("push-inactive");
+          return;
+        }
+
+        if (job.name === "gmail-watch-renew") {
+          await this.renewGmailWatches();
+          return;
+        }
+
+        if (job.name === "email-reconcile") {
+          await this.pollInbox("push-active");
+          await this.pollAutomations({ mode: "reconcile" });
           return;
         }
 
         if (job.name === "automation-poll") {
-          await this.pollAutomations();
+          await this.pollAutomations({ mode: "scheduled" });
           return;
         }
 
@@ -152,7 +211,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             const result = await firstValueFrom(
               this.aiCore.send("proactive.weeklyDigest", { userId }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, result });
+            logger.info("scheduler tick handled", {
+              job: job.name,
+              userId,
+              result,
+            });
           });
           return;
         }
@@ -162,7 +225,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             const result = await firstValueFrom(
               this.aiCore.send("proactive.dailyAnomalyCheck", { userId }),
             );
-            logger.info("scheduler tick handled", { job: job.name, userId, result });
+            logger.info("scheduler tick handled", {
+              job: job.name,
+              userId,
+              result,
+            });
           });
           return;
         }
@@ -207,9 +274,14 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     try {
       const headers: Record<string, string> = {};
       if (secret) headers["x-heyriz-internal-secret"] = secret;
-      const res = await fetch(`${gatewayUrl}/api/admin/usage-digest`, { method: "POST", headers });
+      const res = await fetch(`${gatewayUrl}/api/admin/usage-digest`, {
+        method: "POST",
+        headers,
+      });
       if (!res.ok) {
-        logger.warn("admin usage digest request failed", { status: res.status });
+        logger.warn("admin usage digest request failed", {
+          status: res.status,
+        });
         return;
       }
       const result = (await res.json()) as { ok?: boolean; reason?: string };
@@ -231,7 +303,12 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   private async runBillingSweep() {
     type SweepResult = {
       ok?: boolean;
-      nudges?: Array<{ userId: string; kind: string; message: string; emailFallback?: boolean }>;
+      nudges?: Array<{
+        userId: string;
+        kind: string;
+        message: string;
+        emailFallback?: boolean;
+      }>;
       expiredProcessed?: number;
       reconciled?: number;
     };
@@ -244,7 +321,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     try {
       const headers: Record<string, string> = {};
       if (secret) headers["x-heyriz-internal-secret"] = secret;
-      const res = await fetch(`${gatewayUrl}/api/billing/sweep`, { method: "POST", headers });
+      const res = await fetch(`${gatewayUrl}/api/billing/sweep`, {
+        method: "POST",
+        headers,
+      });
       if (!res.ok) {
         logger.warn("billing sweep request failed", { status: res.status });
         return;
@@ -267,9 +347,16 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             source: "gateway" as const,
             emailFallback: nudge.emailFallback,
           },
-          { jobId: safeJobId(`${nudge.kind}:${nudge.userId}:${new Date().toISOString().slice(0, 10)}`) },
+          {
+            jobId: safeJobId(
+              `${nudge.kind}:${nudge.userId}:${new Date().toISOString().slice(0, 10)}`,
+            ),
+          },
         );
-        logger.info("billing nudge enqueued", { userId: nudge.userId, kind: nudge.kind });
+        logger.info("billing nudge enqueued", {
+          userId: nudge.userId,
+          kind: nudge.kind,
+        });
       } catch (err) {
         logger.warn("billing nudge enqueue failed", {
           userId: nudge.userId,
@@ -293,10 +380,14 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
   /** Deliver the held-email priority digest to users whose Away window elapsed. */
   private async sweepAwayReturns() {
-    let result: { returns?: Array<{ userId: string; message: string }> } | undefined;
+    let result:
+      | { returns?: Array<{ userId: string; message: string }> }
+      | undefined;
     try {
       result = await firstValueFrom(
-        this.aiCore.send<{ returns: Array<{ userId: string; message: string }> }>("proactive.away.sweep", {}),
+        this.aiCore.send<{
+          returns: Array<{ userId: string; message: string }>;
+        }>("proactive.away.sweep", {}),
       );
     } catch (error) {
       logger.warn("away-return: ai-core sweep failed", {
@@ -305,20 +396,25 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     for (const item of result?.returns ?? []) {
-      await enqueueNotification({ userId: item.userId, message: item.message, source: "ai-core" }).catch(
-        (error: unknown) =>
-          logger.warn("away-return: notify enqueue failed", {
-            userId: item.userId,
-            error: error instanceof Error ? error.message : String(error),
-          }),
+      await enqueueNotification({
+        userId: item.userId,
+        message: item.message,
+        source: "ai-core",
+      }).catch((error: unknown) =>
+        logger.warn("away-return: notify enqueue failed", {
+          userId: item.userId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
       );
     }
     if ((result?.returns?.length ?? 0) > 0) {
-      logger.info("away-return: digests delivered", { count: result?.returns?.length });
+      logger.info("away-return: digests delivered", {
+        count: result?.returns?.length,
+      });
     }
   }
 
-  private async pollInbox() {
+  private async pollInbox(mode: "push-active" | "push-inactive") {
     type InboxResult = {
       connected: boolean;
       messages: Array<{
@@ -331,11 +427,27 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     };
 
     await this.forEachActiveUser("gmail", async (userId) => {
+      const push = await firstValueFrom(
+        this.aiCore.send<{ configured: boolean; active: boolean }>(
+          "gmail.push.status",
+          { userId },
+        ),
+      ).catch(() => ({ configured: false, active: false }));
+      if (
+        (mode === "push-active" && !push.active) ||
+        (mode === "push-inactive" && push.active)
+      ) {
+        return;
+      }
+
       // Respect the connectors-page "Auto-process emails" toggle. When it's off,
       // Riz must not read or AI-summarise the inbox at all — we skip the whole
       // poll for this user, not just suppress the Telegram notification later.
       const gate = await firstValueFrom(
-        this.aiCore.send<{ enabled: boolean }>("connector.autoprocess.check", { userId, provider: "gmail" }),
+        this.aiCore.send<{ enabled: boolean }>("connector.autoprocess.check", {
+          userId,
+          provider: "gmail",
+        }),
       ).catch(() => ({ enabled: true }));
       if (!gate.enabled) {
         logger.info("email poll: auto-process disabled, skipping", { userId });
@@ -347,7 +459,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         result = await firstValueFrom(
           this.aiCore.send<InboxResult>("gmail.listRecent", {
             userId,
-            maxResults: 10,
+            maxResults: mode === "push-active" ? 100 : 25,
           }),
         );
       } catch (error) {
@@ -381,7 +493,19 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      logger.info("email poll: enqueued", { userId, count: result.messages.length });
+      logger.info("email poll: enqueued", {
+        userId,
+        count: result.messages.length,
+      });
+    });
+  }
+
+  private async renewGmailWatches() {
+    await this.forEachActiveUser("gmail", async (userId) => {
+      const result = await firstValueFrom(
+        this.aiCore.send("gmail.watch.renew", { userId }),
+      );
+      logger.info("gmail watch renewal handled", { userId, result });
     });
   }
 
@@ -393,7 +517,17 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
    * convention as the billing sweep below), fires a de-duped automation-run
    * job per new trigger item, and writes the advanced cursor back.
    */
-  private async pollAutomations() {
+  /** Called by the authenticated Gmail Pub/Sub worker after it advances the
+   * mailbox history cursor. The Gmail API still evaluates each automation's
+   * exact search query; Pub/Sub is the wake-up signal, not the policy engine. */
+  async dispatchGmailAutomationsFromPush(userId: string): Promise<void> {
+    await this.pollAutomations({ mode: "gmail-push", userId });
+  }
+
+  private async pollAutomations(options: {
+    mode: AutomationPollMode;
+    userId?: string;
+  }) {
     const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
     const secret = env.AUTH_INTERNAL_SECRET;
     if (!gatewayUrl) return;
@@ -402,13 +536,20 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
 
     let flows: AutomationFlow[];
     try {
-      const res = await fetch(`${gatewayUrl}/api/automations/_internal/active`, { headers });
+      const res = await fetch(
+        `${gatewayUrl}/api/automations/_internal/active`,
+        { headers },
+      );
       if (!res.ok) {
-        logger.warn("automation poll: active-flow fetch failed", { status: res.status });
+        logger.warn("automation poll: active-flow fetch failed", {
+          status: res.status,
+        });
         return;
       }
       const data = (await res.json()) as { flows?: AutomationFlow[] };
-      flows = data.flows ?? [];
+      flows = (data.flows ?? []).filter(
+        (flow) => !options.userId || flow.userId === options.userId,
+      );
     } catch (error) {
       logger.warn("automation poll: active-flow fetch threw", {
         error: error instanceof Error ? error.message : String(error),
@@ -416,7 +557,34 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const pushStatusByUser = new Map<string, boolean>();
+    const pushActive = async (userId: string) => {
+      const cached = pushStatusByUser.get(userId);
+      if (cached !== undefined) return cached;
+      const status = await firstValueFrom(
+        this.aiCore.send<{ configured: boolean; active: boolean }>(
+          "gmail.push.status",
+          { userId },
+        ),
+      ).catch(() => ({ configured: false, active: false }));
+      const active = status.configured && status.active;
+      pushStatusByUser.set(userId, active);
+      return active;
+    };
+
     for (const flow of flows) {
+      const triggerApp = flow.steps[0]?.app ?? "";
+      const gmailPushActive =
+        triggerApp === "gmail" && options.mode !== "gmail-push"
+          ? await pushActive(flow.userId)
+          : false;
+      if (!shouldPollAutomationFlow({
+        mode: options.mode,
+        triggerApp,
+        gmailPushActive,
+      })) {
+        continue;
+      }
       try {
         await this.pollOneAutomation(flow, gatewayUrl, headers);
       } catch (error) {
@@ -441,7 +609,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
-    const release = validateAutomationReleasePolicy(flow, env.AUTOMATION_RELEASE_TIER);
+    const release = validateAutomationReleasePolicy(
+      flow,
+      env.AUTOMATION_RELEASE_TIER,
+    );
     if (!release.ok) {
       logger.error("automation poll: active flow is outside release tier", {
         flowId: flow.id,
@@ -455,44 +626,92 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     const seen = new Set(flow.cursor?.seenIds ?? []);
     const now = new Date();
     let newItems: { itemId: string; payload: Record<string, unknown> }[] = [];
+    let cursorNeedsUpdate = false;
 
     if (trigger.app === "schedule") {
       const everyMinutes = Number(trigger.config?.everyMinutes) || 60;
-      const lastPolledAt = flow.cursor?.lastPolledAt ? new Date(flow.cursor.lastPolledAt) : undefined;
-      const due = !lastPolledAt || now.getTime() - lastPolledAt.getTime() >= everyMinutes * 60_000;
+      const lastPolledAt = flow.cursor?.lastPolledAt
+        ? new Date(flow.cursor.lastPolledAt)
+        : undefined;
+      const due =
+        !lastPolledAt ||
+        now.getTime() - lastPolledAt.getTime() >= everyMinutes * 60_000;
       if (due) {
-        newItems = [{ itemId: now.toISOString(), payload: { firedAt: now.toISOString() } }];
+        newItems = [
+          {
+            itemId: now.toISOString(),
+            payload: { firedAt: now.toISOString() },
+          },
+        ];
       }
     } else if (trigger.app === "gmail") {
       const query = String(trigger.config?.query ?? "").trim();
       if (!query) return;
       // Which connected Gmail account this trigger targets (multi-account) — the
       // flow-builder stores the chosen connector row id in the step config.
-      const accountId = String(trigger.config?.account ?? "").trim() || undefined;
+      const accountId =
+        String(trigger.config?.account ?? "").trim() || undefined;
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
-          messages: Array<{ id: string; threadId: string; from: string; subject: string; snippet: string }>;
-        }>("automation.gmail.search", { userId: flow.userId, query, maxResults: 10, accountId }),
+          messages: Array<{
+            id: string;
+            threadId: string;
+            from: string;
+            subject: string;
+            snippet: string;
+            internalDate?: string;
+          }>;
+        }>("automation.gmail.search", {
+          userId: flow.userId,
+          query,
+          maxResults: 10,
+          accountId,
+        }),
       );
       if (!result?.connected) return;
-      newItems = (result.messages ?? [])
-        .filter((m) => !seen.has(m.id))
+      const selection = selectNewGmailTriggerItems(
+        result.messages ?? [],
+        flow.cursor,
+        flow.updatedAt,
+      );
+      newItems = selection.newItems
         .map((m) => ({ itemId: m.id, payload: { ...m } }));
+      if (selection.baselineEstablished) {
+        for (const id of selection.seenIds) seen.add(id);
+        cursorNeedsUpdate = true;
+        logger.info("automation poll: Gmail baseline established", {
+          flowId: flow.id,
+          existingMatches: selection.seenIds.length,
+        });
+      }
     } else if (trigger.app === "calendar") {
       const timeMin = now.toISOString();
       const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
-          events: Array<{ id: string; summary?: string; start?: unknown; end?: unknown }>;
-        }>("automation.calendar.list", { userId: flow.userId, timeMin, timeMax, maxResults: 25 }),
+          events: Array<{
+            id: string;
+            summary?: string;
+            start?: unknown;
+            end?: unknown;
+          }>;
+        }>("automation.calendar.list", {
+          userId: flow.userId,
+          timeMin,
+          timeMax,
+          maxResults: 25,
+        }),
       );
       if (!result?.connected) return;
       newItems = (result.events ?? [])
         .filter((e) => !seen.has(e.id))
         .map((e) => ({ itemId: e.id, payload: { ...e } }));
-    } else if (trigger.app === "google-sheets" || trigger.app === "google-forms") {
+    } else if (
+      trigger.app === "google-sheets" ||
+      trigger.app === "google-forms"
+    ) {
       // Both read a spreadsheet (Forms has no native trigger API here — the
       // response sheet Forms already writes to is the trigger source). Rows
       // have no stable id, so the row's 1-based position is the dedup key:
@@ -501,11 +720,14 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       const range = String(trigger.config?.range ?? "Sheet1").trim();
       if (!spreadsheetId) return;
       const result = await firstValueFrom(
-        this.aiCore.send<{ connected: boolean; rows?: string[][] }>("automation.google.readSheetRows", {
-          userId: flow.userId,
-          spreadsheetId,
-          range,
-        }),
+        this.aiCore.send<{ connected: boolean; rows?: string[][] }>(
+          "automation.google.readSheetRows",
+          {
+            userId: flow.userId,
+            spreadsheetId,
+            range,
+          },
+        ),
       );
       if (!result?.connected) return;
       const rows = result.rows ?? [];
@@ -525,23 +747,48 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
-          records?: Array<{ id: string; createdTime: string; fields: Record<string, unknown> }>;
-        }>("automation.airtable.listRecords", { userId: flow.userId, baseId, table, maxRecords: 20 }),
+          records?: Array<{
+            id: string;
+            createdTime: string;
+            fields: Record<string, unknown>;
+          }>;
+        }>("automation.airtable.listRecords", {
+          userId: flow.userId,
+          baseId,
+          table,
+          maxRecords: 20,
+        }),
       );
       if (!result?.connected) return;
       newItems = (result.records ?? [])
         .filter((r) => !seen.has(r.id))
-        .map((r) => ({ itemId: r.id, payload: { id: r.id, createdTime: r.createdTime, ...r.fields } }));
+        .map((r) => ({
+          itemId: r.id,
+          payload: { id: r.id, createdTime: r.createdTime, ...r.fields },
+        }));
     } else if (trigger.app === "google-meet") {
       // A tight forward window, polled every AUTOMATION_POLL_MINUTES — "started"
       // means it falls inside whichever poll window catches its start time.
       const timeMin = now.toISOString();
-      const timeMax = new Date(now.getTime() + env.AUTOMATION_POLL_MINUTES * 60_000).toISOString();
+      const timeMax = new Date(
+        now.getTime() + env.AUTOMATION_POLL_MINUTES * 60_000,
+      ).toISOString();
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
-          events: Array<{ id: string; summary?: string; hangoutLink?: string; start?: unknown; end?: unknown }>;
-        }>("automation.calendar.list", { userId: flow.userId, timeMin, timeMax, maxResults: 25 }),
+          events: Array<{
+            id: string;
+            summary?: string;
+            hangoutLink?: string;
+            start?: unknown;
+            end?: unknown;
+          }>;
+        }>("automation.calendar.list", {
+          userId: flow.userId,
+          timeMin,
+          timeMax,
+          maxResults: 25,
+        }),
       );
       if (!result?.connected) return;
       newItems = (result.events ?? [])
@@ -571,16 +818,19 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (enqueuedAny) {
+    if (enqueuedAny || cursorNeedsUpdate) {
       const seenIds = [...seen].slice(-200);
-      const cursorRes = await fetch(`${gatewayUrl}/api/automations/_internal/${flow.id}/cursor`, {
-        method: "POST",
-        headers: { ...headers, "content-type": "application/json" },
-        body: JSON.stringify({
-          userId: flow.userId,
-          cursor: { lastPolledAt: now.toISOString(), seenIds },
-        }),
-      });
+      const cursorRes = await fetch(
+        `${gatewayUrl}/api/automations/_internal/${flow.id}/cursor`,
+        {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({
+            userId: flow.userId,
+            cursor: { lastPolledAt: now.toISOString(), seenIds },
+          }),
+        },
+      );
       if (!cursorRes.ok) {
         throw new Error(`automation_cursor_update_failed:${cursorRes.status}`);
       }
@@ -594,7 +844,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     type ActiveUsersResult = { users?: string[] };
     try {
       const result = await firstValueFrom(
-        this.aiCore.send<ActiveUsersResult>("users.active", provider ? { provider } : {}),
+        this.aiCore.send<ActiveUsersResult>(
+          "users.active",
+          provider ? { provider } : {},
+        ),
       );
       const users = [...new Set(result.users ?? [])].filter(Boolean);
       if (users.length === 0) {
@@ -604,13 +857,18 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       const concurrency = 5;
       for (let index = 0; index < users.length; index += concurrency) {
         const batch = users.slice(index, index + concurrency);
-        const results = await Promise.allSettled(batch.map((userId) => fn(userId)));
+        const results = await Promise.allSettled(
+          batch.map((userId) => fn(userId)),
+        );
         results.forEach((result, resultIndex) => {
           if (result.status === "rejected") {
             logger.warn("scheduler: user task failed", {
               provider,
               userId: batch[resultIndex],
-              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
             });
           }
         });

@@ -4,6 +4,7 @@ export const queueNames = {
   scheduler: "jervis.scheduler",
   watchReplies: "jervis.watch-replies",
   emailEvents: "jervis.email-events",
+  gmailPush: "jervis.gmail-push",
   spine: "jervis.spine",
   outboundEmail: "jervis.outbound-email",
   automationRuns: "jervis.automation-runs",

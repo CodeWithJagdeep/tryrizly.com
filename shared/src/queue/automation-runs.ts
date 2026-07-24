@@ -2,7 +2,10 @@ import { Queue } from "bullmq";
 import { createRedisConnection } from "./connection";
 import { queueNames } from "./names";
 import { safeJobId } from "./job-id";
-import type { AutomationRunStepResult } from "../automations/types";
+import type {
+  AutomationRunAuditEvent,
+  AutomationRunStepResult,
+} from "../automations/types";
 
 export type AutomationRunJobData = {
   flowId: string;
@@ -15,6 +18,9 @@ export type AutomationRunJobData = {
   resumeFromIndex?: number;
   /** Step results from before the delay, carried through so the final finish() call has the full list. */
   priorResults?: AutomationRunStepResult[];
+  /** Audit events from before the delay. The original plan and trigger
+   * evidence are always retained when the delayed job resumes. */
+  priorAuditTrail?: AutomationRunAuditEvent[];
 };
 
 let automationRunQueue: Queue<AutomationRunJobData> | undefined;

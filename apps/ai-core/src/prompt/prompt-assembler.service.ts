@@ -198,9 +198,9 @@ function renderPlan(plan: AgentPlan): string {
     )
     .join("\n");
   return [
-    `ACTIVE DURABLE PLAN (${plan.id})`,
+    `ACTIVE DURABLE PLAN (${plan.id}; revision=${plan.revision ?? 1}; pivots=${plan.pivotCount ?? 0}/2)`,
     `Goal: ${plan.goal}`,
     rows,
-    "Resume only for an approval or explicit continue/resume. Tool steps require real tool evidence.",
+    "Resume only for an approval or explicit continue/resume. Tool steps require real tool evidence. Completed and superseded history is immutable; revise only invalid remaining work with fresh ids.",
   ].join("\n");
 }

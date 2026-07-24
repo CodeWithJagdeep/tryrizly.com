@@ -62,6 +62,10 @@
       "types": "./dist/queue/email-events.d.ts",
       "default": "./dist/queue/email-events.js"
     },
+    "./queue/gmail-push": {
+      "types": "./dist/queue/gmail-push.d.ts",
+      "default": "./dist/queue/gmail-push.js"
+    },
     "./queue/spine": {
       "types": "./dist/queue/spine.d.ts",
       "default": "./dist/queue/spine.js"

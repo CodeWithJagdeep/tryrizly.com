@@ -7,7 +7,12 @@ import {
 } from "./slack-surface.service";
 import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
-import { fetchMissedDms, openSocketModeConnection } from "@heyriz/shared/slack-surface";
+import {
+  fetchMissedDms,
+  openSocketModeConnection,
+  sendSlackSurfaceMessage,
+  transcribeSlackAudio,
+} from "@heyriz/shared/slack-surface";
 
 const RETRY_DELAY_MS = 5000;
 const SEEN_EVENT_CAP = 500;
@@ -37,6 +42,7 @@ type SocketEnvelope = {
       user?: string;
       text?: string;
       bot_id?: string;
+      files?: Array<{ mimetype?: string; url_private?: string; url_private_download?: string }>;
     };
     team?: { id?: string };
     user?: { id?: string };
@@ -156,17 +162,36 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
     if (envelope.type === "events_api") {
       const event = payload.event;
       if (!event || event.type !== "message") return;
-      // DMs only, humans only: skip bot echoes (incl. our own replies) and
-      // subtypes like message_changed / message_deleted.
-      if (event.channel_type !== "im" || event.bot_id || event.subtype) return;
-      if (!payload.team_id || !event.user || !event.channel || !event.text) return;
+      // DMs only, humans only: skip bot echoes (incl. our own replies). Allow
+      // the "file_share" subtype through (voice notes land there) but still
+      // drop other subtypes (message_changed / message_deleted, etc).
+      if (event.channel_type !== "im" || event.bot_id) return;
+      if (event.subtype && event.subtype !== "file_share") return;
+      if (!payload.team_id || !event.user || !event.channel) return;
       if (payload.event_id && !this.markSeen(payload.event_id)) return;
+
+      let text = event.text;
+      if (!text) {
+        const audioFile = event.files?.find((f) => f.mimetype?.startsWith("audio/"));
+        if (!audioFile) return;
+        const url = audioFile.url_private_download ?? audioFile.url_private;
+        const botToken = await this.resolveBotToken(payload.team_id);
+        text = url ? await transcribeSlackAudio(url, botToken) : undefined;
+        if (!text) {
+          await sendSlackSurfaceMessage({
+            channel: event.channel,
+            botToken,
+            text: "Couldn't make out that voice note — try again or type it out?",
+          });
+          return;
+        }
+      }
 
       const message: SlackSurfaceMessage = {
         teamId: payload.team_id,
         slackUserId: event.user,
         channel: event.channel,
-        text: event.text,
+        text,
       };
       await this.surface.handleMessage(message);
       return;
@@ -214,8 +239,7 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
       if (!teamId || !slackUserId) continue;
 
       try {
-        const botToken =
-          (await this.authRepo.findSlackBotTokenByTeam(teamId).catch(() => null)) ?? undefined;
+        const botToken = await this.resolveBotToken(teamId);
         const messages = await fetchMissedDms(link.dmChannelId, oldestTs, botToken);
 
         for (const message of messages) {
@@ -238,6 +262,11 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
+  }
+
+  /** OAuth-installed workspaces have their bot token in Mongo; home workspace falls through to the env token inside the caller. */
+  private async resolveBotToken(teamId: string): Promise<string | undefined> {
+    return (await this.authRepo.findSlackBotTokenByTeam(teamId).catch(() => null)) ?? undefined;
   }
 
   /** Returns false when the event was already handled (Slack redelivery). */

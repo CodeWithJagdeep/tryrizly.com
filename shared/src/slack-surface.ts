@@ -186,8 +186,58 @@ export async function fetchMissedDms(
   return messages.slice().reverse();
 }
 
-/** Bot scopes the surface needs; the single source for the OAuth authorize URL. */
-export const SLACK_SURFACE_BOT_SCOPES = ["chat:write", "im:history", "im:write"] as const;
+/**
+ * Downloads a Slack voice/audio file and transcribes it via OpenAI Whisper —
+ * the Slack analog of transcribeTelegramVoice. Slack's file URLs are private:
+ * the download itself needs the bot token as a Bearer header, same token used
+ * for chat.postMessage. Returns undefined if the OpenAI key, bot token, or
+ * either HTTP call is unavailable — callers should fall back to telling the
+ * principal voice notes couldn't be understood right now.
+ */
+export async function transcribeSlackAudio(
+  urlPrivate: string,
+  botToken: string | undefined,
+): Promise<string | undefined> {
+  const token = botToken ?? env.SLACK_SURFACE_BOT_TOKEN;
+  if (!token || !env.OPENAI_API_KEY) return undefined;
+
+  try {
+    const audioRes = await fetch(urlPrivate, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!audioRes.ok) return undefined;
+    const audioBlob = await audioRes.blob();
+
+    const form = new FormData();
+    form.append("file", audioBlob, "voice.m4a");
+    form.append("model", "whisper-1");
+
+    const transcribeRes = await fetch(`${env.OPENAI_BASE_URL}/audio/transcriptions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: form,
+    });
+    if (!transcribeRes.ok) {
+      logger.error("slack voice transcription failed", { status: transcribeRes.status });
+      return undefined;
+    }
+    const json = (await transcribeRes.json()) as { text?: string };
+    return json.text?.trim() || undefined;
+  } catch (error) {
+    logger.error("slack voice transcription threw", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+/**
+ * Bot scopes the surface needs; the single source for the OAuth authorize URL.
+ * files:read is required to download voice-note audio from url_private —
+ * workspaces installed before this scope was added must reauthorize
+ * ("Add to Slack" again) for voice notes to work; text chat is unaffected.
+ */
+export const SLACK_SURFACE_BOT_SCOPES = ["chat:write", "im:history", "im:write", "files:read"] as const;
 
 /**
  * The "Add to Slack" authorize URL. `state` carries the account link token so

@@ -83,6 +83,8 @@ export type AgentRunInput = {
   history?: ConversationTurn[];
   /** Where the reply renders: the web dashboard supports Markdown, Telegram is plain text. */
   channel?: "web" | "telegram";
+  /** Fired at each reasoning/tool step, for callers that stream progress live (web dashboard chat). Never awaited, never throws the turn. */
+  onProgress?: (label: string) => void;
 };
 
 export type AgentRunResult = {
@@ -263,6 +265,8 @@ export class AgentService {
           : escalated || toolCallsSoFar >= MULTI_TOOL_THRESHOLD
             ? STRONG_TIER
             : CHEAP_TIER;
+
+      input.onProgress?.(i === 0 ? "Thinking…" : "Reasoning further…");
 
       let raw: string | undefined;
       try {
@@ -773,6 +777,7 @@ export class AgentService {
             return plan;
           });
       }
+      input.onProgress?.(progressLabel(step.tool_name));
       const result = await this.execute(step.tool_name, payload, input);
       steps.push(summarize(result));
       toolResults.push(result);
@@ -1439,6 +1444,30 @@ function toolFailure(tool: string, error: unknown): ToolExecutionResult {
     };
   }
   return { tool, status: "not_implemented", message: `Tool failed: ${detail}` };
+}
+
+/** Friendly live-progress phrasing per tool, distinct from describeAction's approval-preview phrasing ("send this email" vs "Sending your email…"). Falls back to a humanized tool name. */
+const PROGRESS_LABELS: Record<string, string> = {
+  send_email: "Sending your email…",
+  draft_email: "Drafting the email…",
+  list_emails: "Checking your inbox…",
+  search_emails: "Searching your inbox…",
+  read_email: "Reading that email…",
+  create_calendar_event: "Adding that to your calendar…",
+  reschedule_calendar_event: "Moving that event…",
+  list_calendar_events: "Checking your calendar…",
+  list_automations: "Checking your automations…",
+  create_automation: "Building the automation…",
+  activate_automation: "Activating the automation…",
+  pause_automation: "Pausing the automation…",
+  remember: "Saving that to memory…",
+  recall_decisions: "Checking past decisions…",
+  entity_brief: "Looking up who that is…",
+};
+
+function progressLabel(tool: string): string {
+  if (PROGRESS_LABELS[tool]) return PROGRESS_LABELS[tool];
+  return `${tool.replace(/_/g, " ")}…`;
 }
 
 function describeAction(tool: string): string {

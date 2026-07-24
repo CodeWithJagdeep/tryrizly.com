@@ -16,7 +16,10 @@ import { logger } from "@heyriz/shared/logger";
 import { sendEmail } from "@heyriz/shared/email";
 import {
   approvalActionBlocks,
+  sendSlackPlaceholder,
   sendSlackSurfaceMessage,
+  updateSlackSurfaceMessage,
+  type SlackBlock,
 } from "@heyriz/shared/slack-surface";
 import { appendActionAudit } from "@heyriz/shared/action-audit";
 
@@ -280,6 +283,11 @@ export class SlackSurfaceService {
     const conversationKey = this.conversationKey(dst.channel);
     const history = await this.conversations.get(conversationKey);
 
+    const placeholderTs = await sendSlackPlaceholder({
+      channel: dst.channel,
+      botToken: dst.botToken,
+    });
+
     const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
       userId,
       message,
@@ -305,15 +313,30 @@ export class SlackSurfaceService {
               .join("; ")}). This one is #${rec.id} — say "yes ${rec.id}" or use the buttons.`
           : "";
       const full = `${res.reply}\n\n${res.pendingApproval.preview}${note}`;
-      await sendSlackSurfaceMessage({
-        channel: dst.channel,
-        botToken: dst.botToken,
-        text: full,
-        blocks: approvalActionBlocks(full, rec.id),
-      });
+      await this.deliver(dst, placeholderTs, full, approvalActionBlocks(full, rec.id));
       return;
     }
-    await this.send(dst, res.reply);
+    await this.deliver(dst, placeholderTs, res.reply);
+  }
+
+  /** Replaces the "Thinking…" placeholder with the real reply, or sends fresh if there was no placeholder. */
+  private async deliver(
+    dst: SendTarget,
+    placeholderTs: string | null,
+    text: string,
+    blocks?: SlackBlock[],
+  ): Promise<void> {
+    if (placeholderTs) {
+      const updated = await updateSlackSurfaceMessage({
+        channel: dst.channel,
+        ts: placeholderTs,
+        botToken: dst.botToken,
+        text,
+        blocks,
+      });
+      if (updated) return;
+    }
+    await sendSlackSurfaceMessage({ channel: dst.channel, botToken: dst.botToken, text, blocks });
   }
 
   private async runApproved(
@@ -339,6 +362,11 @@ export class SlackSurfaceService {
     }).catch(() => undefined);
     const history = await this.conversations.get(conversationKey);
 
+    const placeholderTs = await sendSlackPlaceholder({
+      channel: dst.channel,
+      botToken: dst.botToken,
+    });
+
     const res: ChatResponse = await this.gateway.sendChatToAiCore<ChatResponse>({
       userId,
       message: "approved",
@@ -357,7 +385,7 @@ export class SlackSurfaceService {
 
     await this.conversations.append(conversationKey, turn("user", "approved"));
     await this.conversations.append(conversationKey, turn("assistant", res.reply));
-    await this.send(dst, `${res.reply}${note}`);
+    await this.deliver(dst, placeholderTs, `${res.reply}${note}`);
   }
 
   /** Apply a yes/no/watch decision against the pending queue. */

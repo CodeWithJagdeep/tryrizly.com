@@ -18,12 +18,15 @@ export async function enqueueWatchReply(request: WatchReplyRequest) {
   const attempt = request.attempt ?? 1;
   const maxAttempts = request.maxAttempts ?? 4;
   const delay = Math.max(request.delayMs ?? request.nextDelayMs, 0);
-  const jobId = safeJobId(`watch-reply:${request.userId}:${request.threadId}:${attempt}`);
+  const jobId = safeJobId(
+    `watch-reply:${request.userId}:${request.accountId ?? "primary"}:${request.threadId}:${attempt}`,
+  );
 
   const job = await getWatchReplyQueue().add(
     "watch-reply",
     {
       userId: request.userId,
+      accountId: request.accountId,
       threadId: request.threadId,
       attempt,
       maxAttempts,

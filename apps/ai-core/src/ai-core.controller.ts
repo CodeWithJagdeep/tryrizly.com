@@ -17,6 +17,11 @@ import type {
 import type { EmailCategory } from "./email/email.types";
 import type { ExtractedEmailFacts } from "./email/email.types";
 import { AccountDeletionService } from "./account/account-deletion.service";
+import {
+  GmailPushService,
+  type GmailPushNotification,
+} from "./email/gmail-push.service";
+import type { GmailPushJobData } from "@heyriz/shared/queue/types";
 
 type ToolExecutePayload = {
   userId?: string;
@@ -33,6 +38,7 @@ export class AiCoreController {
     @Inject(AiCoreService)
     private readonly aiCoreService: AiCoreService,
     private readonly accountDeletion: AccountDeletionService,
+    private readonly gmailPush: GmailPushService,
   ) {}
 
   @MessagePattern("user.deleteData")
@@ -96,7 +102,9 @@ export class AiCoreController {
   }
 
   @MessagePattern("user.sync")
-  syncUser(@Payload() payload: { userId?: string; name?: string; timezone?: string }) {
+  syncUser(
+    @Payload() payload: { userId?: string; name?: string; timezone?: string },
+  ) {
     return this.aiCoreService.syncUser(payload);
   }
 
@@ -107,7 +115,13 @@ export class AiCoreController {
 
   @MessagePattern("entity.resolve")
   resolveEntity(
-    @Payload() payload: { userId?: string; from?: string; name?: string; email?: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      from?: string;
+      name?: string;
+      email?: string;
+    },
   ) {
     return this.aiCoreService.resolveEntity(payload);
   }
@@ -163,12 +177,16 @@ export class AiCoreController {
   }
 
   @MessagePattern("proactive.briefIfDue")
-  proactiveBriefIfDue(@Payload() payload: { userId?: string; briefHour?: number }) {
+  proactiveBriefIfDue(
+    @Payload() payload: { userId?: string; briefHour?: number },
+  ) {
     return this.aiCoreService.proactiveBriefIfDue(payload);
   }
 
   @MessagePattern("proactive.sync")
-  proactiveSync(@Payload() payload: { userId?: string; source?: "calendar" | "calcom" }) {
+  proactiveSync(
+    @Payload() payload: { userId?: string; source?: "calendar" | "calcom" },
+  ) {
     return this.aiCoreService.proactiveSync(payload);
   }
 
@@ -184,7 +202,12 @@ export class AiCoreController {
 
   @MessagePattern("email.draftReply")
   draftEmailReply(
-    @Payload() payload: { userId?: string; messageId: string; instructions?: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      messageId: string;
+      instructions?: string;
+    },
   ) {
     return this.aiCoreService.draftEmailReply(payload);
   }
@@ -202,7 +225,12 @@ export class AiCoreController {
   @MessagePattern("gmail.checkThreadReply")
   checkThreadReply(
     @Payload()
-    payload: { userId?: string; threadId?: string; baselineMessageCount?: number },
+    payload: {
+      userId?: string;
+      accountId?: string;
+      threadId?: string;
+      baselineMessageCount?: number;
+    },
   ) {
     return this.aiCoreService.checkThreadReply(payload);
   }
@@ -233,17 +261,28 @@ export class AiCoreController {
   }
 
   @MessagePattern("connector.updateMetadata")
-  updateConnectorMetadata(@Payload() payload: { userId?: string; id: string; metadata: Record<string, unknown> }) {
+  updateConnectorMetadata(
+    @Payload()
+    payload: {
+      userId?: string;
+      id: string;
+      metadata: Record<string, unknown>;
+    },
+  ) {
     return this.aiCoreService.updateConnectorMetadata(payload);
   }
 
   @MessagePattern("connector.notification.check")
-  checkConnectorNotification(@Payload() payload: { userId: string; provider: string }) {
+  checkConnectorNotification(
+    @Payload() payload: { userId: string; provider: string },
+  ) {
     return this.aiCoreService.checkConnectorNotification(payload);
   }
 
   @MessagePattern("connector.autoprocess.check")
-  checkConnectorAutoProcess(@Payload() payload: { userId: string; provider: string }) {
+  checkConnectorAutoProcess(
+    @Payload() payload: { userId: string; provider: string },
+  ) {
     return this.aiCoreService.checkConnectorAutoProcess(payload);
   }
 
@@ -269,31 +308,51 @@ export class AiCoreController {
     return this.aiCoreService.listRecentEmails(payload);
   }
 
+  @MessagePattern("gmail.push.enqueue")
+  enqueueGmailPush(@Payload() payload: GmailPushNotification) {
+    return this.gmailPush.enqueueNotification(payload);
+  }
+
+  @MessagePattern("gmail.push.process")
+  processGmailPush(@Payload() payload: GmailPushJobData) {
+    return this.gmailPush.process(payload);
+  }
+
+  @MessagePattern("gmail.push.status")
+  gmailPushStatus(@Payload() payload: { userId: string }) {
+    return this.gmailPush.pushStatus(payload.userId);
+  }
+
+  @MessagePattern("gmail.watch.renew")
+  renewGmailWatch(@Payload() payload: { userId: string }) {
+    return this.gmailPush.renewWatches(payload.userId);
+  }
+
   @MessagePattern("notification.log")
   logNotification(
-    @Payload() payload: { userId: string; message: string; source?: string; sentAt?: string },
+    @Payload()
+    payload: {
+      userId: string;
+      message: string;
+      source?: string;
+      sentAt?: string;
+    },
   ) {
     return this.aiCoreService.logNotification(payload);
   }
 
   @MessagePattern("notification.list")
-  listNotifications(
-    @Payload() payload: { userId: string; limit?: number },
-  ) {
+  listNotifications(@Payload() payload: { userId: string; limit?: number }) {
     return this.aiCoreService.listNotifications(payload);
   }
 
   @MessagePattern("gmail.listEmailMemories")
-  listEmailMemories(
-    @Payload() payload: { userId?: string; limit?: number },
-  ) {
+  listEmailMemories(@Payload() payload: { userId?: string; limit?: number }) {
     return this.aiCoreService.listEmailMemories(payload);
   }
 
   @MessagePattern("chat.listMemories")
-  listChatMemories(
-    @Payload() payload: { userId?: string; limit?: number },
-  ) {
+  listChatMemories(@Payload() payload: { userId?: string; limit?: number }) {
     return this.aiCoreService.listChatMemories(payload);
   }
 
@@ -303,13 +362,27 @@ export class AiCoreController {
   }
 
   @MessagePattern("automation.gmail.search")
-  automationGmailSearch(@Payload() payload: { userId?: string; query: string; maxResults?: number; accountId?: string }) {
+  automationGmailSearch(
+    @Payload()
+    payload: {
+      userId?: string;
+      query: string;
+      maxResults?: number;
+      accountId?: string;
+    },
+  ) {
     return this.aiCoreService.automationGmailSearch(payload);
   }
 
   @MessagePattern("automation.calendar.list")
   automationCalendarList(
-    @Payload() payload: { userId?: string; timeMin: string; timeMax: string; maxResults?: number },
+    @Payload()
+    payload: {
+      userId?: string;
+      timeMin: string;
+      timeMax: string;
+      maxResults?: number;
+    },
   ) {
     return this.aiCoreService.automationCalendarList(payload);
   }
@@ -330,7 +403,9 @@ export class AiCoreController {
   }
 
   @MessagePattern("automation.ai.enhancePrompt")
-  automationAiEnhancePrompt(@Payload() payload: { userId?: string; prompt: string }) {
+  automationAiEnhancePrompt(
+    @Payload() payload: { userId?: string; prompt: string },
+  ) {
     return this.aiCoreService.automationAiEnhancePrompt(payload);
   }
 
@@ -353,13 +428,21 @@ export class AiCoreController {
   }
 
   @MessagePattern("automation.discord.postMessage")
-  automationDiscordPostMessage(@Payload() payload: { userId?: string; content: string }) {
+  automationDiscordPostMessage(
+    @Payload() payload: { userId?: string; content: string },
+  ) {
     return this.aiCoreService.automationDiscordPostMessage(payload);
   }
 
   @MessagePattern("automation.github.createIssue")
   automationGitHubCreateIssue(
-    @Payload() payload: { userId?: string; repo: string; title: string; body?: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      repo: string;
+      title: string;
+      body?: string;
+    },
   ) {
     return this.aiCoreService.automationGitHubCreateIssue(payload);
   }
@@ -387,27 +470,46 @@ export class AiCoreController {
 
   @MessagePattern("automation.google.uploadFile")
   automationGoogleUploadFile(
-    @Payload() payload: { userId?: string; name: string; mimeType: string; content: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      name: string;
+      mimeType: string;
+      content: string;
+    },
   ) {
     return this.aiCoreService.automationGoogleUploadFile(payload);
   }
 
   @MessagePattern("automation.google.appendRow")
   automationGoogleAppendRow(
-    @Payload() payload: { userId?: string; spreadsheetId: string; range: string; values: string[] },
+    @Payload()
+    payload: {
+      userId?: string;
+      spreadsheetId: string;
+      range: string;
+      values: string[];
+    },
   ) {
     return this.aiCoreService.automationGoogleAppendRow(payload);
   }
 
   @MessagePattern("automation.google.readSheetRows")
   automationGoogleReadSheetRows(
-    @Payload() payload: { userId?: string; spreadsheetId: string; range: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      spreadsheetId: string;
+      range: string;
+    },
   ) {
     return this.aiCoreService.automationGoogleReadSheetRows(payload);
   }
 
   @MessagePattern("automation.google.createDoc")
-  automationGoogleCreateDoc(@Payload() payload: { userId?: string; title: string; content?: string }) {
+  automationGoogleCreateDoc(
+    @Payload() payload: { userId?: string; title: string; content?: string },
+  ) {
     return this.aiCoreService.automationGoogleCreateDoc(payload);
   }
 
@@ -434,7 +536,13 @@ export class AiCoreController {
 
   @MessagePattern("automation.mongo.find")
   automationMongoFind(
-    @Payload() payload: { userId?: string; collection: string; filter?: Record<string, unknown>; limit?: number },
+    @Payload()
+    payload: {
+      userId?: string;
+      collection: string;
+      filter?: Record<string, unknown>;
+      limit?: number;
+    },
   ) {
     return this.aiCoreService.automationMongoFind(payload);
   }
@@ -442,7 +550,13 @@ export class AiCoreController {
   @MessagePattern("automation.jira.createIssue")
   automationJiraCreateIssue(
     @Payload()
-    payload: { userId?: string; projectKey: string; summary: string; description?: string; issueType?: string },
+    payload: {
+      userId?: string;
+      projectKey: string;
+      summary: string;
+      description?: string;
+      issueType?: string;
+    },
   ) {
     return this.aiCoreService.automationJiraCreateIssue(payload);
   }
@@ -450,34 +564,60 @@ export class AiCoreController {
   @MessagePattern("automation.pagerduty.createIncident")
   automationPagerDutyCreateIncident(
     @Payload()
-    payload: { userId?: string; serviceId: string; title: string; urgency?: "high" | "low"; details?: string },
+    payload: {
+      userId?: string;
+      serviceId: string;
+      title: string;
+      urgency?: "high" | "low";
+      details?: string;
+    },
   ) {
     return this.aiCoreService.automationPagerDutyCreateIncident(payload);
   }
 
   @MessagePattern("automation.trello.createCard")
   automationTrelloCreateCard(
-    @Payload() payload: { userId?: string; listId: string; name: string; description?: string },
+    @Payload()
+    payload: {
+      userId?: string;
+      listId: string;
+      name: string;
+      description?: string;
+    },
   ) {
     return this.aiCoreService.automationTrelloCreateCard(payload);
   }
 
   @MessagePattern("automation.airtable.createRecord")
   automationAirtableCreateRecord(
-    @Payload() payload: { userId?: string; baseId: string; table: string; fields: Record<string, unknown> },
+    @Payload()
+    payload: {
+      userId?: string;
+      baseId: string;
+      table: string;
+      fields: Record<string, unknown>;
+    },
   ) {
     return this.aiCoreService.automationAirtableCreateRecord(payload);
   }
 
   @MessagePattern("automation.airtable.listRecords")
   automationAirtableListRecords(
-    @Payload() payload: { userId?: string; baseId: string; table: string; maxRecords?: number },
+    @Payload()
+    payload: {
+      userId?: string;
+      baseId: string;
+      table: string;
+      maxRecords?: number;
+    },
   ) {
     return this.aiCoreService.automationAirtableListRecords(payload);
   }
 
   @MessagePattern("automation.twilio.sendSms")
-  automationTwilioSendSms(@Payload() payload: { userId?: string; to: string; body: string }) {
+  automationTwilioSendSms(
+    @Payload() payload: { userId?: string; to: string; body: string },
+  ) {
     return this.aiCoreService.automationTwilioSendSms(payload);
   }
 
@@ -502,6 +642,7 @@ export class AiCoreController {
     @Payload()
     payload: {
       userId?: string;
+      accountId?: string;
       messageId?: string;
       threadId?: string;
       category?: EmailCategory;

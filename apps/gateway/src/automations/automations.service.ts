@@ -94,7 +94,12 @@ export class AutomationsService {
         }],
       };
     }
-    const updated = await this.repo.setStatus(userId, id, "active");
+    // A Gmail trigger must start from "now", including after a pause. Clearing
+    // its old cursor makes the worker establish a fresh baseline rather than
+    // replaying messages that arrived while the automation was inactive.
+    const updated = await this.repo.setStatus(userId, id, "active", {
+      resetCursor: flow.steps[0]?.app === "gmail",
+    });
     return updated ? { ok: true, flow: updated } : { ok: false, error: "not_found" };
   }
 

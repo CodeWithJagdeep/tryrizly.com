@@ -36,6 +36,7 @@ export type WatchReplyJobName = "watch-reply";
 
 export type WatchReplyJobData = {
   userId: string;
+  accountId?: string;
   threadId: string;
   attempt: number;
   maxAttempts: number;
@@ -45,7 +46,10 @@ export type WatchReplyJobData = {
   reason?: string;
 };
 
-export type WatchReplyRequest = Omit<WatchReplyJobData, "attempt" | "maxAttempts"> & {
+export type WatchReplyRequest = Omit<
+  WatchReplyJobData,
+  "attempt" | "maxAttempts"
+> & {
   attempt?: number;
   maxAttempts?: number;
   delayMs?: number;
@@ -72,13 +76,21 @@ export type ContactCandidate = {
  */
 export type SpineJobData = {
   userId: string;
+  accountId?: string;
   messageId: string;
   threadId: string;
   from: string;
   subject: string;
   extractDecisions: boolean;
   senderName?: string;
-  senderType?: "human" | "automated" | "customer" | "investor" | "vendor" | "internal" | "unknown";
+  senderType?:
+    | "human"
+    | "automated"
+    | "customer"
+    | "investor"
+    | "vendor"
+    | "internal"
+    | "unknown";
   isAutomated?: boolean;
   isMarketing?: boolean;
   contactCandidate?: ContactCandidate;
@@ -101,10 +113,21 @@ export type EmailEventJobName = "email-event";
 
 export type EmailEventJobData = {
   userId: string;
+  accountId?: string;
   messageId: string;
   threadId: string;
   from: string;
   subject: string;
   snippet: string;
   source: "push" | "poll";
+};
+
+export type GmailPushJobName = "gmail-push";
+
+export type GmailPushJobData = {
+  userId: string;
+  accountId: string;
+  emailAddress: string;
+  historyId: string;
+  pubsubMessageId: string;
 };

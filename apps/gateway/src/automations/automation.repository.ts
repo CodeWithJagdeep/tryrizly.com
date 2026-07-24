@@ -78,12 +78,23 @@ export class AutomationRepository {
     return flow;
   }
 
-  async setStatus(userId: string, id: string, status: AutomationFlowStatus): Promise<AutomationFlow | null> {
+  async setStatus(
+    userId: string,
+    id: string,
+    status: AutomationFlowStatus,
+    options?: { resetCursor?: boolean },
+  ): Promise<AutomationFlow | null> {
     await this.ensureIndexes();
     const db = await getDb();
     await db
       .collection<AutomationFlow>("automation_flows")
-      .updateOne({ id, userId }, { $set: { status, updatedAt: new Date().toISOString() } });
+      .updateOne(
+        { id, userId },
+        {
+          $set: { status, updatedAt: new Date().toISOString() },
+          ...(options?.resetCursor ? { $unset: { cursor: "" } } : {}),
+        },
+      );
     return this.getFlow(userId, id);
   }
 
@@ -120,10 +131,17 @@ export class AutomationRepository {
     return record;
   }
 
+  async getRun(id: string, userId: string): Promise<AutomationRun | null> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    const doc = await db.collection<AutomationRun>("automation_runs").findOne({ id, userId });
+    return doc ? stripMongoId(doc) : null;
+  }
+
   async finishRun(
     id: string,
     userId: string,
-    patch: Pick<AutomationRun, "status" | "finishedAt" | "stepResults">,
+    patch: Pick<AutomationRun, "status" | "finishedAt" | "stepResults" | "auditTrail">,
   ): Promise<boolean> {
     await this.ensureIndexes();
     const db = await getDb();

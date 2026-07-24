@@ -9,7 +9,13 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
-import type { AutomationCursor, AutomationRunStepResult, AutomationStep } from "@heyriz/shared/automations/types";
+import {
+  snapshotAutomationRunPlan,
+  type AutomationCursor,
+  type AutomationRunAuditEvent,
+  type AutomationRunStepResult,
+  type AutomationStep,
+} from "@heyriz/shared/automations/types";
 import { GatewayService } from "../gateway.service";
 import { requireInternalSecret } from "../internal-auth";
 import { AutomationRepository } from "./automation.repository";
@@ -194,17 +200,52 @@ export class AutomationsController {
       flowId?: string;
       userId?: string;
       triggerPayload?: Record<string, unknown>;
+      triggerItemId?: string;
     },
   ) {
     requireInternalSecret(secret);
     if (!body.flowId || !body.userId) return { error: "flowId and userId are required" };
+    const flow = await this.repo.getFlow(body.userId, body.flowId);
+    if (!flow) return { error: "flow_not_found" };
+    const startedAt = new Date().toISOString();
+    const originalPlan = snapshotAutomationRunPlan(flow.steps);
+    const trigger = originalPlan[0];
+    const auditTrail: AutomationRunAuditEvent[] = [
+      {
+        id: "plan:1",
+        at: startedAt,
+        revision: 1,
+        type: "plan_created",
+        stepIds: originalPlan.map((step) => step.id),
+      },
+    ];
+    if (trigger) {
+      auditTrail.push({
+        id: "trigger:1",
+        at: startedAt,
+        revision: 1,
+        type: "step_succeeded",
+        stepId: trigger.id,
+        evidence: {
+          kind: "control",
+          provider: trigger.app || "automation-trigger",
+          acknowledged: true,
+          ...(body.triggerItemId
+            ? { resourceId: body.triggerItemId.slice(0, 500) }
+            : {}),
+          metadata: { source: trigger.app || "automation-trigger" },
+        },
+      });
+    }
     const run = await this.repo.createRun({
       flowId: body.flowId,
       userId: body.userId,
-      startedAt: new Date().toISOString(),
+      startedAt,
       status: "running",
       triggerPayload: body.triggerPayload ?? {},
       stepResults: [],
+      originalPlan,
+      auditTrail,
     });
     return { run };
   }
@@ -217,6 +258,7 @@ export class AutomationsController {
       userId?: string;
       status?: "success" | "failed";
       stepResults?: AutomationRunStepResult[];
+      auditTrail?: AutomationRunAuditEvent[];
     },
     @Param("runId") runId: string,
   ) {
@@ -234,11 +276,66 @@ export class AutomationsController {
     ) {
       return { ok: false, error: "success_requires_evidence_for_every_completed_step" };
     }
+    if (body.status === "failed" && !stepResults.some((step) => step.status === "failed")) {
+      return { ok: false, error: "failed_run_requires_a_failed_step" };
+    }
+    const existing = await this.repo.getRun(runId, body.userId);
+    if (!existing) return { ok: false, error: "run_not_found" };
+    const mergedAuditTrail = mergeAutomationAuditTrail(
+      existing.auditTrail ?? [],
+      body.auditTrail ?? [],
+    );
+    const revision = mergedAuditTrail.reduce(
+      (latest, event) => Math.max(latest, event.revision),
+      1,
+    );
+    const failedStep = stepResults.find((step) => step.status === "failed");
+    const verifierId = `${runId}:verification:deterministic:${revision}`;
+    if (!mergedAuditTrail.some((event) => event.id === verifierId)) {
+      mergedAuditTrail.push({
+        id: verifierId,
+        at: new Date().toISOString(),
+        revision,
+        type: "final_verification",
+        result: body.status === "success" ? "passed" : "failed",
+        method: "deterministic_evidence",
+        summary:
+          body.status === "success"
+            ? "Completion verified. Every successful step has an immutable evidence receipt."
+            : `Goal completion failed${failedStep ? ` at ${failedStep.app}` : ""}. The run was not reported as successful.`,
+      });
+    }
     const updated = await this.repo.finishRun(runId, body.userId, {
       status: body.status,
       finishedAt: new Date().toISOString(),
       stepResults,
+      auditTrail: mergedAuditTrail,
     });
     return updated ? { ok: true } : { ok: false, error: "run_not_found" };
   }
+}
+
+const MAX_AUTOMATION_AUDIT_EVENTS = 128;
+
+function mergeAutomationAuditTrail(
+  retained: AutomationRunAuditEvent[],
+  incoming: AutomationRunAuditEvent[],
+): AutomationRunAuditEvent[] {
+  const merged: AutomationRunAuditEvent[] = [];
+  const ids = new Set<string>();
+  for (const event of [...retained, ...incoming]) {
+    if (
+      !event ||
+      typeof event.id !== "string" ||
+      typeof event.at !== "string" ||
+      !Number.isInteger(event.revision) ||
+      ids.has(event.id)
+    ) {
+      continue;
+    }
+    ids.add(event.id);
+    merged.push(event);
+    if (merged.length >= MAX_AUTOMATION_AUDIT_EVENTS - 1) break;
+  }
+  return merged;
 }

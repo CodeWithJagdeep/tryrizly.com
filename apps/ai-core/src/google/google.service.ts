@@ -11,7 +11,9 @@ import type {
   CalendarEvent,
   CreateCalendarEventInput,
   GmailMessage,
+  GmailHistory,
   GmailThreadSummary,
+  GmailWatch,
   GoogleResult,
   SendOrDraftInput,
   UpdateCalendarEventInput,
@@ -46,7 +48,10 @@ export class GoogleService {
     private readonly vault: ConnectorVaultService,
   ) {}
 
-  async isConnected(userId: string, provider: "gmail" | "calendar" | "google_workspace"): Promise<boolean> {
+  async isConnected(
+    userId: string,
+    provider: "gmail" | "calendar" | "google_workspace",
+  ): Promise<boolean> {
     const account = await this.findAccount(userId, provider);
     return Boolean(account);
   }
@@ -120,7 +125,8 @@ export class GoogleService {
     const body: Record<string, unknown> = {};
     if (patch.start) body.start = { dateTime: patch.start, timeZone };
     if (patch.end) body.end = { dateTime: patch.end, timeZone };
-    if (patch.attendees) body.attendees = patch.attendees.map((email) => ({ email }));
+    if (patch.attendees)
+      body.attendees = patch.attendees.map((email) => ({ email }));
 
     const sendUpdates = patch.notifyAttendee === false ? "none" : "all";
     const res = await this.gfetch(
@@ -155,10 +161,17 @@ export class GoogleService {
       userId,
       "google_workspace",
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
-      { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${boundary}` } },
+      {
+        method: "POST",
+        body,
+        headers: { "content-type": `multipart/related; boundary=${boundary}` },
+      },
     );
     if (!res.connected) return res;
-    const file = (await res.response.json()) as { id: string; webViewLink?: string };
+    const file = (await res.response.json()) as {
+      id: string;
+      webViewLink?: string;
+    };
     return { connected: true, id: file.id, webViewLink: file.webViewLink };
   }
 
@@ -175,7 +188,9 @@ export class GoogleService {
       body: JSON.stringify({ values: [input.values] }),
     });
     if (!res.connected) return res;
-    const data = (await res.response.json()) as { updates?: { updatedRange?: string } };
+    const data = (await res.response.json()) as {
+      updates?: { updatedRange?: string };
+    };
     return { connected: true, updatedRange: data.updates?.updatedRange };
   }
 
@@ -196,10 +211,15 @@ export class GoogleService {
     userId: string,
     input: { title: string; content?: string },
   ): Promise<GoogleResult<{ id: string; url: string }>> {
-    const createRes = await this.gfetch(userId, "google_workspace", "https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      body: JSON.stringify({ title: input.title }),
-    });
+    const createRes = await this.gfetch(
+      userId,
+      "google_workspace",
+      "https://docs.googleapis.com/v1/documents",
+      {
+        method: "POST",
+        body: JSON.stringify({ title: input.title }),
+      },
+    );
     if (!createRes.connected) return createRes;
     const doc = (await createRes.response.json()) as { documentId: string };
 
@@ -211,13 +231,19 @@ export class GoogleService {
         {
           method: "POST",
           body: JSON.stringify({
-            requests: [{ insertText: { location: { index: 1 }, text: input.content } }],
+            requests: [
+              { insertText: { location: { index: 1 }, text: input.content } },
+            ],
           }),
         },
       );
     }
 
-    return { connected: true, id: doc.documentId, url: `https://docs.google.com/document/d/${doc.documentId}/edit` };
+    return {
+      connected: true,
+      id: doc.documentId,
+      url: `https://docs.google.com/document/d/${doc.documentId}/edit`,
+    };
   }
 
   // --- Contacts (via People API + Gmail search) ---------------------------
@@ -225,8 +251,15 @@ export class GoogleService {
   async searchContacts(
     userId: string,
     name: string,
-  ): Promise<GoogleResult<{ contacts: Array<{ name: string; email: string; source: string }> }>> {
-    const found = new Map<string, { name: string; email: string; source: string }>();
+  ): Promise<
+    GoogleResult<{
+      contacts: Array<{ name: string; email: string; source: string }>;
+    }>
+  > {
+    const found = new Map<
+      string,
+      { name: string; email: string; source: string }
+    >();
 
     // 1. People API — primary contacts directory
     const peopleParams = new URLSearchParams({
@@ -252,7 +285,11 @@ export class GoogleService {
         const displayName = r.person?.names?.[0]?.displayName ?? name;
         for (const ea of r.person?.emailAddresses ?? []) {
           if (ea.value) {
-            found.set(ea.value, { name: displayName, email: ea.value, source: "contacts" });
+            found.set(ea.value, {
+              name: displayName,
+              email: ea.value,
+              source: "contacts",
+            });
           }
         }
       }
@@ -268,7 +305,9 @@ export class GoogleService {
         `${GMAIL_BASE}/users/me/messages?${gmailParams.toString()}`,
       );
       if (listRes.connected) {
-        const list = (await listRes.response.json()) as { messages?: Array<{ id: string }> };
+        const list = (await listRes.response.json()) as {
+          messages?: Array<{ id: string }>;
+        };
         for (const m of (list.messages ?? []).slice(0, 5)) {
           const msg = await this.getMessage(userId, m.id, "metadata");
           if (!msg.connected) continue;
@@ -295,6 +334,104 @@ export class GoogleService {
   }
 
   // --- Gmail --------------------------------------------------------------
+
+  async watchMailbox(
+    userId: string,
+    topicName: string,
+    accountId?: string,
+  ): Promise<GoogleResult<{ watch: GmailWatch }>> {
+    const res = await this.gfetch(
+      userId,
+      "gmail",
+      `${GMAIL_BASE}/users/me/watch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          topicName,
+          labelIds: ["INBOX"],
+          labelFilterBehavior: "INCLUDE",
+        }),
+      },
+      accountId,
+    );
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as Partial<GmailWatch>;
+    if (!data.historyId || !data.expiration) {
+      throw new Error("gmail_watch_invalid_response");
+    }
+    return {
+      connected: true,
+      watch: {
+        historyId: data.historyId,
+        expiration: data.expiration,
+      },
+    };
+  }
+
+  async listHistory(
+    userId: string,
+    startHistoryId: string,
+    accountId?: string,
+  ): Promise<GoogleResult<{ history: GmailHistory }>> {
+    const messageIds = new Set<string>();
+    let pageToken: string | undefined;
+    let latestHistoryId = startHistoryId;
+
+    try {
+      do {
+        const params = new URLSearchParams({
+          startHistoryId,
+          historyTypes: "messageAdded",
+          labelId: "INBOX",
+          maxResults: "100",
+        });
+        if (pageToken) params.set("pageToken", pageToken);
+        const res = await this.gfetch(
+          userId,
+          "gmail",
+          `${GMAIL_BASE}/users/me/history?${params.toString()}`,
+          {},
+          accountId,
+        );
+        if (!res.connected) return res;
+        const data = (await res.response.json()) as {
+          historyId?: string;
+          nextPageToken?: string;
+          history?: Array<{
+            messagesAdded?: Array<{ message?: { id?: string } }>;
+          }>;
+        };
+        for (const entry of data.history ?? []) {
+          for (const added of entry.messagesAdded ?? []) {
+            if (added.message?.id) messageIds.add(added.message.id);
+          }
+        }
+        latestHistoryId = data.historyId ?? latestHistoryId;
+        pageToken = data.nextPageToken;
+      } while (pageToken);
+    } catch (error) {
+      if (error instanceof Error && error.message === "google_api_404") {
+        return {
+          connected: true,
+          history: {
+            messageIds: [],
+            historyId: startHistoryId,
+            historyExpired: true,
+          },
+        };
+      }
+      throw error;
+    }
+
+    return {
+      connected: true,
+      history: {
+        messageIds: [...messageIds],
+        historyId: latestHistoryId,
+        historyExpired: false,
+      },
+    };
+  }
 
   async listThreads(
     userId: string,
@@ -337,6 +474,7 @@ export class GoogleService {
           subject: m.subject,
           snippet: m.snippet,
           date: m.date,
+          internalDate: m.internalDate,
           labelIds: m.labelIds,
         });
       }
@@ -353,7 +491,14 @@ export class GoogleService {
   ): Promise<GoogleResult<{ message: GmailMessage }>> {
     const params = new URLSearchParams({ format });
     if (format === "metadata") {
-      for (const header of ["Subject", "From", "To", "Cc", "Date", "Message-ID"]) {
+      for (const header of [
+        "Subject",
+        "From",
+        "To",
+        "Cc",
+        "Date",
+        "Message-ID",
+      ]) {
         params.append("metadataHeaders", header);
       }
     }
@@ -376,12 +521,17 @@ export class GoogleService {
     if (message.bodyHtml?.includes("cid:")) {
       for (const img of collectInlineImages(data.payload)) {
         if (!message.bodyHtml.includes(`cid:${img.contentId}`)) continue;
-        const att = await this.getAttachment(userId, id, img.attachmentId);
+        const att = await this.getAttachment(
+          userId,
+          id,
+          img.attachmentId,
+          accountId,
+        );
         if (att.connected && att.data) {
           const base64 = Buffer.from(att.data, "base64url").toString("base64");
-          message.bodyHtml = message.bodyHtml.split(`cid:${img.contentId}`).join(
-            `data:${img.mimeType};base64,${base64}`,
-          );
+          message.bodyHtml = message.bodyHtml
+            .split(`cid:${img.contentId}`)
+            .join(`data:${img.mimeType};base64,${base64}`);
         }
       }
     }
@@ -393,11 +543,14 @@ export class GoogleService {
     userId: string,
     messageId: string,
     attachmentId: string,
+    accountId?: string,
   ): Promise<GoogleResult<{ data: string }>> {
     const res = await this.gfetch(
       userId,
       "gmail",
       `${GMAIL_BASE}/users/me/messages/${messageId}/attachments/${attachmentId}`,
+      {},
+      accountId,
     );
     if (!res.connected) return res;
 
@@ -408,6 +561,7 @@ export class GoogleService {
   async getThreadMessages(
     userId: string,
     threadId: string,
+    accountId?: string,
   ): Promise<GoogleResult<{ messages: GmailMessage[] }>> {
     const params = new URLSearchParams({ format: "metadata" });
     for (const header of ["Subject", "From", "To", "Date", "Message-ID"]) {
@@ -418,10 +572,14 @@ export class GoogleService {
       userId,
       "gmail",
       `${GMAIL_BASE}/users/me/threads/${threadId}?${params.toString()}`,
+      {},
+      accountId,
     );
     if (!res.connected) return res;
 
-    const data = (await res.response.json()) as { messages?: GoogleGmailMessage[] };
+    const data = (await res.response.json()) as {
+      messages?: GoogleGmailMessage[];
+    };
     return {
       connected: true,
       messages: (data.messages ?? []).map(toGmailMessage),
@@ -433,12 +591,17 @@ export class GoogleService {
     input: SendOrDraftInput,
   ): Promise<GoogleResult<{ draftId: string; threadId?: string }>> {
     const raw = buildRawMessage(input);
-    const res = await this.gfetch(userId, "gmail", `${GMAIL_BASE}/users/me/drafts`, {
-      method: "POST",
-      body: JSON.stringify({
-        message: { raw, threadId: input.threadId },
-      }),
-    });
+    const res = await this.gfetch(
+      userId,
+      "gmail",
+      `${GMAIL_BASE}/users/me/drafts`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message: { raw, threadId: input.threadId },
+        }),
+      },
+    );
     if (!res.connected) return res;
 
     const data = (await res.response.json()) as {
@@ -487,7 +650,9 @@ export class GoogleService {
     url: string,
     init: RequestInit = {},
     accountId?: string,
-  ): Promise<{ connected: true; response: Response } | GoogleNotConnectedLocal> {
+  ): Promise<
+    { connected: true; response: Response } | GoogleNotConnectedLocal
+  > {
     const account = await this.findAccount(userId, provider, accountId);
     if (!account) {
       return { connected: false, reason: "not_connected" };
@@ -545,7 +710,11 @@ export class GoogleService {
     // this user and matches the provider (or the legacy combined "google" row).
     if (accountId) {
       const chosen = await this.repository.findById(accountId);
-      if (chosen && chosen.userId === userId && (chosen.provider === provider || chosen.provider === "google")) {
+      if (
+        chosen &&
+        chosen.userId === userId &&
+        (chosen.provider === provider || chosen.provider === "google")
+      ) {
         return chosen;
       }
       // Fall through to the default account if the id is stale/invalid.
@@ -557,7 +726,9 @@ export class GoogleService {
     return this.repository.find(userId, "google");
   }
 
-  private async accessTokenFor(account: ConnectedAccount): Promise<string | null> {
+  private async accessTokenFor(
+    account: ConnectedAccount,
+  ): Promise<string | null> {
     const tokens = this.tokensOf(account);
     const expiry =
       tokens.expiry_date ??
@@ -610,16 +781,23 @@ export class GoogleService {
       authType: account.authType,
       label: account.label,
       status: "connected",
-      encryptedPayload: this.vault.encrypt(next as unknown as ConnectorSecretPayload),
+      encryptedPayload: this.vault.encrypt(
+        next as unknown as ConnectorSecretPayload,
+      ),
       scopes: account.scopes,
-      metadata: { ...account.metadata, lastRefreshAt: new Date().toISOString() },
+      metadata: {
+        ...account.metadata,
+        lastRefreshAt: new Date().toISOString(),
+      },
     });
 
     return next.access_token ?? null;
   }
 
   private tokensOf(account: ConnectedAccount): GoogleTokens {
-    return this.vault.decrypt(account.encryptedPayload) as unknown as GoogleTokens;
+    return this.vault.decrypt(
+      account.encryptedPayload,
+    ) as unknown as GoogleTokens;
   }
 }
 
@@ -644,6 +822,7 @@ type GoogleCalendarItem = {
 type GoogleGmailMessage = {
   id: string;
   threadId: string;
+  internalDate?: string;
   snippet?: string;
   labelIds?: string[];
   payload?: {
@@ -677,7 +856,8 @@ function toCalendarEvent(item: GoogleCalendarItem): CalendarEvent {
 function toGmailMessage(data: GoogleGmailMessage): GmailMessage {
   const headers = data.payload?.headers ?? [];
   const header = (name: string) =>
-    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+    "";
 
   return {
     id: data.id,
@@ -687,6 +867,7 @@ function toGmailMessage(data: GoogleGmailMessage): GmailMessage {
     cc: header("Cc") || undefined,
     subject: header("Subject"),
     date: header("Date") || undefined,
+    internalDate: data.internalDate,
     snippet: decodeHtmlEntities(data.snippet ?? ""),
     labelIds: data.labelIds ?? [],
     messageIdHeader: header("Message-ID") || undefined,
@@ -706,7 +887,10 @@ function extractPlainBody(payload: GoogleGmailMessage["payload"]): string {
   }
   // Only fall back to the raw body for genuinely plain (or type-less) parts —
   // a lone text/html part must NOT land here, or its markup renders as text.
-  if (payload.body?.data && (!payload.mimeType || payload.mimeType === "text/plain")) {
+  if (
+    payload.body?.data &&
+    (!payload.mimeType || payload.mimeType === "text/plain")
+  ) {
     return decodeBase64Url(payload.body.data);
   }
   return "";
@@ -728,11 +912,19 @@ function collectInlineImages(
   payload: GoogleGmailMessage["payload"],
 ): Array<{ contentId: string; attachmentId: string; mimeType: string }> {
   if (!payload) return [];
-  const results: Array<{ contentId: string; attachmentId: string; mimeType: string }> = [];
+  const results: Array<{
+    contentId: string;
+    attachmentId: string;
+    mimeType: string;
+  }> = [];
   const contentIdHeader = (payload.headers ?? []).find(
     (h) => h.name.toLowerCase() === "content-id",
   )?.value;
-  if (contentIdHeader && payload.body?.attachmentId && payload.mimeType?.startsWith("image/")) {
+  if (
+    contentIdHeader &&
+    payload.body?.attachmentId &&
+    payload.mimeType?.startsWith("image/")
+  ) {
     results.push({
       contentId: contentIdHeader.replace(/^<|>$/g, ""),
       attachmentId: payload.body.attachmentId,
@@ -751,7 +943,7 @@ function buildRawMessage(input: SendOrDraftInput): string {
     input.cc ? `Cc: ${input.cc}` : undefined,
     `Subject: ${input.subject}`,
     input.inReplyTo ? `In-Reply-To: ${input.inReplyTo}` : undefined,
-    input.references ?? input.inReplyTo
+    (input.references ?? input.inReplyTo)
       ? `References: ${input.references ?? input.inReplyTo}`
       : undefined,
     'Content-Type: text/plain; charset="UTF-8"',
@@ -776,9 +968,12 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&quot;/g, '"');
 }
 
-function parseEmailAddress(raw: string): { name: string; email: string } | null {
+function parseEmailAddress(
+  raw: string,
+): { name: string; email: string } | null {
   const withAngle = raw.match(/^\s*"?([^"<]+?)"?\s*<([^>]+)>/);
-  if (withAngle) return { name: withAngle[1].trim(), email: withAngle[2].trim() };
+  if (withAngle)
+    return { name: withAngle[1].trim(), email: withAngle[2].trim() };
   const bare = raw.match(/^\s*([^\s@]+@[^\s@]+)\s*$/);
   if (bare) return { name: bare[1].split("@")[0], email: bare[1].trim() };
   return null;

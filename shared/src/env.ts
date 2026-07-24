@@ -155,11 +155,19 @@ const schema = z.object({
   // the id is provisioned by hand and injected here; unset = full price.
   RAZORPAY_STARTER_INTRO_OFFER_ID: z.string().optional(),
   BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(10),
-  BILLING_SUBSCRIPTION_TOTAL_COUNT: z.coerce.number().int().positive().default(120),
+  BILLING_SUBSCRIPTION_TOTAL_COUNT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(120),
   // Ad-hoc business_snapshot routing against a principal's own connected
   // Postgres/MongoDB/Razorpay accounts (separate from the two vars above,
   // which would be a single shared Razorpay account, not per-user vault creds).
-  CONNECTOR_SCHEMA_CACHE_TTL_MS: z.coerce.number().int().positive().default(900_000),
+  CONNECTOR_SCHEMA_CACHE_TTL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900_000),
   CONNECTOR_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000),
   CONNECTOR_MONGO_SAMPLE_SIZE: z.coerce.number().int().positive().default(20),
   CONNECTOR_SQL_ROW_LIMIT: z.coerce.number().int().positive().default(500),
@@ -173,6 +181,13 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:3000/api/auth/google/callback"),
+  // Optional Gmail server-push delivery. When unset, the existing poller
+  // remains authoritative. The topic project must match GOOGLE_CLIENT_ID's
+  // Google Cloud project and grant Gmail's publisher service account access.
+  GMAIL_PUBSUB_TOPIC: z.string().optional(),
+  GMAIL_PUBSUB_VERIFICATION_TOKEN: z.string().min(24).optional(),
+  GMAIL_PUBSUB_AUDIENCE: z.string().url().optional(),
+  GMAIL_PUBSUB_SERVICE_ACCOUNT: z.string().email().optional(),
   // Cal.com's EU data-residency org (cal.eu) is a fully separate instance
   // from the global cal.com one - each needs its own approved OAuth client,
   // since a client created on one is unknown to the other. The plain data

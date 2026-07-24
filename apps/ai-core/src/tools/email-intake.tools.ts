@@ -58,7 +58,12 @@ export function createReadEmailBodyTool(
       return {
         tool: "read_email_body",
         status: "ok",
-        message: buildSummary(facts, msg.from, context.honorific, context.timezone),
+        message: buildSummary(
+          facts,
+          msg.from,
+          context.honorific,
+          context.timezone,
+        ),
         data: {
           messageId: msg.id,
           threadId: msg.threadId,
@@ -107,7 +112,9 @@ export function createSetEmailPreferenceTool(
       });
 
       const label = payload.category.replace(/_/g, " ");
-      const action = payload.defaultAction ? ` and ${payload.defaultAction} automatically` : "";
+      const action = payload.defaultAction
+        ? ` and ${payload.defaultAction} automatically`
+        : "";
       return {
         tool: "set_email_preference",
         status: "ok",
@@ -119,6 +126,7 @@ export function createSetEmailPreferenceTool(
 }
 
 type EmailConfirmPayload = {
+  accountId?: string;
   messageId?: string;
   threadId?: string;
   category?: EmailCategory;
@@ -143,7 +151,13 @@ export function createEmailConfirmTool(
     approvalRequired: false,
     sensitiveDataPolicy: "none",
     async execute({ userId, payload, context }) {
-      if (!payload.messageId || !payload.threadId || !payload.category || !payload.facts || !payload.action) {
+      if (
+        !payload.messageId ||
+        !payload.threadId ||
+        !payload.category ||
+        !payload.facts ||
+        !payload.action
+      ) {
         return {
           tool: "email_confirm",
           status: "not_implemented",
@@ -153,6 +167,7 @@ export function createEmailConfirmTool(
 
       const result = await pipeline.confirmAction({
         userId,
+        accountId: payload.accountId,
         messageId: payload.messageId,
         threadId: payload.threadId,
         category: payload.category,
@@ -165,7 +180,8 @@ export function createEmailConfirmTool(
         reminder_scheduled: "reminder set",
         reply_watch_set: "watching for reply",
         meeting_reminders_scheduled: "meeting reminders scheduled",
-        preference_learned: "preference saved — I'll auto-handle this next time",
+        preference_learned:
+          "preference saved — I'll auto-handle this next time",
       };
 
       const summary = result.done.map((d) => labels[d] ?? d).join(", ");
@@ -182,7 +198,18 @@ export function createEmailConfirmTool(
 }
 
 function buildSummary(
-  facts: { category: string; person?: string; serviceName?: string; amount?: string; dueDate?: string; meetingTime?: string; meetingEndTime?: string; meetingTitle?: string; action?: string; summary: string },
+  facts: {
+    category: string;
+    person?: string;
+    serviceName?: string;
+    amount?: string;
+    dueDate?: string;
+    meetingTime?: string;
+    meetingEndTime?: string;
+    meetingTitle?: string;
+    action?: string;
+    summary: string;
+  },
   from: string,
   honorific: string,
   timezone: string,

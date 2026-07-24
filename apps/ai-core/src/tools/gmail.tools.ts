@@ -1,6 +1,5 @@
 import type { GoogleService } from "../google/google.service";
 import type { GmailMessage } from "../google/google.types";
-import type { LlmRouterService } from "../llm/llm-router.service";
 import type { PriorityClassification } from "../llm/llm.types";
 import type { HeyRizPriority } from "../context/context.types";
 import type { HeyRizTool } from "./tool.types";
@@ -8,6 +7,11 @@ import { env } from "@heyriz/shared/env";
 import { primaryUpdatesInboxQuery } from "../google/gmail-search";
 import type { DraftCacheService } from "./draft-cache.service";
 import { enqueueOutboundEmail } from "@heyriz/shared/queue/outbound-email";
+import type {
+  CanonicalEmailAssessment,
+  EmailAssessmentService,
+} from "../email/email-assessment.service";
+import type { LlmRouterService } from "../llm/llm-router.service";
 
 const TRIAGE_LIMIT = 8;
 const MAX_TRIAGE_LIMIT = 50;
@@ -36,7 +40,7 @@ type TriagePayload = {
 
 export function createGmailTriageTool(
   google: GoogleService,
-  llm: LlmRouterService,
+  assessments: EmailAssessmentService,
 ): HeyRizTool<TriagePayload> {
   return {
     name: "gmail_triage",
@@ -48,11 +52,13 @@ export function createGmailTriageTool(
     async execute({ userId, payload, context }) {
       // Single, already-known item (e.g. from a Gmail push webhook).
       if (payload.subject || payload.from || payload.messageId) {
-        let cls = await llm.classifyPriority({
+        let cls = await assessments.assess({
+          userId,
+          messageId: payload.messageId,
           subject: payload.subject ?? payload.message,
           from: payload.from,
           snippet: payload.snippet,
-          userId,
+          origin: "interactive",
         });
         if (
           payload.messageId &&
@@ -60,7 +66,7 @@ export function createGmailTriageTool(
         ) {
           cls = await refineWithLiveBody(
             google,
-            llm,
+            assessments,
             userId,
             payload.messageId,
             cls,
@@ -107,29 +113,47 @@ export function createGmailTriageTool(
         category?: PriorityClassification["category"];
         requiresAction?: boolean;
         confidence?: PriorityClassification["confidence"];
+        cacheStatus: CanonicalEmailAssessment["cacheStatus"];
       };
 
       // Gmail's IMPORTANT label is only a retrieval hint, not our verdict. Score
       // the whole small candidate pool with bounded concurrency, then apply the
       // result limit. Otherwise eight Gmail-labelled newsletters can consume
       // the budget and hide a genuinely critical ninth message.
-      const items = await mapWithConcurrency(
-        ranked,
+      const initialAssessments = await assessments.assessBatch(
+        ranked.map((message) => ({
+          userId,
+          messageId: message.id,
+          subject: message.subject,
+          from: message.from,
+          snippet: message.snippet,
+          origin: "interactive" as const,
+        })),
         CLASSIFY_CONCURRENCY,
-        async (m): Promise<TriageItem> => {
-          let cls = await llm.classifyPriority({
-            subject: m.subject,
-            from: m.from,
-            snippet: m.snippet,
-            userId,
-          });
+      );
+      const candidates = ranked.map((message, index) => ({
+        message,
+        classification: initialAssessments[index]!,
+      }));
+      const items = await mapWithConcurrency(
+        candidates,
+        CLASSIFY_CONCURRENCY,
+        async ({ message: m, classification }): Promise<TriageItem> => {
+          let cls = classification;
           // Worth the extra fetch: read the real body live (never stored) so the
           // verdict/reason isn't based on a truncated snippet.
           if (cls.priority === "HIGH" || cls.priority === "MEDIUM") {
-            cls = await refineWithLiveBody(google, llm, userId, m.id, cls, {
-              subject: m.subject,
-              from: m.from,
-            });
+            cls = await refineWithLiveBody(
+              google,
+              assessments,
+              userId,
+              m.id,
+              cls,
+              {
+                subject: m.subject,
+                from: m.from,
+              },
+            );
           }
           return {
             id: m.id,
@@ -142,6 +166,7 @@ export function createGmailTriageTool(
             category: cls.category,
             requiresAction: cls.requiresAction,
             confidence: cls.confidence,
+            cacheStatus: cls.cacheStatus,
           };
         },
       );
@@ -443,20 +468,22 @@ export async function draftBody(
 /** Re-classifies using the live message body (never persisted) once a snippet-based pass says HIGH/MEDIUM. */
 async function refineWithLiveBody(
   google: GoogleService,
-  llm: LlmRouterService,
+  assessments: EmailAssessmentService,
   userId: string,
   messageId: string,
-  fallback: PriorityClassification,
+  fallback: CanonicalEmailAssessment,
   meta: { subject?: string; from?: string },
-): Promise<PriorityClassification> {
+): Promise<CanonicalEmailAssessment> {
   const res = await google.getMessage(userId, messageId, "full");
   if (!res.connected) return fallback;
 
-  return llm.classifyPriority({
+  return assessments.assess({
+    userId,
+    messageId,
     subject: meta.subject,
     from: meta.from,
     body: res.message.body,
-    userId,
+    origin: "interactive",
   });
 }
 

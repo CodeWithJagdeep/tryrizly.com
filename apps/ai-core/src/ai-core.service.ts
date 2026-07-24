@@ -15,6 +15,7 @@ import type {
   HeyRizEventSource,
 } from "./context/context.types";
 import { EmailPipelineService } from "./email/email-pipeline.service";
+import { GmailPushService } from "./email/gmail-push.service";
 import type { EmailCategory, ExtractedEmailFacts } from "./email/email.types";
 import { GoogleService } from "./google/google.service";
 import { CalComService } from "./connectors/calcom.service";
@@ -29,7 +30,11 @@ import { PagerDutyService } from "./connectors/pagerduty.service";
 import { TrelloService } from "./connectors/trello.service";
 import { AirtableService } from "./connectors/airtable.service";
 import { TwilioService } from "./connectors/twilio.service";
-import { draftBody, ensureRe, fillAndGuardPlaceholders } from "./tools/gmail.tools";
+import {
+  draftBody,
+  ensureRe,
+  fillAndGuardPlaceholders,
+} from "./tools/gmail.tools";
 import { formatAwayDigest } from "./tools/preferences.tools";
 import { primaryUpdatesInboxQuery } from "./google/gmail-search";
 import { AutoMemoryService } from "./memory/auto-memory.service";
@@ -45,7 +50,10 @@ import { ProactiveService } from "./proactive/proactive.service";
 import { DigestService } from "./proactive/digest.service";
 import { UserPreferencesRepository } from "./preferences/user-preferences.repository";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
-import { EntityResolverService, parseHeader } from "./spine/entity-resolver.service";
+import {
+  EntityResolverService,
+  parseHeader,
+} from "./spine/entity-resolver.service";
 import { EventRepository } from "./spine/event.repository";
 import { EventIngestService } from "./spine/event-ingest.service";
 import { DecisionService } from "./spine/decision.service";
@@ -85,6 +93,7 @@ type ToolExecutePayload = {
 
 type CheckThreadReplyPayload = {
   userId?: string;
+  accountId?: string;
   threadId?: string;
   baselineMessageCount?: number;
 };
@@ -116,6 +125,8 @@ export class AiCoreService {
     private readonly google: GoogleService,
     @Inject(EmailPipelineService)
     private readonly emailPipeline: EmailPipelineService,
+    @Inject(GmailPushService)
+    private readonly gmailPush: GmailPushService,
     @Inject(UserPreferencesRepository)
     private readonly preferences: UserPreferencesRepository,
     @Inject(EntityResolverService)
@@ -160,7 +171,10 @@ export class AiCoreService {
 
   /** Spine: active (non-superseded) decisions, optionally filtered by topic. */
   recallDecisions(body: { userId?: string; topic?: string }) {
-    return this.decisions.recall(body.userId ?? env.DEFAULT_USER_ID, body.topic);
+    return this.decisions.recall(
+      body.userId ?? env.DEFAULT_USER_ID,
+      body.topic,
+    );
   }
 
   /** Current-cycle AI spend vs. plan budget + per-task breakdown, for the dashboard's Usage view. */
@@ -194,7 +208,12 @@ export class AiCoreService {
   }
 
   /** Spine: resolve a person/company reference to a canonical entity id. */
-  resolveEntity(body: { userId?: string; from?: string; name?: string; email?: string }) {
+  resolveEntity(body: {
+    userId?: string;
+    from?: string;
+    name?: string;
+    email?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     if (body.from) {
       return this.entityResolver.resolveFromHeader(userId, body.from, "api");
@@ -207,7 +226,10 @@ export class AiCoreService {
   }
 
   listPeople(body: { userId?: string; limit?: number }) {
-    return this.entityResolver.listPeople(body.userId ?? env.DEFAULT_USER_ID, body.limit ?? 50);
+    return this.entityResolver.listPeople(
+      body.userId ?? env.DEFAULT_USER_ID,
+      body.limit ?? 50,
+    );
   }
 
   /** Spine: seed the timeline from the last/next N days of calendar + inbox. */
@@ -235,7 +257,9 @@ export class AiCoreService {
             content: e.title,
             metadata: { start: e.start, end: e.end },
             participants: [
-              ...(e.organizer ? [{ email: e.organizer, role: "organizer" }] : []),
+              ...(e.organizer
+                ? [{ email: e.organizer, role: "organizer" }]
+                : []),
               ...e.attendees.map((a) => ({ email: a, role: "attendee" })),
             ],
           })
@@ -366,9 +390,10 @@ export class AiCoreService {
       cleanSenderHint(data.contactCandidate?.name) ??
       cleanSenderHint(data.senderName) ??
       sender.name;
-    const senderEmail = data.contactCandidate?.isRealContact && data.contactCandidate.email
-      ? data.contactCandidate.email
-      : sender.email;
+    const senderEmail =
+      data.contactCandidate?.isRealContact && data.contactCandidate.email
+        ? data.contactCandidate.email
+        : sender.email;
     // Parse CC header into extra participants
     const ccParticipants = parseCcHeader(data.cc ?? "").map((p) => ({
       ...p,
@@ -398,7 +423,12 @@ export class AiCoreService {
       ],
     });
 
-    const msg = await this.google.getMessage(data.userId, data.messageId, "full");
+    const msg = await this.google.getMessage(
+      data.userId,
+      data.messageId,
+      "full",
+      data.accountId,
+    );
     const body = msg.connected ? msg.message.body : "";
 
     if (data.extractDecisions && body) {
@@ -431,7 +461,11 @@ export class AiCoreService {
     }
 
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const res = await this.google.getThreadMessages(userId, body.threadId);
+    const res = await this.google.getThreadMessages(
+      userId,
+      body.threadId,
+      body.accountId,
+    );
     if (!res.connected) {
       return {
         connected: false,
@@ -487,13 +521,16 @@ export class AiCoreService {
       history: body.history,
       pendingTool: approval?.tool,
     });
-    const context = await this.contextService.build({
-      userId,
-      source: "telegram",
-      message,
-    }, {
-      scopes: skillSelection.contextScopes,
-    });
+    const context = await this.contextService.build(
+      {
+        userId,
+        source: "telegram",
+        message,
+      },
+      {
+        scopes: skillSelection.contextScopes,
+      },
+    );
 
     const result = await this.agent.run({
       userId,
@@ -505,7 +542,10 @@ export class AiCoreService {
       channel: body.channel,
     });
 
-    if (env.BACKGROUND_AI_ENABLED && (await this.budgetGate.check(userId)).state !== "exceeded") {
+    if (
+      env.BACKGROUND_AI_ENABLED &&
+      (await this.budgetGate.check(userId)).state !== "exceeded"
+    ) {
       // Let long-term memory build itself, without blocking the reply.
       void this.autoMemory
         .captureTurn({ userId, message, toolResults: result.toolResults })
@@ -582,7 +622,10 @@ export class AiCoreService {
       context,
     });
 
-    if (env.BACKGROUND_AI_ENABLED && (await this.budgetGate.check(context.userId)).state !== "exceeded") {
+    if (
+      env.BACKGROUND_AI_ENABLED &&
+      (await this.budgetGate.check(context.userId)).state !== "exceeded"
+    ) {
       void this.autoMemory
         .captureEvent({
           userId: context.userId,
@@ -643,23 +686,42 @@ export class AiCoreService {
     return { removed: await this.vectorMemory.forgetAll(body.userId) };
   }
 
-  async listEmailMemories(body: { userId?: string; limit?: number; includeLowValue?: boolean }) {
+  async listEmailMemories(body: {
+    userId?: string;
+    limit?: number;
+    includeLowValue?: boolean;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const limit = body.limit ?? 50;
-    const fetchLimit = body.includeLowValue ? limit : Math.max(limit * 5, limit);
-    const memories = await this.vectorMemory.listBySource(userId, "gmail", fetchLimit);
+    const fetchLimit = body.includeLowValue
+      ? limit
+      : Math.max(limit * 5, limit);
+    const memories = await this.vectorMemory.listBySource(
+      userId,
+      "gmail",
+      fetchLimit,
+    );
 
     if (body.includeLowValue) return memories.slice(0, limit);
 
     return memories
-      .filter((memory) => !LOW_VALUE_EMAIL_CATEGORIES.has(String(memory.metadata.category ?? "")))
+      .filter(
+        (memory) =>
+          !LOW_VALUE_EMAIL_CATEGORIES.has(
+            String(memory.metadata.category ?? ""),
+          ),
+      )
       .slice(0, limit);
   }
 
   async listChatMemories(body: { userId?: string; limit?: number }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const limit = body.limit ?? 50;
-    const memories = await this.vectorMemory.listBySource(userId, "telegram", limit);
+    const memories = await this.vectorMemory.listBySource(
+      userId,
+      "telegram",
+      limit,
+    );
     // Only conversation turns have the "User: ... | Assistant: ..." shape —
     // auto-memory notes and event summaries don't and would break parsing.
     return memories.filter((m) => m.metadata.kind === "turn");
@@ -693,7 +755,9 @@ export class AiCoreService {
    * whose vacation window has elapsed and who has held emails, build the priority
    * digest, clear their away state, and return the messages to deliver.
    */
-  async awayReturnSweep(): Promise<{ returns: Array<{ userId: string; message: string }> }> {
+  async awayReturnSweep(): Promise<{
+    returns: Array<{ userId: string; message: string }>;
+  }> {
     const userIds = await this.preferences.listExpiredAwayUsers();
     const returns: Array<{ userId: string; message: string }> = [];
     for (const userId of userIds) {
@@ -723,32 +787,54 @@ export class AiCoreService {
   }
 
   deleteConnector(body: DeleteConnectorInput) {
-    return this.connectorService.delete(body.userId ?? "default", body.provider);
+    return this.connectorService.delete(
+      body.userId ?? "default",
+      body.provider,
+    );
   }
 
   deleteConnectorById(body: { userId?: string; id: string }) {
     return this.connectorService.deleteById(body.userId ?? "default", body.id);
   }
 
-  updateConnectorMetadata(body: { userId?: string; id: string; metadata: Record<string, unknown> }) {
-    return this.connectorService.updateMetadata(body.userId ?? "default", body.id, body.metadata);
+  updateConnectorMetadata(body: {
+    userId?: string;
+    id: string;
+    metadata: Record<string, unknown>;
+  }) {
+    return this.connectorService.updateMetadata(
+      body.userId ?? "default",
+      body.id,
+      body.metadata,
+    );
   }
 
   async checkConnectorNotification(body: { userId: string; provider: string }) {
     const provider = parseConnectorProvider(body.provider);
     if (!provider) return { enabled: true };
-    const enabled = await this.connectorService.isNotificationsEnabled(body.userId, provider);
+    const enabled = await this.connectorService.isNotificationsEnabled(
+      body.userId,
+      provider,
+    );
     return { enabled };
   }
 
   async checkConnectorAutoProcess(body: { userId: string; provider: string }) {
     const provider = parseConnectorProvider(body.provider);
     if (!provider) return { enabled: false };
-    const enabled = await this.connectorService.isAutoProcessEnabled(body.userId, provider);
+    const enabled = await this.connectorService.isAutoProcessEnabled(
+      body.userId,
+      provider,
+    );
     return { enabled };
   }
 
-  async logNotification(body: { userId: string; message: string; source?: string; sentAt?: string }) {
+  async logNotification(body: {
+    userId: string;
+    message: string;
+    source?: string;
+    sentAt?: string;
+  }) {
     await this.notificationLog.append({
       userId: body.userId,
       message: body.message,
@@ -759,7 +845,10 @@ export class AiCoreService {
   }
 
   async listNotifications(body: { userId: string; limit?: number }) {
-    const entries = await this.notificationLog.list(body.userId, body.limit ?? 50);
+    const entries = await this.notificationLog.list(
+      body.userId,
+      body.limit ?? 50,
+    );
     return { entries };
   }
 
@@ -767,8 +856,20 @@ export class AiCoreService {
     return this.connectorService.startOAuth(body);
   }
 
-  completeConnectorOAuth(body: CompleteOAuthInput) {
-    return this.connectorService.completeOAuth(body);
+  async completeConnectorOAuth(body: CompleteOAuthInput) {
+    const result = await this.connectorService.completeOAuth(body);
+    if (result.provider === "gmail") {
+      // Do not make a successful OAuth connection fail just because the
+      // optional push infrastructure is unavailable; the polling fallback
+      // remains active until a watch is successfully recorded.
+      await this.gmailPush.renewWatches(result.userId).catch((error) => {
+        logger.warn("initial gmail watch setup failed", {
+          userId: result.userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return result;
   }
 
   async listRecentEmails(body: { userId?: string; maxResults?: number }) {
@@ -784,7 +885,12 @@ export class AiCoreService {
   }
 
   /** Gmail search-by-query for the automation-poll "New Email Matching Search" trigger. */
-  async automationGmailSearch(body: { userId?: string; query: string; maxResults?: number; accountId?: string }) {
+  async automationGmailSearch(body: {
+    userId?: string;
+    query: string;
+    maxResults?: number;
+    accountId?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const res = await this.google.listThreads(
       userId,
@@ -796,7 +902,12 @@ export class AiCoreService {
   }
 
   /** Calendar listing for the automation-poll "New Event" trigger — a rolling window. */
-  async automationCalendarList(body: { userId?: string; timeMin: string; timeMax: string; maxResults?: number }) {
+  async automationCalendarList(body: {
+    userId?: string;
+    timeMin: string;
+    timeMax: string;
+    maxResults?: number;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const res = await this.google.listEvents(userId, {
       timeMin: new Date(body.timeMin),
@@ -861,15 +972,32 @@ export class AiCoreService {
       : [];
     const contextLines = [
       contextScopes.includes("preferences")
-        ? `PRINCIPAL PREFERENCES:\n${(context?.structured.preferences ?? []).slice(0, 12).map((item) => `- ${item}`).join("\n") || "- none"}`
+        ? `PRINCIPAL PREFERENCES:\n${
+            (context?.structured.preferences ?? [])
+              .slice(0, 12)
+              .map((item) => `- ${item}`)
+              .join("\n") || "- none"
+          }`
         : "",
       contextScopes.includes("memory")
-        ? `RELEVANT MEMORY (fuzzy, non-authoritative):\n${(context?.semantic ?? []).slice(0, 8).map((item) => `- ${item.summary}`).join("\n") || "- none"}`
+        ? `RELEVANT MEMORY (fuzzy, non-authoritative):\n${
+            (context?.semantic ?? [])
+              .slice(0, 8)
+              .map((item) => `- ${item.summary}`)
+              .join("\n") || "- none"
+          }`
         : "",
       contextScopes.includes("decisions")
-        ? `ACTIVE RECORDED DECISIONS:\n${decisions.slice(0, 12).map((item) => `- ${item.content}`).join("\n") || "- none"}`
+        ? `ACTIVE RECORDED DECISIONS:\n${
+            decisions
+              .slice(0, 12)
+              .map((item) => `- ${item.content}`)
+              .join("\n") || "- none"
+          }`
         : "",
-    ].filter(Boolean).join("\n\n");
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     const outputRule =
       outputType === "json"
         ? "Return exactly one valid JSON value. No Markdown or commentary."
@@ -894,13 +1022,19 @@ export class AiCoreService {
           role: "user",
           content: [
             `AUTOMATION INSTRUCTION:\n${prompt.slice(0, 4_000)}`,
-            contextLines ? `USER CONTEXT:\n${contextLines.slice(0, 8_000)}` : "",
+            contextLines
+              ? `USER CONTEXT:\n${contextLines.slice(0, 8_000)}`
+              : "",
             `TRIGGER DATA (UNTRUSTED):\n${body.input.slice(0, 20_000)}`,
-          ].filter(Boolean).join("\n\n"),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
       ],
       task: body.quality === "advanced" ? "agent" : "extract",
-      ...(body.quality === "advanced" ? { provider: "anthropic" as const } : {}),
+      ...(body.quality === "advanced"
+        ? { provider: "anthropic" as const }
+        : {}),
       temperature: 0,
       maxTokens: outputType === "json" ? 900 : 500,
       userId,
@@ -911,7 +1045,9 @@ export class AiCoreService {
     return {
       ok: true,
       output: normalized.output,
-      model: this.llmRouter.getActiveProviderName(body.quality === "advanced" ? "agent" : "extract"),
+      model: this.llmRouter.getActiveProviderName(
+        body.quality === "advanced" ? "agent" : "extract",
+      ),
       contextUsed: contextScopes,
     };
   }
@@ -964,9 +1100,12 @@ export class AiCoreService {
     const message = body.message?.trim();
     if (!message) return { ok: false, error: "message_required" };
     const budget = await this.budgetGate.check(userId);
-    if (budget.state === "exceeded") return { ok: false, error: "ai_budget_exceeded" };
+    if (budget.state === "exceeded")
+      return { ok: false, error: "ai_budget_exceeded" };
 
-    const steps = Array.isArray(body.flow?.steps) ? (body.flow?.steps as Array<Record<string, unknown>>) : [];
+    const steps = Array.isArray(body.flow?.steps)
+      ? (body.flow?.steps as Array<Record<string, unknown>>)
+      : [];
     const compactFlow = {
       name: String(body.flow?.name ?? "Untitled"),
       steps: steps.slice(0, 30).map((s, i) => ({
@@ -980,10 +1119,16 @@ export class AiCoreService {
     };
 
     const history = (Array.isArray(body.history) ? body.history : [])
-      .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content.trim())
+      .filter(
+        (t) =>
+          (t.role === "user" || t.role === "assistant") &&
+          typeof t.content === "string" &&
+          t.content.trim(),
+      )
       .slice(-12)
       .map((t) => ({
-        role: t.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        role:
+          t.role === "assistant" ? ("assistant" as const) : ("user" as const),
         content: String(t.content).slice(0, 2_000),
       }));
 
@@ -1002,16 +1147,35 @@ export class AiCoreService {
     });
     if (!raw) return { ok: false, error: "no_output" };
 
-    const parsed = extractJson<{ thinking?: unknown; reply?: unknown; name?: unknown; operations?: unknown }>(raw);
+    const parsed = extractJson<{
+      thinking?: unknown;
+      reply?: unknown;
+      name?: unknown;
+      operations?: unknown;
+    }>(raw);
     if (!parsed) {
       // Model answered in prose — still a valid conversational turn, just no edits.
-      return { ok: true, reply: raw.trim().slice(0, 4_000), thinking: "", operations: [] };
+      return {
+        ok: true,
+        reply: raw.trim().slice(0, 4_000),
+        thinking: "",
+        operations: [],
+      };
     }
-    const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 80) : undefined;
+    const name =
+      typeof parsed.name === "string" && parsed.name.trim()
+        ? parsed.name.trim().slice(0, 80)
+        : undefined;
     return {
       ok: true,
-      reply: (typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : "Done.").slice(0, 4_000),
-      thinking: (typeof parsed.thinking === "string" ? parsed.thinking.trim() : "").slice(0, 1_200),
+      reply: (typeof parsed.reply === "string" && parsed.reply.trim()
+        ? parsed.reply.trim()
+        : "Done."
+      ).slice(0, 4_000),
+      thinking: (typeof parsed.thinking === "string"
+        ? parsed.thinking.trim()
+        : ""
+      ).slice(0, 1_200),
       ...(name ? { name } : {}),
       operations: sanitizeBuilderOperations(parsed.operations),
     };
@@ -1042,42 +1206,69 @@ export class AiCoreService {
   }
 
   /** The automation "Upload File" action for Google Drive. */
-  async automationGoogleUploadFile(body: { userId?: string; name: string; mimeType: string; content: string }) {
+  async automationGoogleUploadFile(body: {
+    userId?: string;
+    name: string;
+    mimeType: string;
+    content: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const result = await this.google.uploadDriveFile(userId, {
       name: body.name,
       mimeType: body.mimeType || "text/plain",
       content: body.content,
     });
-    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    if (!result.connected)
+      return { ok: false, error: "google_workspace_not_connected" };
     return { ok: true, id: result.id, url: result.webViewLink };
   }
 
   /** The automation "Create Row" action for Google Sheets. */
-  async automationGoogleAppendRow(body: { userId?: string; spreadsheetId: string; range: string; values: string[] }) {
+  async automationGoogleAppendRow(body: {
+    userId?: string;
+    spreadsheetId: string;
+    range: string;
+    values: string[];
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const result = await this.google.appendSheetRow(userId, {
       spreadsheetId: body.spreadsheetId,
       range: body.range,
       values: body.values,
     });
-    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    if (!result.connected)
+      return { ok: false, error: "google_workspace_not_connected" };
     return { ok: true };
   }
 
   /** Sheet row reads — backs both the Sheets "New Row" and Forms "New Submission" (via its response sheet) pollers. */
-  async automationGoogleReadSheetRows(body: { userId?: string; spreadsheetId: string; range: string }) {
+  async automationGoogleReadSheetRows(body: {
+    userId?: string;
+    spreadsheetId: string;
+    range: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const result = await this.google.readSheetRows(userId, { spreadsheetId: body.spreadsheetId, range: body.range });
+    const result = await this.google.readSheetRows(userId, {
+      spreadsheetId: body.spreadsheetId,
+      range: body.range,
+    });
     if (!result.connected) return { connected: false, rows: [] };
     return { connected: true, rows: result.rows };
   }
 
   /** The automation "Create Document" action for Google Docs. */
-  async automationGoogleCreateDoc(body: { userId?: string; title: string; content?: string }) {
+  async automationGoogleCreateDoc(body: {
+    userId?: string;
+    title: string;
+    content?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const result = await this.google.createDoc(userId, { title: body.title, content: body.content });
-    if (!result.connected) return { ok: false, error: "google_workspace_not_connected" };
+    const result = await this.google.createDoc(userId, {
+      title: body.title,
+      content: body.content,
+    });
+    if (!result.connected)
+      return { ok: false, error: "google_workspace_not_connected" };
     return { ok: true, id: result.id, url: result.url };
   }
 
@@ -1100,8 +1291,13 @@ export class AiCoreService {
       end: body.end,
       attendees: body.attendees,
     });
-    if (!result.connected) return { ok: false, error: "calendar_not_connected" };
-    return { ok: true, meetingUrl: result.event.hangoutLink, eventId: result.event.id };
+    if (!result.connected)
+      return { ok: false, error: "calendar_not_connected" };
+    return {
+      ok: true,
+      meetingUrl: result.event.hangoutLink,
+      eventId: result.event.id,
+    };
   }
 
   /**
@@ -1112,12 +1308,23 @@ export class AiCoreService {
    * Values are bound as `$1,$2,...` params, never interpolated into the SQL
    * text itself.
    */
-  async automationPostgresQuery(body: { userId?: string; query: string; params?: unknown[] }) {
+  async automationPostgresQuery(body: {
+    userId?: string;
+    query: string;
+    params?: unknown[];
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const result = await this.connectorService.getDataSourceSecret(userId, "postgres");
-    if (!result.connected || result.provider !== "postgres") return { ok: false, error: "postgres_not_connected" };
+    const result = await this.connectorService.getDataSourceSecret(
+      userId,
+      "postgres",
+    );
+    if (!result.connected || result.provider !== "postgres")
+      return { ok: false, error: "postgres_not_connected" };
     try {
-      const schema = await this.postgresIntrospection.getSchema(userId, result.secret.connectionUrl);
+      const schema = await this.postgresIntrospection.getSchema(
+        userId,
+        result.secret.connectionUrl,
+      );
       const { rows } = await this.postgresIntrospection.runReadOnlyQuery(
         result.secret.connectionUrl,
         body.query,
@@ -1126,7 +1333,10 @@ export class AiCoreService {
       );
       return { ok: true, rows: rows.slice(0, 50) };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "postgres_query_failed" };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "postgres_query_failed",
+      };
     }
   }
 
@@ -1143,18 +1353,32 @@ export class AiCoreService {
     limit?: number;
   }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const result = await this.connectorService.getDataSourceSecret(userId, "mongodb");
-    if (!result.connected || result.provider !== "mongodb") return { ok: false, error: "mongodb_not_connected" };
+    const result = await this.connectorService.getDataSourceSecret(
+      userId,
+      "mongodb",
+    );
+    if (!result.connected || result.provider !== "mongodb")
+      return { ok: false, error: "mongodb_not_connected" };
     try {
-      const schema = await this.mongoIntrospection.getSchema(userId, result.secret.connectionUrl);
+      const schema = await this.mongoIntrospection.getSchema(
+        userId,
+        result.secret.connectionUrl,
+      );
       const { documents } = await this.mongoIntrospection.runFind(
         result.secret.connectionUrl,
-        { collection: body.collection, filter: body.filter ?? {}, limit: Math.min(body.limit ?? 20, 50) },
+        {
+          collection: body.collection,
+          filter: body.filter ?? {},
+          limit: Math.min(body.limit ?? 20, 50),
+        },
         schema,
       );
       return { ok: true, documents };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "mongo_find_failed" };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "mongo_find_failed",
+      };
     }
   }
 
@@ -1178,7 +1402,11 @@ export class AiCoreService {
       });
       return { ok: true, key: issue.key, url: issue.url };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "jira_create_issue_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "jira_create_issue_failed",
+      };
     }
   }
 
@@ -1202,12 +1430,23 @@ export class AiCoreService {
       });
       return { ok: true, id: incident.id, url: incident.url };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "pagerduty_create_incident_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "pagerduty_create_incident_failed",
+      };
     }
   }
 
   /** The automation "Create Card" action for Trello. */
-  async automationTrelloCreateCard(body: { userId?: string; listId: string; name: string; description?: string }) {
+  async automationTrelloCreateCard(body: {
+    userId?: string;
+    listId: string;
+    name: string;
+    description?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getTrelloSecret(userId);
     if (!secret) return { ok: false, error: "trello_not_connected" };
@@ -1219,7 +1458,11 @@ export class AiCoreService {
       });
       return { ok: true, id: card.id, url: card.url };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "trello_create_card_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "trello_create_card_failed",
+      };
     }
   }
 
@@ -1241,12 +1484,23 @@ export class AiCoreService {
       });
       return { ok: true, id: record.id };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "airtable_create_record_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "airtable_create_record_failed",
+      };
     }
   }
 
   /** Backs the Airtable "New Record" poller. */
-  async automationAirtableListRecords(body: { userId?: string; baseId: string; table: string; maxRecords?: number }) {
+  async automationAirtableListRecords(body: {
+    userId?: string;
+    baseId: string;
+    table: string;
+    maxRecords?: number;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getAirtableSecret(userId);
     if (!secret) return { connected: false, records: [] };
@@ -1263,7 +1517,11 @@ export class AiCoreService {
   }
 
   /** The automation "Send SMS" action for Twilio. */
-  async automationTwilioSendSms(body: { userId?: string; to: string; body: string }) {
+  async automationTwilioSendSms(body: {
+    userId?: string;
+    to: string;
+    body: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getTwilioSecret(userId);
     if (!secret) return { ok: false, error: "twilio_not_connected" };
@@ -1271,33 +1529,58 @@ export class AiCoreService {
       const result = await this.twilio.sendSms(secret, body.to, body.body);
       return { ok: true, sid: result.sid };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "twilio_send_sms_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "twilio_send_sms_failed",
+      };
     }
   }
 
   /** The automation "Send Message" action for Discord — webhook-only, same restriction as connectors/discord.service.ts. */
-  async automationDiscordPostMessage(body: { userId?: string; content: string }) {
+  async automationDiscordPostMessage(body: {
+    userId?: string;
+    content: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getDiscordSecret(userId);
-    if (!secret?.webhookUrl) return { ok: false, error: "discord_not_connected" };
+    if (!secret?.webhookUrl)
+      return { ok: false, error: "discord_not_connected" };
     try {
       await this.discord.postMessage(secret, body.content);
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "discord_send_failed" };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "discord_send_failed",
+      };
     }
   }
 
   /** The automation "Create Issue" action for GitHub. */
-  async automationGitHubCreateIssue(body: { userId?: string; repo: string; title: string; body?: string }) {
+  async automationGitHubCreateIssue(body: {
+    userId?: string;
+    repo: string;
+    title: string;
+    body?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getGitHubSecret(userId);
     if (!secret) return { ok: false, error: "github_not_connected" };
     try {
-      const issue = await this.github.createIssue(secret, body.repo, body.title, body.body);
+      const issue = await this.github.createIssue(
+        secret,
+        body.repo,
+        body.title,
+        body.body,
+      );
       return { ok: true, number: issue.number, url: issue.html_url };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "github_create_issue_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "github_create_issue_failed",
+      };
     }
   }
 
@@ -1313,39 +1596,69 @@ export class AiCoreService {
     const secret = await this.connectorService.getNotionSecret(userId);
     if (!secret) return { ok: false, error: "notion_not_connected" };
     try {
-      const page = await this.notion.createPage(secret, body.parentId, body.parentType, body.title, body.content);
+      const page = await this.notion.createPage(
+        secret,
+        body.parentId,
+        body.parentType,
+        body.title,
+        body.content,
+      );
       return { ok: true, id: page.id, url: page.url };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "notion_create_page_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "notion_create_page_failed",
+      };
     }
   }
 
   /** The automation "Create Customer" action for Stripe. */
-  async automationStripeCreateCustomer(body: { userId?: string; email?: string; name?: string }) {
+  async automationStripeCreateCustomer(body: {
+    userId?: string;
+    email?: string;
+    name?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const result = await this.connectorService.getDataSourceSecret(userId, "stripe");
-    if (!result.connected || result.provider !== "stripe") return { ok: false, error: "stripe_not_connected" };
+    const result = await this.connectorService.getDataSourceSecret(
+      userId,
+      "stripe",
+    );
+    if (!result.connected || result.provider !== "stripe")
+      return { ok: false, error: "stripe_not_connected" };
     try {
-      const customer = await this.stripe.createCustomer(result.secret, { email: body.email, name: body.name });
+      const customer = await this.stripe.createCustomer(result.secret, {
+        email: body.email,
+        name: body.name,
+      });
       return { ok: true, id: customer.id };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "stripe_create_customer_failed" };
+      return {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "stripe_create_customer_failed",
+      };
     }
   }
 
   processEmail(body: EmailEventJobData) {
     return this.emailPipeline.process({
       userId: body.userId ?? env.DEFAULT_USER_ID,
+      accountId: body.accountId,
       messageId: body.messageId,
       threadId: body.threadId,
       from: body.from,
       subject: body.subject,
       snippet: body.snippet,
+      source: body.source,
     });
   }
 
   confirmEmailAction(body: {
     userId?: string;
+    accountId?: string;
     messageId?: string;
     threadId?: string;
     category?: EmailCategory;
@@ -1353,11 +1666,18 @@ export class AiCoreService {
     action?: "remind" | "schedule" | "draft" | "watch";
     learnPreference?: boolean;
   }) {
-    if (!body.messageId || !body.threadId || !body.category || !body.facts || !body.action) {
+    if (
+      !body.messageId ||
+      !body.threadId ||
+      !body.category ||
+      !body.facts ||
+      !body.action
+    ) {
       throw new Error("email_confirm_missing_fields");
     }
     return this.emailPipeline.confirmAction({
       userId: body.userId ?? env.DEFAULT_USER_ID,
+      accountId: body.accountId,
       messageId: body.messageId,
       threadId: body.threadId,
       category: body.category,
@@ -1401,7 +1721,11 @@ export class AiCoreService {
     return { connected: true as const, message: res.message };
   }
 
-  async draftEmailReply(body: { userId?: string; messageId: string; instructions?: string }) {
+  async draftEmailReply(body: {
+    userId?: string;
+    messageId: string;
+    instructions?: string;
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const res = await this.google.getMessage(userId, body.messageId, "full");
     if (!res.connected) return { connected: false as const };
@@ -1442,7 +1766,11 @@ export class AiCoreService {
     const principalName = await this.preferences.getDisplayName(userId);
     const guarded = fillAndGuardPlaceholders(payload.body, principalName);
     if (guarded.leftoverPlaceholder) {
-      return { ok: false as const, error: "unfilled_placeholder", placeholder: guarded.leftoverPlaceholder };
+      return {
+        ok: false as const,
+        error: "unfilled_placeholder",
+        placeholder: guarded.leftoverPlaceholder,
+      };
     }
 
     if (payload.sendAt) {
@@ -1459,7 +1787,11 @@ export class AiCoreService {
         },
         sendAt,
       );
-      return { ok: true as const, scheduled: true as const, sendAt: sendAt.toISOString() };
+      return {
+        ok: true as const,
+        scheduled: true as const,
+        sendAt: sendAt.toISOString(),
+      };
     }
 
     const res = await this.google.sendMessage(userId, {
@@ -1470,7 +1802,12 @@ export class AiCoreService {
       inReplyTo: payload.inReplyTo,
     });
     if (!res.connected) return { ok: false as const, error: "not_connected" };
-    return { ok: true as const, scheduled: false as const, messageId: res.messageId, threadId: res.threadId };
+    return {
+      ok: true as const,
+      scheduled: false as const,
+      messageId: res.messageId,
+      threadId: res.threadId,
+    };
   }
 
   private selectToolForEvent(source: HeyRizEventSource) {
@@ -1490,7 +1827,11 @@ export class AiCoreService {
   }
 }
 
-const LOW_VALUE_EMAIL_CATEGORIES = new Set(["newsletter", "general_low", "otp"]);
+const LOW_VALUE_EMAIL_CATEGORIES = new Set([
+  "newsletter",
+  "general_low",
+  "otp",
+]);
 
 function stripHtml(html: string): string {
   return html
@@ -1500,12 +1841,29 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function parseConnectorProvider(provider: string | undefined): ConnectorProvider | undefined {
+function parseConnectorProvider(
+  provider: string | undefined,
+): ConnectorProvider | undefined {
   const allowed = new Set([
-    "google", "gmail", "calendar", "telegram", "postgres", "mongodb", "razorpay",
-    "stripe", "calcom", "slack", "notion", "custom_api", "paypal", "github", "mpesa",
+    "google",
+    "gmail",
+    "calendar",
+    "telegram",
+    "postgres",
+    "mongodb",
+    "razorpay",
+    "stripe",
+    "calcom",
+    "slack",
+    "notion",
+    "custom_api",
+    "paypal",
+    "github",
+    "mpesa",
   ]);
-  return provider && allowed.has(provider) ? (provider as ConnectorProvider) : undefined;
+  return provider && allowed.has(provider)
+    ? (provider as ConnectorProvider)
+    : undefined;
 }
 
 function cleanSenderHint(value: string | undefined): string | undefined {
@@ -1524,10 +1882,13 @@ function parseCcHeader(cc: string): { name?: string; email?: string }[] {
 }
 
 const PHONE_RE = /(?:\+?\d[\d\s\-().]{7,}\d)/g;
-const PHONE_CONTEXT_RE = /\b(phone|mobile|tel|telephone|cell|call|whatsapp|wa|contact)\b/i;
+const PHONE_CONTEXT_RE =
+  /\b(phone|mobile|tel|telephone|cell|call|whatsapp|wa|contact)\b/i;
 const LINKEDIN_RE = /https?:\/\/(?:www\.)?linkedin\.com\/in\/[\w-]+\/?/gi;
-const GITHUB_RE = /https?:\/\/(?:www\.)?github\.com\/(?!features|marketplace|pricing|topics|orgs\b)[\w-]+\/?/gi;
-const EMAIL_IN_BODY_RE = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
+const GITHUB_RE =
+  /https?:\/\/(?:www\.)?github\.com\/(?!features|marketplace|pricing|topics|orgs\b)[\w-]+\/?/gi;
+const EMAIL_IN_BODY_RE =
+  /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
 
 /**
  * Extracts email addresses, phone numbers, and LinkedIn URLs from the email
@@ -1544,39 +1905,55 @@ async function enrichContactsFromBody(
   const tail = body.slice(-800);
 
   const phones = extractSignaturePhones(tail).slice(0, 3);
-  const linkedins = [...new Set((tail.match(LINKEDIN_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
-  const githubs = [...new Set((tail.match(GITHUB_RE) ?? []).map((u) => u.toLowerCase()))].slice(0, 2);
-  const bodyEmails = [...new Set((tail.match(EMAIL_IN_BODY_RE) ?? []).map((e) => e.toLowerCase()))].slice(0, 5);
+  const linkedins = [
+    ...new Set((tail.match(LINKEDIN_RE) ?? []).map((u) => u.toLowerCase())),
+  ].slice(0, 2);
+  const githubs = [
+    ...new Set((tail.match(GITHUB_RE) ?? []).map((u) => u.toLowerCase())),
+  ].slice(0, 2);
+  const bodyEmails = [
+    ...new Set(
+      (tail.match(EMAIL_IN_BODY_RE) ?? []).map((e) => e.toLowerCase()),
+    ),
+  ].slice(0, 5);
 
   // For each email found in the signature: if it matches an existing entity,
   // attach any phone/LinkedIn found in the same tail to that entity.
   for (const email of bodyEmails) {
-    const entityId = await resolver.lookup(userId, { email }).catch(() => undefined);
+    const entityId = await resolver
+      .lookup(userId, { email })
+      .catch(() => undefined);
     if (!entityId) continue;
 
     for (const phone of phones) {
-      await resolver.attachAlias(userId, entityId, {
-        alias: phone.alias,
-        normalized: phone.normalized,
-        kind: "phone",
-        source: "email_body",
-        confidence: 0.7,
-      }).catch(() => undefined);
+      await resolver
+        .attachAlias(userId, entityId, {
+          alias: phone.alias,
+          normalized: phone.normalized,
+          kind: "phone",
+          source: "email_body",
+          confidence: 0.7,
+        })
+        .catch(() => undefined);
     }
 
     for (const url of [...linkedins, ...githubs]) {
-      await resolver.attachAlias(userId, entityId, {
-        alias: url,
-        normalized: url,
-        kind: "url",
-        source: "email_body",
-        confidence: 0.9,
-      }).catch(() => undefined);
+      await resolver
+        .attachAlias(userId, entityId, {
+          alias: url,
+          normalized: url,
+          kind: "url",
+          source: "email_body",
+          confidence: 0.9,
+        })
+        .catch(() => undefined);
     }
   }
 }
 
-function extractSignaturePhones(text: string): Array<{ alias: string; normalized: string }> {
+function extractSignaturePhones(
+  text: string,
+): Array<{ alias: string; normalized: string }> {
   const phones = new Map<string, string>();
 
   for (const match of text.matchAll(PHONE_RE)) {
@@ -1588,7 +1965,10 @@ function extractSignaturePhones(text: string): Array<{ alias: string; normalized
     phones.set(normalized, alias);
   }
 
-  return [...phones.entries()].map(([normalized, alias]) => ({ alias, normalized }));
+  return [...phones.entries()].map(([normalized, alias]) => ({
+    alias,
+    normalized,
+  }));
 }
 
 function isPlausiblePhone(
@@ -1615,10 +1995,21 @@ function isPlausiblePhone(
 function shouldStoreEpisode(message: string): boolean {
   const text = message.trim();
   if (text.length < 12 || text.length > 2_000) return false;
-  if (/^(?:yes|no|ok(?:ay)?|approved?|continue|thanks?|hello|hey|hi)[.!\s]*$/i.test(text)) return false;
+  if (
+    /^(?:yes|no|ok(?:ay)?|approved?|continue|thanks?|hello|hey|hi)[.!\s]*$/i.test(
+      text,
+    )
+  )
+    return false;
   // Do not persist likely credentials or payment/authentication material from chat.
-  if (/\b(?:password|passcode|otp|api[_ -]?key|secret|private key|access token|bearer|cvv)\b/i.test(text)) return false;
-  if (/\b(?:sk|pk|xox[baprs]|gh[pousr])_[A-Za-z0-9_-]{12,}\b/.test(text)) return false;
+  if (
+    /\b(?:password|passcode|otp|api[_ -]?key|secret|private key|access token|bearer|cvv)\b/i.test(
+      text,
+    )
+  )
+    return false;
+  if (/\b(?:sk|pk|xox[baprs]|gh[pousr])_[A-Za-z0-9_-]{12,}\b/.test(text))
+    return false;
   return true;
 }
 

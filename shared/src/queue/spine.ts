@@ -21,7 +21,9 @@ export function getSpineQueue() {
  * (user, message) via jobId.
  */
 export async function enqueueSpineIngest(data: SpineJobData) {
-  const jobId = safeJobId(`spine:${data.userId}:${data.messageId}`);
+  const jobId = safeJobId(
+    `spine:${data.userId}:${data.accountId ?? "primary"}:${data.messageId}`,
+  );
   const job = await getSpineQueue().add("spine-ingest-email", data, {
     attempts: 5,
     backoff: { type: "exponential", delay: 10_000 },

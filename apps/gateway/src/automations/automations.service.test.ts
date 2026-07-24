@@ -69,7 +69,12 @@ describe("automation activation contract", () => {
     await expect(service.activate(candidate.userId, candidate.id)).resolves.toEqual(
       expect.objectContaining({ ok: true }),
     );
-    expect(repo.setStatus).toHaveBeenCalledWith(candidate.userId, candidate.id, "active");
+    expect(repo.setStatus).toHaveBeenCalledWith(
+      candidate.userId,
+      candidate.id,
+      "active",
+      { resetCursor: true },
+    );
   });
 
   it("keeps payment actions behind the expanded release tier", () => {

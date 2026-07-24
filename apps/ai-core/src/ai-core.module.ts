@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { AvailabilityService } from "./availability/availability.service";
 import { AgentService } from "./agent/agent.service";
+import { AgentFinalVerifierService } from "./agent/agent-final-verifier.service";
+import { AgentGuardrailService } from "./agent/agent-guardrail.service";
 import { AiCoreController } from "./ai-core.controller";
 import { AiCoreService } from "./ai-core.service";
 import { BudgetGateService } from "./billing/budget-gate.service";
@@ -29,10 +31,14 @@ import { NotificationLogRepository } from "./notifications/notification-log.repo
 import { AccountDeletionService } from "./account/account-deletion.service";
 import { SourceReceiptRepository } from "./intelligence/source-receipt.repository";
 import { AgentPlanRepository } from "./planning/agent-plan.repository";
+import { AgentPlanSupervisorService } from "./planning/agent-plan-supervisor.service";
 import { ContextService } from "./context/context.service";
 import { EmailClassifierService } from "./email/email-classifier.service";
+import { EmailAssessmentRepository } from "./email/email-assessment.repository";
+import { EmailAssessmentService } from "./email/email-assessment.service";
 import { EmailPreferencesRepository } from "./email/email-preferences.repository";
 import { EmailPipelineService } from "./email/email-pipeline.service";
+import { GmailPushService } from "./email/gmail-push.service";
 import { GoogleService } from "./google/google.service";
 import { AnthropicProvider } from "./llm/anthropic.provider";
 import { GrokProvider } from "./llm/grok.provider";
@@ -62,9 +68,12 @@ import { PromptAssemblerService } from "./prompt/prompt-assembler.service";
   controllers: [AiCoreController],
   providers: [
     AgentService,
+    AgentFinalVerifierService,
+    AgentGuardrailService,
     AgentSkillRegistryService,
     AccountDeletionService,
     AgentPlanRepository,
+    AgentPlanSupervisorService,
     AiCoreService,
     AutoMemoryService,
     AvailabilityService,
@@ -74,9 +83,12 @@ import { PromptAssemblerService } from "./prompt/prompt-assembler.service";
     ConnectorService,
     ConnectorVaultService,
     ContextService,
+    EmailAssessmentRepository,
+    EmailAssessmentService,
     EmailClassifierService,
     EmailPreferencesRepository,
     EmailPipelineService,
+    GmailPushService,
     EmbeddingsService,
     GoogleService,
     AnthropicProvider,

@@ -1,3 +1,5 @@
+import type { HeyRizPriority } from "../context/context.types";
+
 export type EmailCategory =
   | "otp"
   | "payment_due"
@@ -54,6 +56,10 @@ export type ExtractedContactCandidate = {
 };
 
 export type ExtractedEmailFacts = {
+  /** Canonical importance decision shared by background and interactive triage. */
+  priority?: HeyRizPriority;
+  priorityReason?: string;
+  prioritySource?: "llm" | "rules";
   category: EmailCategory;
   person?: string;
   contactCandidate?: ExtractedContactCandidate;

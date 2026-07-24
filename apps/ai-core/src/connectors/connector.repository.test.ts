@@ -7,7 +7,9 @@ describe("ConnectorRepository.updateOwned", () => {
   const repositories: ConnectorRepository[] = [];
 
   afterEach(async () => {
-    await Promise.all(repositories.splice(0).map((repository) => repository.onModuleDestroy()));
+    await Promise.all(
+      repositories.splice(0).map((repository) => repository.onModuleDestroy()),
+    );
   });
 
   it("updates only the owning tenant and matching provider", async () => {
@@ -26,15 +28,24 @@ describe("ConnectorRepository.updateOwned", () => {
     });
 
     await expect(
-      repository.updateOwned(account.id, "attacker@example.com", "postgres", { label: "Hijacked" }),
+      repository.updateOwned(account.id, "attacker@example.com", "postgres", {
+        label: "Hijacked",
+      }),
     ).resolves.toBeUndefined();
     await expect(
-      repository.updateOwned(account.id, "owner@example.com", "mongodb", { label: "Wrong provider" }),
+      repository.updateOwned(account.id, "owner@example.com", "mongodb", {
+        label: "Wrong provider",
+      }),
     ).resolves.toBeUndefined();
 
-    const updated = await repository.updateOwned(account.id, "owner@example.com", "postgres", {
-      label: "Updated",
-    });
+    const updated = await repository.updateOwned(
+      account.id,
+      "owner@example.com",
+      "postgres",
+      {
+        label: "Updated",
+      },
+    );
     expect(updated?.label).toBe("Updated");
     expect(updated?.userId).toBe("owner@example.com");
   });
@@ -45,16 +56,37 @@ describe("ConnectorRepository.updateOwned", () => {
     const owner = "delete-owner@example.com";
     const other = "delete-other@example.com";
     await repository.insert({
-      id: crypto.randomUUID(), userId: owner, provider: "postgres", authType: "manual",
-      label: "DB", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+      id: crypto.randomUUID(),
+      userId: owner,
+      provider: "postgres",
+      authType: "manual",
+      label: "DB",
+      status: "connected",
+      encryptedPayload: "ciphertext",
+      scopes: [],
+      metadata: {},
     });
     await repository.insert({
-      id: crypto.randomUUID(), userId: owner, provider: "stripe", authType: "manual",
-      label: "Stripe", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+      id: crypto.randomUUID(),
+      userId: owner,
+      provider: "stripe",
+      authType: "manual",
+      label: "Stripe",
+      status: "connected",
+      encryptedPayload: "ciphertext",
+      scopes: [],
+      metadata: {},
     });
     await repository.insert({
-      id: crypto.randomUUID(), userId: other, provider: "postgres", authType: "manual",
-      label: "Other DB", status: "connected", encryptedPayload: "ciphertext", scopes: [], metadata: {},
+      id: crypto.randomUUID(),
+      userId: other,
+      provider: "postgres",
+      authType: "manual",
+      label: "Other DB",
+      status: "connected",
+      encryptedPayload: "ciphertext",
+      scopes: [],
+      metadata: {},
     });
 
     await expect(repository.deleteAll(owner)).resolves.toBe(2);
@@ -79,7 +111,43 @@ describe("ConnectorRepository.updateOwned", () => {
       metadata: {},
     });
 
-    await expect(repository.find(userId, "stripe")).resolves.toMatchObject({ id: inserted.id });
+    await expect(repository.find(userId, "stripe")).resolves.toMatchObject({
+      id: inserted.id,
+    });
+    await repository.deleteAll(userId);
+  });
+
+  it("resolves Gmail push recipients and advances history monotonically", async () => {
+    const repository = new ConnectorRepository();
+    repositories.push(repository);
+    const userId = `gmail-push-${crypto.randomUUID()}@example.com`;
+    const account = await repository.insert({
+      id: crypto.randomUUID(),
+      userId,
+      provider: "gmail",
+      authType: "oauth",
+      label: "Gmail",
+      status: "connected",
+      encryptedPayload: "ciphertext",
+      scopes: [],
+      metadata: {
+        accountEmail: "Mailbox@Example.com",
+        gmailWatchHistoryId: "100",
+      },
+    });
+
+    await expect(
+      repository.findGmailAccountsByEmail("mailbox@example.com"),
+    ).resolves.toEqual([expect.objectContaining({ id: account.id })]);
+    await expect(
+      repository.advanceGmailHistoryCursor(account.id, userId, "125"),
+    ).resolves.toBe(true);
+    await expect(
+      repository.advanceGmailHistoryCursor(account.id, userId, "120"),
+    ).resolves.toBe(false);
+    await expect(repository.findById(account.id)).resolves.toMatchObject({
+      metadata: expect.objectContaining({ gmailWatchHistoryId: "125" }),
+    });
     await repository.deleteAll(userId);
   });
 });

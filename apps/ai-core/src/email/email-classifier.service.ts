@@ -21,6 +21,7 @@ import {
   assessEmailImportance,
   type EmailImportanceAssessment,
 } from "./email-importance";
+import type { PriorityClassification } from "../llm/llm.types";
 
 const OTP_PATTERNS = [
   /\botp\b/i,
@@ -73,7 +74,7 @@ export class EmailClassifierService {
 
     const importance = assessEmailImportance(input);
     if (importance.decisivePriority === "LOW") {
-      return this.lowImportanceFacts(input, importance);
+      return this.lowPriorityFacts(input);
     }
 
     if (!this.llm.hasProvider("extract")) {
@@ -259,18 +260,22 @@ export class EmailClassifierService {
     return `${shortFrom(from)}: ${snippet}${body.length > 140 ? "…" : ""}`;
   }
 
-  private lowImportanceFacts(
+  lowPriorityFacts(
     input: { from: string; subject: string; body: string },
-    importance: EmailImportanceAssessment,
+    classification?: PriorityClassification,
   ): ExtractedEmailFacts {
-    const category: EmailCategory = importance.isBulk
-      ? "newsletter"
-      : "general_low";
+    const importance = assessEmailImportance(input);
+    const isBulk =
+      classification?.category === "bulk_noise" || importance.isBulk;
+    const category: EmailCategory = isBulk ? "newsletter" : "general_low";
     return {
+      priority: "LOW",
+      priorityReason: classification?.reason ?? importance.reason,
+      prioritySource: classification?.source ?? "rules",
       category,
       summary: this.bodySnippetSummary(input.from, input.body || input.subject),
       contactCandidate: rejectContactCandidate(
-        importance.isBulk
+        isBulk
           ? "Bulk, promotional, digest, or notification email"
           : "Passive automated or transactional email",
       ),
@@ -278,10 +283,10 @@ export class EmailClassifierService {
       urgency: "low",
       senderType: "automated",
       suggestedAction: "ignore",
-      reason: importance.reason,
+      reason: classification?.reason ?? importance.reason,
       riskLevel: "low",
-      isAutomated: importance.isLikelyAutomated || importance.isBulk,
-      isMarketing: importance.isBulk,
+      isAutomated: importance.isLikelyAutomated || isBulk,
+      isMarketing: isBulk,
       replyIntent: "ignore",
       confidence: "high",
     };

@@ -89,6 +89,57 @@ export type AutomationStepEvidence = {
   metadata?: Record<string, string | number | boolean | null>;
 };
 
+/** Immutable, configuration-free description of a step as it existed when a
+ * run started. Config is deliberately excluded so audit history never becomes
+ * another place for credentials or private payloads to leak. */
+export type AutomationRunPlanStep = Pick<
+  AutomationStep,
+  "id" | "kind" | "app" | "title" | "label"
+>;
+
+type AutomationRunAuditEventBase = {
+  id: string;
+  at: string;
+  /** Starts at one and increments whenever a supervisor revises the plan. */
+  revision: number;
+};
+
+export type AutomationRunAuditEvent =
+  | (AutomationRunAuditEventBase & {
+      type: "plan_created";
+      stepIds: string[];
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_succeeded";
+      stepId: string;
+      evidence: AutomationStepEvidence;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_failed";
+      stepId: string;
+      error: string;
+      code?: string;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_skipped";
+      stepId: string;
+      reason: string;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "plan_revised";
+      /** Human-readable supervisor explanation, preserved verbatim but bounded. */
+      reason: string;
+      supersededStepIds: string[];
+      preservedStepIds: string[];
+      replacementSteps: AutomationRunPlanStep[];
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "final_verification";
+      result: "passed" | "failed";
+      method: "deterministic_evidence" | "semantic_goal";
+      summary: string;
+    });
+
 export type AutomationRunStatus = "running" | "success" | "failed";
 
 export type AutomationRun = {
@@ -100,7 +151,69 @@ export type AutomationRun = {
   status: AutomationRunStatus;
   triggerPayload: Record<string, unknown>;
   stepResults: AutomationRunStepResult[];
+  /** Original revision-one plan. Never rewritten when the active plan pivots. */
+  originalPlan?: AutomationRunPlanStep[];
+  /** Ordered, append-only account of execution, recovery, and verification. */
+  auditTrail?: AutomationRunAuditEvent[];
 };
+
+export function snapshotAutomationRunPlan(
+  steps: AutomationStep[],
+): AutomationRunPlanStep[] {
+  return steps.map(({ id, kind, app, title, label }) => ({
+    id,
+    kind,
+    app,
+    title,
+    ...(label ? { label } : {}),
+  }));
+}
+
+export function auditEventForAutomationStepResult(input: {
+  runId: string;
+  result: AutomationRunStepResult;
+  at: string;
+  revision: number;
+  sequence: number;
+  skippedReason?: string;
+}): AutomationRunAuditEvent {
+  const base = {
+    id: `${input.runId}:${input.sequence}`,
+    at: input.at,
+    revision: input.revision,
+  };
+  if (input.result.status === "success" && input.result.evidence) {
+    return {
+      ...base,
+      type: "step_succeeded",
+      stepId: input.result.stepId,
+      evidence: input.result.evidence,
+    };
+  }
+  if (input.result.status === "failed") {
+    return {
+      ...base,
+      type: "step_failed",
+      stepId: input.result.stepId,
+      error: input.result.error?.slice(0, 2_000) || "The step failed without an error message.",
+    };
+  }
+  if (input.result.status === "success") {
+    return {
+      ...base,
+      type: "step_failed",
+      stepId: input.result.stepId,
+      error: "Completion was rejected because the step did not provide evidence.",
+      code: "missing_evidence",
+    };
+  }
+  return {
+    ...base,
+    type: "step_skipped",
+    stepId: input.result.stepId,
+    reason: (input.skippedReason || "Skipped after an earlier step stopped the run.").slice(0, 1_000),
+  };
+}
 
 /** Which trigger events actually fire, per app. Everything else is UI-only. */
 export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {

@@ -49,6 +49,7 @@ export class WatchReplyWorkerService implements OnModuleInit, OnModuleDestroy {
         const result = await firstValueFrom(
           this.aiCore.send<CheckThreadReplyResult>("gmail.checkThreadReply", {
             userId: job.data.userId,
+            accountId: job.data.accountId,
             threadId: job.data.threadId,
             baselineMessageCount: job.data.baselineMessageCount,
           }),
@@ -64,7 +65,10 @@ export class WatchReplyWorkerService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (job.data.attempt < job.data.maxAttempts) {
-          const nextDelayMs = Math.min(job.data.nextDelayMs * 2, 24 * 60 * 60_000);
+          const nextDelayMs = Math.min(
+            job.data.nextDelayMs * 2,
+            24 * 60 * 60_000,
+          );
           await enqueueWatchReply({
             ...job.data,
             attempt: job.data.attempt + 1,

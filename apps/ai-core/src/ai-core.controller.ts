@@ -387,6 +387,11 @@ export class AiCoreController {
     return this.aiCoreService.automationCalendarList(payload);
   }
 
+  @MessagePattern("connector.notion.webhook")
+  notionWebhook(@Payload() payload: { event: Record<string, unknown> }) {
+    return this.aiCoreService.notionWebhookEvent(payload.event);
+  }
+
   @MessagePattern("automation.ai.extract")
   automationAiExtract(
     @Payload()

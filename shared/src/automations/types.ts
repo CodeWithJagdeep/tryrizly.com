@@ -228,6 +228,10 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   // of minutes — no separate Meet API, same connection as "calendar".
   "google-meet": ["Meeting Started"],
   airtable: ["New Record"],
+  // Push-only, not polled — there's no cheap "list recent comments" endpoint
+  // to poll. Fed by the Notion webhook receiver in apps/gateway instead of
+  // SchedulerService's automation-poll cron; see NotionWebhookService.
+  notion: ["New Comment"],
 };
 
 /** Which action events actually run, per app. Everything else is UI-only. */

@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
 } from "@nestjs/common";
 import { APPROVAL_STORE, type ApprovalStore } from "./approval-store";
@@ -37,6 +38,8 @@ import {
   GmailPushAuthService,
   type PubSubPushEnvelope,
 } from "./gmail-push-auth.service";
+import { NotionWebhookAuthService } from "./notion-webhook-auth.service";
+import { logger } from "@heyriz/shared/logger";
 
 type ProxyPayload = Record<string, unknown>;
 type ChatHttpBody = {
@@ -83,6 +86,8 @@ export class GatewayController {
     private readonly throttlerStorage: RedisThrottlerStorage,
     @Inject(GmailPushAuthService)
     private readonly gmailPushAuth: GmailPushAuthService,
+    @Inject(NotionWebhookAuthService)
+    private readonly notionWebhookAuth: NotionWebhookAuthService,
   ) {}
 
   @Post("api/public/rate-limit")
@@ -893,6 +898,30 @@ export class GatewayController {
       `/dashboard/connectors?connected=${result.provider ?? "notion"}`,
     );
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  /**
+   * Notion's own event push — separate from the OAuth callback above. Handles
+   * both the one-time verification handshake and every signed event after
+   * it (see NotionWebhookAuthService); always 200s so Notion never retries a
+   * request we've already understood, including ones we deliberately drop.
+   */
+  @Post("api/connectors/notion/webhook")
+  @HttpCode(200)
+  async notionWebhook(
+    @Headers("x-notion-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const event = await this.notionWebhookAuth.handle(request.rawBody, signature);
+    if (event) {
+      this.gatewayService.sendToAiCore("connector.notion.webhook", { event }).catch((error) => {
+        logger.warn("notion webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
   }
 
   @Get("api/connectors/github/callback")

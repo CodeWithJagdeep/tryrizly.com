@@ -358,6 +358,12 @@ export class ConnectorService {
     return { apiToken: token };
   }
 
+  /** Which of our userIds have this Notion workspace connected — for routing an incoming webhook event to the right principal(s). */
+  async resolveNotionWorkspaceUsers(workspaceId: string): Promise<string[]> {
+    const accounts = await this.repository.findAllByProviderAndWorkspace("notion", workspaceId);
+    return [...new Set(accounts.map((a) => a.userId))];
+  }
+
   /** Decrypts the Slack bot token. Returns null if not connected. */
   async getSlackSecret(userId: string): Promise<{ botToken: string } | null> {
     const account = await this.repository.find(userId, "slack");

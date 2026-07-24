@@ -96,6 +96,47 @@ export async function sendSlackSurfaceMessage(opts: {
 }
 
 /**
+ * Posts a short-lived "Thinking…" placeholder while the agent works — Slack's
+ * analog of Telegram's sendChatAction typing indicator (Slack has no bare
+ * typing event over the Web API/Socket Mode). Returns the message ts so the
+ * caller can edit it in place via updateSlackSurfaceMessage, or null if it
+ * couldn't be posted (missing token/channel — caller falls back to a normal send).
+ */
+export async function sendSlackPlaceholder(opts: {
+  channel: string | undefined;
+  botToken?: string;
+  text?: string;
+}): Promise<string | null> {
+  const token = opts.botToken ?? env.SLACK_SURFACE_BOT_TOKEN;
+  if (!token || !opts.channel) return null;
+  const json = await slackApi("chat.postMessage", token, {
+    channel: opts.channel,
+    text: opts.text ?? "_Thinking…_",
+  });
+  const ts = json?.ts;
+  return typeof ts === "string" ? ts : null;
+}
+
+/** Edits a previously-sent message in place — used to replace the "Thinking…" placeholder with the real reply. */
+export async function updateSlackSurfaceMessage(opts: {
+  channel: string;
+  ts: string;
+  text: string;
+  blocks?: SlackBlock[];
+  botToken?: string;
+}): Promise<boolean> {
+  const token = opts.botToken ?? env.SLACK_SURFACE_BOT_TOKEN;
+  if (!token) return false;
+  const json = await slackApi("chat.update", token, {
+    channel: opts.channel,
+    ts: opts.ts,
+    text: opts.text,
+    blocks: opts.blocks,
+  });
+  return Boolean(json?.ok);
+}
+
+/**
  * Opens (or fetches) the 1:1 DM channel between the surface bot and a Slack
  * user, for proactive sends — Slack's analog of already knowing a Telegram
  * chatId. Returns the DM channel id, or null if unavailable.

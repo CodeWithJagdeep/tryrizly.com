@@ -1,5 +1,6 @@
 import { Controller, Inject } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
+import { Observable } from "rxjs";
 import { AiCoreService, type ChatPayload } from "./ai-core.service";
 import type {
   CompleteOAuthInput,
@@ -59,6 +60,37 @@ export class AiCoreController {
   @MessagePattern("chat.message")
   chat(@Payload() payload: ChatPayload) {
     return this.aiCoreService.chat(payload);
+  }
+
+  /**
+   * Same turn as "chat.message", but emits a "step" frame at each reasoning/tool
+   * point before the final "final" frame — NestJS TCP transport sends every
+   * Observable emission as its own response frame, so gateway's client-side
+   * subscription sees them as they happen, not just the last one.
+   */
+  @MessagePattern("chat.message.stream")
+  chatStream(
+    @Payload() payload: ChatPayload,
+  ): Observable<
+    | { type: "step"; label: string }
+    | { type: "final"; result: Record<string, unknown> }
+    | { type: "error"; message: string }
+  > {
+    return new Observable((subscriber) => {
+      this.aiCoreService
+        .chat(payload, (label) => subscriber.next({ type: "step", label }))
+        .then((result) => {
+          subscriber.next({ type: "final", result });
+          subscriber.complete();
+        })
+        .catch((error: unknown) => {
+          subscriber.next({
+            type: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+          subscriber.complete();
+        });
+    });
   }
 
   @MessagePattern("event.ingest")

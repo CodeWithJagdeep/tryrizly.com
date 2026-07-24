@@ -68,6 +68,12 @@ type RedirectResponse = {
     send(body: string): void;
   };
 };
+type SseResponse = {
+  writeHead(status: number, headers: Record<string, string>): void;
+  write(chunk: string): void;
+  end(): void;
+  on(event: "close", listener: () => void): void;
+};
 
 @Controller()
 export class GatewayController {
@@ -235,6 +241,103 @@ export class GatewayController {
       };
     }
     return result;
+  }
+
+  /**
+   * Same turn as api/ai/chat, but each reasoning/tool step streams down as its
+   * own SSE frame before the final one — the web dashboard chat's live
+   * "what I'm doing" trace. Telegram/Slack are unaffected; they still call
+   * api/ai/chat via sendChatToAiCore.
+   */
+  @Post("api/ai/chat/stream")
+  async chatStream(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: ChatHttpBody,
+    @Res() res: SseResponse,
+  ): Promise<void> {
+    this.requireInternal(secret);
+    const userId = body.userId;
+    if (!userId) throw new BadRequestException("userId is required");
+
+    res.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    const send = (event: Record<string, unknown>) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    if (body.approve && !(await this.gatewayService.hasProductAccess(userId))) {
+      send({ type: "final", result: upgradeRequiredResult() });
+      res.end();
+      return;
+    }
+
+    let approval: { id: string; tool: string; payload: unknown } | undefined;
+    if (body.approve && body.pendingApprovalId) {
+      const pending = await this.approvals.get(userId, body.pendingApprovalId);
+      if (pending) {
+        approval = { id: pending.id, tool: pending.tool, payload: pending.payload };
+        await this.approvals.remove(userId, body.pendingApprovalId);
+        await appendActionAudit({
+          userId,
+          event: "approved",
+          tool: pending.tool,
+          payload: pending.payload,
+          approvalId: pending.id,
+        }).catch(() => undefined);
+      }
+    }
+
+    const subscription = this.gatewayService
+      .streamChatFromAiCore({
+        userId,
+        message: body.message,
+        history: body.history,
+        channel: "web",
+        ...(approval ? { approve: true, pendingApproval: approval } : {}),
+      })
+      .subscribe({
+        next: async (event) => {
+          if (event.type === "final") {
+            const result = event.result;
+            if (result.pendingApproval) {
+              const record = await this.approvals.add(
+                userId,
+                result.pendingApproval as {
+                  tool: string;
+                  payload: Record<string, unknown>;
+                  preview: string;
+                },
+              );
+              send({
+                type: "final",
+                result: {
+                  ...result,
+                  pendingApproval: { id: record.id, preview: record.preview },
+                },
+              });
+              return;
+            }
+            send({ type: "final", result });
+            return;
+          }
+          send(event);
+        },
+        error: (error: unknown) => {
+          send({
+            type: "final",
+            result: {
+              reply: "Sorry, that took too long or hit an error. Try again?",
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+          res.end();
+        },
+        complete: () => res.end(),
+      });
+
+    res.on("close", () => subscription.unsubscribe());
   }
 
   @Post("api/tasks/:id/done")

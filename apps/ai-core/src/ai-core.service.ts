@@ -515,7 +515,7 @@ export class AiCoreService {
     };
   }
 
-  async chat(body: ChatPayload) {
+  async chat(body: ChatPayload, onProgress?: (label: string) => void) {
     const message = body.message?.trim();
 
     if (!message) {
@@ -556,6 +556,7 @@ export class AiCoreService {
       approval,
       history: body.history,
       channel: body.channel,
+      onProgress,
     });
 
     if (

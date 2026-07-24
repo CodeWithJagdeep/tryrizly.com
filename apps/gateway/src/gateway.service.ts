@@ -1,8 +1,18 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ClientProxy, ClientProxyFactory, Transport } from "@nestjs/microservices";
-import { firstValueFrom, timeout, TimeoutError } from "rxjs";
+import { firstValueFrom, Observable, timeout, TimeoutError } from "rxjs";
 import { env } from "@heyriz/shared/env";
 import { BillingGatewayService } from "./billing/billing.service";
+
+/** One frame of a streamed chat turn — see AiCoreController's "chat.message.stream" handler. */
+export type ChatStreamEvent =
+  | { type: "step"; label: string }
+  | { type: "final"; result: Record<string, unknown> }
+  | { type: "error"; message: string };
+
+// Progress frames can be sparse (a slow tool call between them), so this bounds
+// the gap between frames, not the whole turn's duration.
+const AI_CORE_STREAM_GAP_TIMEOUT_MS = 45_000;
 
 type ProxyPayload = Record<string, unknown>;
 
@@ -88,6 +98,13 @@ export class GatewayService implements OnModuleDestroy {
       }
       throw error;
     }
+  }
+
+  /** Live progress + final result for the web dashboard chat. Telegram/Slack keep using sendToAiCore("chat.message", ...) unchanged. */
+  streamChatFromAiCore(payload: ProxyPayload): Observable<ChatStreamEvent> {
+    return this.aiCoreClient
+      .send<ChatStreamEvent>("chat.message.stream", payload)
+      .pipe(timeout({ each: AI_CORE_STREAM_GAP_TIMEOUT_MS }));
   }
 
   async hasProductAccess(userId: string): Promise<boolean> {

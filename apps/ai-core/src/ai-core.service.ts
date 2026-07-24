@@ -64,11 +64,27 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { cancelReminder, listReminders } from "@heyriz/shared/queue/queues";
 import { enqueueOutboundEmail } from "@heyriz/shared/queue/outbound-email";
+import { enqueueAutomationRun } from "@heyriz/shared/queue/automation-runs";
+import type { AutomationFlow } from "@heyriz/shared/automations/types";
 import type {
   EmailEventJobData,
   ReminderRequest,
   SpineJobData,
 } from "@heyriz/shared/queue/types";
+
+/** Internal, secret-authenticated calls into gateway's automation store — same pattern as tools/automation.tools.ts's gatewayFetch. */
+async function gatewayInternalFetch<T>(path: string): Promise<T | null> {
+  const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+  if (!gatewayUrl) return null;
+  const headers: Record<string, string> = {};
+  if (env.AUTH_INTERNAL_SECRET) headers["x-heyriz-internal-secret"] = env.AUTH_INTERNAL_SECRET;
+  try {
+    const res = await fetch(`${gatewayUrl}${path}`, { headers });
+    return (await res.json().catch(() => null)) as T;
+  } catch {
+    return null;
+  }
+}
 
 export type ChatPayload = {
   userId?: string;
@@ -925,6 +941,69 @@ export class AiCoreService {
     if (!secret) return { connected: false, eventTypes: [] };
     const eventTypes = await this.calcom.listEventTypes(secret);
     return { connected: true, eventTypes };
+  }
+
+  /**
+   * Push counterpart to SchedulerService.pollOneAutomation for the "New
+   * Comment" Notion trigger — gateway's webhook receiver already verified
+   * the signature before forwarding here. Resolves which of our users have
+   * this Notion workspace connected, then enqueues a run for each of their
+   * matching active flows. There's no cheap poll equivalent for Notion
+   * comments (no "list recent comments" endpoint), so this is the only path.
+   */
+  async notionWebhookEvent(event: Record<string, unknown>): Promise<void> {
+    if (event.type !== "comment.created") return;
+
+    const workspaceId = typeof event.workspace_id === "string" ? event.workspace_id : undefined;
+    const eventId = typeof event.id === "string" ? event.id : undefined;
+    if (!workspaceId || !eventId) return;
+
+    const userIds = await this.connectorService.resolveNotionWorkspaceUsers(workspaceId);
+    if (userIds.length === 0) return;
+
+    const result = await gatewayInternalFetch<{ flows?: AutomationFlow[] }>(
+      "/api/automations/_internal/active",
+    );
+    const userIdSet = new Set(userIds);
+    const flows = (result?.flows ?? []).filter((flow) => {
+      const trigger = flow.steps[0];
+      return (
+        userIdSet.has(flow.userId) &&
+        trigger?.kind === "trigger" &&
+        trigger.app === "notion" &&
+        trigger.title === "New Comment"
+      );
+    });
+    if (flows.length === 0) return;
+
+    const entity =
+      typeof event.entity === "object" && event.entity !== null
+        ? (event.entity as Record<string, unknown>)
+        : {};
+    const triggerPayload = {
+      eventId,
+      type: event.type,
+      workspaceId,
+      entityId: typeof entity.id === "string" ? entity.id : undefined,
+      entityType: typeof entity.type === "string" ? entity.type : undefined,
+      timestamp: typeof event.timestamp === "string" ? event.timestamp : new Date().toISOString(),
+    };
+
+    for (const flow of flows) {
+      try {
+        await enqueueAutomationRun({
+          flowId: flow.id,
+          userId: flow.userId,
+          triggerItemId: eventId,
+          triggerPayload,
+        });
+      } catch (error) {
+        logger.warn("notion webhook: enqueue failed", {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   /**

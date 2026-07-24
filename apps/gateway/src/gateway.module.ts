@@ -18,6 +18,8 @@ import { AutomationsService } from "./automations/automations.service";
 import { GatewayController } from "./gateway.controller";
 import { GatewayService } from "./gateway.service";
 import { GmailPushAuthService } from "./gmail-push-auth.service";
+import { NotionWebhookAuthService } from "./notion-webhook-auth.service";
+import { NotionWebhookRepository } from "./notion-webhook.repository";
 import { RedisThrottlerStorage } from "./throttler-redis.storage";
 import { SlackSocketService } from "./slack-socket.service";
 import { SlackSurfaceController } from "./slack-surface.controller";
@@ -49,6 +51,8 @@ import { TelegramService } from "./telegram.service";
     EmailThrottlerGuard,
     GatewayService,
     GmailPushAuthService,
+    NotionWebhookAuthService,
+    NotionWebhookRepository,
     RedisThrottlerStorage,
     TelegramService,
     TelegramPollerService,

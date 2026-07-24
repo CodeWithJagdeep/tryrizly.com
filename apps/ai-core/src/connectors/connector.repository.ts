@@ -315,6 +315,46 @@ export class ConnectorRepository implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  /**
+   * Cross-user lookup by provider metadata (e.g. Notion's workspace_id) —
+   * every other query here is scoped to one userId; a webhook event carries
+   * only the external workspace id, so we need to search the other direction.
+   */
+  async findAllByProviderAndWorkspace(
+    provider: ConnectorProvider,
+    workspaceId: string,
+  ): Promise<ConnectedAccount[]> {
+    if (!this.pool) {
+      return [...inMemoryAccounts.values()].filter(
+        (a) =>
+          a.provider === provider &&
+          (a.metadata?.workspaceId as string | undefined) === workspaceId,
+      );
+    }
+
+    await this.ensureTable();
+    const result = await this.pool.query<ConnectedAccount>(
+      `
+      select
+        id,
+        user_id as "userId",
+        provider,
+        auth_type as "authType",
+        label,
+        status,
+        encrypted_payload as "encryptedPayload",
+        scopes,
+        metadata,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      from connected_accounts
+      where provider = $1 and metadata->>'workspaceId' = $2
+      `,
+      [provider, workspaceId],
+    );
+    return result.rows;
+  }
+
   /** Find all accounts for a given provider (e.g. multiple Postgres connections). */
   async findAll(
     userId: string,

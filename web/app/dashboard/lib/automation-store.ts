@@ -45,6 +45,52 @@ export type AutomationRunStepResult = {
   };
 };
 
+export type AutomationRunPlanStep = Pick<
+  AutomationStep,
+  "id" | "kind" | "app" | "title" | "label"
+>;
+
+type AutomationRunAuditEventBase = {
+  id: string;
+  at: string;
+  revision: number;
+};
+
+export type AutomationRunAuditEvent =
+  | (AutomationRunAuditEventBase & {
+      type: "plan_created";
+      stepIds: string[];
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_succeeded";
+      stepId: string;
+      evidence: NonNullable<AutomationRunStepResult["evidence"]>;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_failed";
+      stepId: string;
+      error: string;
+      code?: string;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "step_skipped";
+      stepId: string;
+      reason: string;
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "plan_revised";
+      reason: string;
+      supersededStepIds: string[];
+      preservedStepIds: string[];
+      replacementSteps: AutomationRunPlanStep[];
+    })
+  | (AutomationRunAuditEventBase & {
+      type: "final_verification";
+      result: "passed" | "failed";
+      method: "deterministic_evidence" | "semantic_goal";
+      summary: string;
+    });
+
 export type AutomationRun = {
   id: string;
   flowId: string;
@@ -52,6 +98,8 @@ export type AutomationRun = {
   finishedAt?: string;
   status: "running" | "success" | "failed";
   stepResults: AutomationRunStepResult[];
+  originalPlan?: AutomationRunPlanStep[];
+  auditTrail?: AutomationRunAuditEvent[];
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

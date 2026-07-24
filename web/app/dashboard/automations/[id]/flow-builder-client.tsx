@@ -54,6 +54,8 @@ import {
   activateFlow,
   type AutomationFlow,
   type AutomationRun,
+  type AutomationRunAuditEvent,
+  type AutomationRunPlanStep,
   type AutomationStep,
   type BuilderChatOp,
   builderChat,
@@ -694,13 +696,23 @@ function Builder({ flowId }: { flowId: string }) {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(true);
+  const [runsError, setRunsError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const refreshRuns = useCallback(() => {
-    listRuns(flowId).then(setRuns).catch(() => setRuns([]));
+  const refreshRuns = useCallback(async () => {
+    setRunsLoading(true);
+    setRunsError(null);
+    try {
+      setRuns(await listRuns(flowId));
+    } catch {
+      setRunsError("Run history could not be loaded.");
+    } finally {
+      setRunsLoading(false);
+    }
   }, [flowId]);
 
   useEffect(() => {
@@ -1071,6 +1083,9 @@ function Builder({ flowId }: { flowId: string }) {
                 step={selectedStep}
                 index={selectedIndex}
                 runs={runs}
+                runsLoading={runsLoading}
+                runsError={runsError}
+                onRefreshRuns={() => void refreshRuns()}
                 expanded={configExpanded}
                 onToggleExpand={() => setConfigExpanded((v) => !v)}
                 onPatch={(patch) => patchStep(selectedStep.id, patch)}
@@ -1344,6 +1359,9 @@ function ConfigPanel({
   step,
   index,
   runs,
+  runsLoading,
+  runsError,
+  onRefreshRuns,
   expanded,
   onToggleExpand,
   onPatch,
@@ -1352,6 +1370,9 @@ function ConfigPanel({
   step: AutomationStep;
   index: number;
   runs: AutomationRun[];
+  runsLoading: boolean;
+  runsError: string | null;
+  onRefreshRuns: () => void;
   expanded: boolean;
   onToggleExpand: () => void;
   onPatch: (patch: Partial<AutomationStep>) => void;
@@ -1487,70 +1508,12 @@ function ConfigPanel({
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         {tab === "test" ? (
-          runs.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-              <p className="text-[14px] font-medium text-slate-700">No runs yet</p>
-              <p className="max-w-[240px] text-[13px] text-slate-400">
-                Activate this automation — once its trigger fires, runs will show up here.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {runs.map((run) => (
-                <div key={run.id} className="rounded-lg border border-slate-200 px-3 py-2.5">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-[12px] font-semibold ${
-                        run.status === "success"
-                          ? "text-emerald-600"
-                          : run.status === "failed"
-                            ? "text-red-500"
-                            : "text-slate-400"
-                      }`}
-                    >
-                      {run.status === "running" ? "Running…" : run.status === "success" ? "Success" : "Failed"}
-                    </span>
-                    <span className="text-[11px] text-slate-400">{new Date(run.startedAt).toLocaleString()}</span>
-                  </div>
-                  {run.stepResults.some((r) => r.status === "failed") && (
-                    <p className="mt-1 text-[12px] text-red-500">
-                      {run.stepResults.find((r) => r.status === "failed")?.error ?? "A step failed"}
-                    </p>
-                  )}
-                  {run.stepResults.some((result) => result.evidence) && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {run.stepResults
-                        .filter((result) => result.evidence)
-                        .map((result) => {
-                          const receipt = result.evidence!;
-                          const label = receipt.resourceId
-                            ? `${receipt.provider} · ${receipt.resourceId}`
-                            : `${receipt.provider} acknowledged`;
-                          return receipt.resourceUrl ? (
-                            <a
-                              key={result.stepId}
-                              href={receipt.resourceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
-                            >
-                              {label}
-                            </a>
-                          ) : (
-                            <span
-                              key={result.stepId}
-                              className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700"
-                            >
-                              {label}
-                            </span>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )
+          <RunHistory
+            runs={runs}
+            loading={runsLoading}
+            error={runsError}
+            onRetry={onRefreshRuns}
+          />
         ) : (
           <div className="flex flex-col gap-5">
             {/* App */}
@@ -1639,6 +1602,622 @@ function ConfigPanel({
     )}
     </>
   );
+}
+
+// ── Run audit trail ──────────────────────────────────────────────────────────
+
+function RunHistory({
+  runs,
+  loading,
+  error,
+  onRetry,
+}: {
+  runs: AutomationRun[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (loading && runs.length === 0) {
+    return (
+      <div className="space-y-3" aria-label="Loading run history">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="rounded-xl border border-slate-200 p-4">
+            <div className="h-3 w-24 rounded bg-slate-100" />
+            <div className="mt-3 h-2.5 w-3/4 rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error && runs.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
+          <HistoryGlyph className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="text-[14px] font-semibold text-slate-800">Run history unavailable</p>
+          <p className="mt-1 text-[13px] text-slate-500">{error}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors duration-150 hover:bg-slate-50 active:bg-slate-100"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (runs.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          <HistoryGlyph className="h-5 w-5" />
+        </span>
+        <p className="mt-1 text-[14px] font-semibold text-slate-800">No runs yet</p>
+        <p className="max-w-[260px] text-[13px] leading-5 text-slate-500">
+          Activate this automation. Its original plan, decisions, evidence, and final verification will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-semibold text-slate-900">Run history</p>
+          <p className="mt-1 text-[12px] leading-5 text-slate-500">
+            An inspectable record of what Rizly planned, changed, and proved.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={loading}
+          aria-label="Refresh run history"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 disabled:opacity-40"
+        >
+          <HistoryGlyph className="h-4 w-4" />
+        </button>
+      </div>
+      {error && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+          Refresh failed. Showing the last loaded history.
+        </p>
+      )}
+      <div className="space-y-3">
+        {runs.map((run, index) => (
+          <RunAuditDisclosure
+            key={run.id}
+            run={run}
+            defaultOpen={index === 0}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RunAuditDisclosure({
+  run,
+  defaultOpen,
+}: {
+  run: AutomationRun;
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const revisions = run.auditTrail?.filter((event) => event.type === "plan_revised") ?? [];
+  const eventCount = run.auditTrail?.length ?? run.stepResults.length;
+  const duration = formatRunDuration(run.startedAt, run.finishedAt);
+  const statusLabel =
+    run.status === "running" ? "Running" : run.status === "success" ? "Completed" : "Failed";
+  const statusTone =
+    run.status === "running"
+      ? "bg-blue-50 text-blue-700"
+      : run.status === "success"
+        ? "bg-emerald-50 text-emerald-700"
+        : "bg-red-50 text-red-700";
+
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="group overflow-hidden rounded-xl border border-slate-200 bg-white open:border-slate-300"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3.5 transition-colors duration-150 hover:bg-slate-50 active:bg-slate-100 [&::-webkit-details-marker]:hidden">
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${
+            run.status === "running"
+              ? "bg-blue-500"
+              : run.status === "success"
+                ? "bg-emerald-500"
+                : "bg-red-500"
+          }`}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${statusTone}`}>
+              {statusLabel}
+            </span>
+            {revisions.length > 0 && (
+              <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                Recovered {revisions.length}×
+              </span>
+            )}
+          </span>
+          <span className="mt-1.5 block truncate text-[11px] text-slate-500">
+            {formatRunDate(run.startedAt)}
+            {duration ? ` · ${duration}` : ""}
+            {` · ${eventCount} ${eventCount === 1 ? "event" : "events"}`}
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 group-open:rotate-90" />
+      </summary>
+      <div className="border-t border-slate-100 px-3.5 pb-5 pt-4">
+        <RunAuditDetails run={run} />
+      </div>
+    </details>
+  );
+}
+
+function RunAuditDetails({
+  run,
+}: {
+  run: AutomationRun;
+}) {
+  const auditTrail = run.auditTrail ?? legacyAuditEvents(run);
+  const revisions = auditTrail.filter(
+    (event): event is Extract<AutomationRunAuditEvent, { type: "plan_revised" }> =>
+      event.type === "plan_revised",
+  );
+  const originalPlan = run.originalPlan;
+  const allPlanSteps = [
+    ...(originalPlan ?? []),
+    ...revisions.flatMap((event) => event.replacementSteps),
+  ];
+  const stepMap = new Map<string, AutomationRunPlanStep | AutomationStep>();
+  for (const result of run.stepResults) {
+    stepMap.set(result.stepId, {
+      id: result.stepId,
+      kind: "action",
+      app: result.app,
+      title: readableAppName(result.app),
+    });
+  }
+  for (const step of allPlanSteps) stepMap.set(step.id, step);
+  const supersededAt = new Map<string, number>();
+  for (const event of revisions) {
+    for (const stepId of event.supersededStepIds) {
+      supersededAt.set(stepId, event.revision);
+    }
+  }
+  const headline =
+    run.status === "running"
+      ? "Execution is still in progress"
+      : run.status === "failed"
+        ? "Execution stopped without claiming success"
+        : revisions.length > 0
+          ? `Completed after ${revisions.length} supervised ${revisions.length === 1 ? "recovery" : "recoveries"}`
+          : "Completed as planned";
+
+  return (
+    <div>
+      <div className="rounded-lg bg-slate-950 px-3.5 py-3 text-white">
+        <p className="text-[12px] font-semibold">{headline}</p>
+        <p className="mt-1 text-[10px] font-medium text-slate-400">
+          Run <span className="font-mono text-slate-300">{shortRunId(run.id)}</span>
+        </p>
+      </div>
+
+      <section className="mt-5" aria-labelledby={`${run.id}-original-plan`}>
+        <AuditSectionHeading
+          id={`${run.id}-original-plan`}
+          eyebrow="Revision 1"
+          title="Original plan"
+        />
+        {originalPlan?.length ? (
+          <ol className="mt-3 space-y-1">
+            {originalPlan.map((step, index) => {
+              const supersededRevision = supersededAt.get(step.id);
+              return (
+                <li
+                  key={step.id}
+                  className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[10px] font-bold text-slate-500">
+                    {index + 1}
+                  </span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                    <AppIcon app={step.app} className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate text-[12px] font-semibold ${
+                        supersededRevision ? "text-slate-400 line-through" : "text-slate-800"
+                      }`}
+                    >
+                      {step.label || step.title || readableAppName(step.app)}
+                    </span>
+                    <span className="block truncate text-[10px] text-slate-400">
+                      {readableAppName(step.app)}
+                    </span>
+                  </span>
+                  {supersededRevision && (
+                    <span className="shrink-0 rounded-md bg-amber-50 px-1.5 py-1 text-[9px] font-bold uppercase tracking-[0.06em] text-amber-700">
+                      Superseded R{supersededRevision}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <div className="mt-3 rounded-lg border border-dashed border-slate-200 px-3 py-3">
+            <p className="text-[12px] font-medium text-slate-600">Original plan snapshot unavailable</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-400">
+              This run predates audit snapshots. The recorded outcomes below are preserved, but Rizly will not infer the old plan from today&apos;s flow.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-6" aria-labelledby={`${run.id}-timeline`}>
+        <AuditSectionHeading
+          id={`${run.id}-timeline`}
+          eyebrow={`${auditTrail.length} ${auditTrail.length === 1 ? "event" : "events"}`}
+          title="Execution timeline"
+        />
+        {!run.auditTrail && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800">
+            Legacy run: exact event timing and plan revisions were not captured.
+          </p>
+        )}
+        <ol className="relative mt-4 space-y-0">
+          {auditTrail.map((event, index) => (
+            <AuditTimelineEvent
+              key={event.id}
+              event={event}
+              stepMap={stepMap}
+              isLast={index === auditTrail.length - 1}
+            />
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+}
+
+function AuditSectionHeading({
+  id,
+  eyebrow,
+  title,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+}) {
+  return (
+    <div className="flex items-end justify-between gap-3">
+      <h3 id={id} className="text-[12px] font-bold text-slate-900">{title}</h3>
+      <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">{eyebrow}</span>
+    </div>
+  );
+}
+
+function AuditTimelineEvent({
+  event,
+  stepMap,
+  isLast,
+}: {
+  event: AutomationRunAuditEvent;
+  stepMap: Map<string, AutomationRunPlanStep | AutomationStep>;
+  isLast: boolean;
+}) {
+  const tone =
+    event.type === "step_failed" ||
+    (event.type === "final_verification" && event.result === "failed")
+      ? "red"
+      : event.type === "plan_revised"
+        ? "violet"
+        : event.type === "step_succeeded" ||
+            (event.type === "final_verification" && event.result === "passed")
+          ? "emerald"
+          : "slate";
+  const step =
+    "stepId" in event && typeof event.stepId === "string"
+      ? stepMap.get(event.stepId)
+      : undefined;
+  const stepTitle = step?.label || step?.title || (
+    step?.app ? readableAppName(step.app) : "Unknown step"
+  );
+
+  return (
+    <li className="relative flex gap-3 pb-5 last:pb-0">
+      {!isLast && <span className="absolute left-[5px] top-3 h-full w-px bg-slate-200" />}
+      <span
+        className={`relative z-10 mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-2 border-white ring-1 ${
+          tone === "red"
+            ? "bg-red-500 ring-red-200"
+            : tone === "violet"
+              ? "bg-violet-500 ring-violet-200"
+              : tone === "emerald"
+                ? "bg-emerald-500 ring-emerald-200"
+                : "bg-slate-400 ring-slate-200"
+        }`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[12px] font-semibold leading-5 text-slate-800">
+            {auditEventTitle(event, stepTitle)}
+          </p>
+          <time
+            dateTime={event.at}
+            className="shrink-0 pt-0.5 text-[9px] font-medium tabular-nums text-slate-400"
+          >
+            {formatAuditTime(event.at)}
+          </time>
+        </div>
+        <AuditEventBody event={event} stepMap={stepMap} />
+      </div>
+    </li>
+  );
+}
+
+function AuditEventBody({
+  event,
+  stepMap,
+}: {
+  event: AutomationRunAuditEvent;
+  stepMap: Map<string, AutomationRunPlanStep | AutomationStep>;
+}) {
+  if (event.type === "plan_created") {
+    return (
+      <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+        Revision 1 locked with {event.stepIds.length} {event.stepIds.length === 1 ? "step" : "steps"}.
+      </p>
+    );
+  }
+  if (event.type === "step_succeeded") {
+    return <EvidenceReceipt evidence={event.evidence} />;
+  }
+  if (event.type === "step_failed") {
+    return (
+      <div className="mt-1.5">
+        <p className="break-words rounded-md bg-red-50 px-2.5 py-2 text-[11px] leading-4 text-red-800">
+          {event.error}
+        </p>
+        {event.code && (
+          <span className="mt-1.5 inline-block font-mono text-[9px] text-red-500">{event.code}</span>
+        )}
+      </div>
+    );
+  }
+  if (event.type === "step_skipped") {
+    return <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{event.reason}</p>;
+  }
+  if (event.type === "plan_revised") {
+    const superseded = event.supersededStepIds
+      .map((id) => stepMap.get(id))
+      .filter(Boolean) as Array<AutomationRunPlanStep | AutomationStep>;
+    return (
+      <div className="mt-1.5">
+        <p className="rounded-md bg-violet-50 px-2.5 py-2 text-[11px] leading-4 text-violet-900">
+          {event.reason}
+        </p>
+        <div className="mt-2 grid gap-2">
+          {superseded.length > 0 && (
+            <AuditStepGroup label="Superseded" steps={superseded} tone="amber" />
+          )}
+          {event.replacementSteps.length > 0 && (
+            <AuditStepGroup label="Replacement" steps={event.replacementSteps} tone="violet" />
+          )}
+        </div>
+        {event.preservedStepIds.length > 0 && (
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">
+            {event.preservedStepIds.length} completed {event.preservedStepIds.length === 1 ? "step was" : "steps were"} preserved with existing evidence.
+          </p>
+        )}
+      </div>
+    );
+  }
+  const methodLabel =
+    event.method === "semantic_goal" ? "Semantic goal check" : "Deterministic evidence check";
+  return (
+    <div className={`mt-1.5 rounded-md px-2.5 py-2 ${
+      event.result === "passed" ? "bg-emerald-50" : "bg-red-50"
+    }`}>
+      <p className={`text-[10px] font-bold uppercase tracking-[0.07em] ${
+        event.result === "passed" ? "text-emerald-700" : "text-red-700"
+      }`}>
+        {methodLabel} {event.result}
+      </p>
+      <p className={`mt-1 text-[11px] leading-4 ${
+        event.result === "passed" ? "text-emerald-900" : "text-red-900"
+      }`}>
+        {event.summary}
+      </p>
+    </div>
+  );
+}
+
+function EvidenceReceipt({
+  evidence,
+}: {
+  evidence: NonNullable<AutomationRun["stepResults"][number]["evidence"]>;
+}) {
+  const metadata = Object.entries(evidence.metadata ?? {}).slice(0, 3);
+  const receipt = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <CheckGlyph className="h-3 w-3 shrink-0" />
+      <span className="truncate">
+        {evidence.resourceId
+          ? `${evidence.provider} receipt ${evidence.resourceId}`
+          : `${evidence.provider} acknowledged`}
+      </span>
+    </span>
+  );
+  const href = safeExternalUrl(evidence.resourceUrl);
+
+  return (
+    <div className="mt-1.5">
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="block max-w-full rounded-md bg-emerald-50 px-2.5 py-2 text-[10px] font-semibold text-emerald-800 transition-colors duration-150 hover:bg-emerald-100"
+        >
+          {receipt}
+        </a>
+      ) : (
+        <div className="max-w-full rounded-md bg-emerald-50 px-2.5 py-2 text-[10px] font-semibold text-emerald-800">
+          {receipt}
+        </div>
+      )}
+      {metadata.length > 0 && (
+        <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+          {metadata.map(([key, value]) => (
+            <div key={key} className="min-w-0">
+              <dt className="truncate text-[9px] font-medium text-slate-400">{humanizeAuditKey(key)}</dt>
+              <dd className="truncate text-[10px] font-medium text-slate-600">{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function AuditStepGroup({
+  label,
+  steps,
+  tone,
+}: {
+  label: string;
+  steps: Array<AutomationRunPlanStep | AutomationStep>;
+  tone: "amber" | "violet";
+}) {
+  return (
+    <div>
+      <p className={`text-[9px] font-bold uppercase tracking-[0.08em] ${
+        tone === "amber" ? "text-amber-700" : "text-violet-700"
+      }`}>
+        {label}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {steps.map((step) => (
+          <span
+            key={step.id}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-semibold ${
+              tone === "amber"
+                ? "bg-amber-50 text-amber-800"
+                : "bg-violet-50 text-violet-800"
+            }`}
+          >
+            <AppIcon app={step.app} className="h-3 w-3" />
+            {step.label || step.title || readableAppName(step.app)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function auditEventTitle(event: AutomationRunAuditEvent, stepTitle: string): string {
+  if (event.type === "plan_created") return "Original plan captured";
+  if (event.type === "step_succeeded") return `${stepTitle} completed`;
+  if (event.type === "step_failed") return `${stepTitle} failed`;
+  if (event.type === "step_skipped") return `${stepTitle} skipped`;
+  if (event.type === "plan_revised") return `Supervisor revised the plan to revision ${event.revision}`;
+  return event.result === "passed" ? "Final verification passed" : "Final verification failed";
+}
+
+function legacyAuditEvents(run: AutomationRun): AutomationRunAuditEvent[] {
+  const at = run.finishedAt ?? run.startedAt;
+  return run.stepResults.map((result, index) => {
+    const base = {
+      id: `${run.id}:legacy:${index}`,
+      at,
+      revision: 1,
+      stepId: result.stepId,
+    };
+    if (result.status === "success" && result.evidence) {
+      return { ...base, type: "step_succeeded" as const, evidence: result.evidence };
+    }
+    if (result.status === "failed") {
+      return {
+        ...base,
+        type: "step_failed" as const,
+        error: result.error ?? "A step failed without a recorded error.",
+      };
+    }
+    return {
+      ...base,
+      type: "step_skipped" as const,
+      reason: "This step was recorded as skipped. Older runs did not retain the reason.",
+    };
+  });
+}
+
+function formatRunDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Unknown start time"
+    : date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+}
+
+function formatAuditTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "time unavailable"
+    : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+
+function formatRunDuration(startedAt: string, finishedAt?: string): string | null {
+  if (!finishedAt) return null;
+  const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(durationMs) || durationMs < 0) return null;
+  if (durationMs < 1_000) return `${durationMs}ms`;
+  if (durationMs < 60_000) return `${Math.round(durationMs / 1_000)}s`;
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1_000);
+  return `${minutes}m ${seconds}s`;
+}
+
+function shortRunId(id: string): string {
+  return id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id;
+}
+
+function readableAppName(app: string): string {
+  return appName(app) || app.split("-").map((part) => (
+    part ? `${part[0].toUpperCase()}${part.slice(1)}` : part
+  )).join(" ");
+}
+
+function humanizeAuditKey(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function safeExternalUrl(value?: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Chat panel ───────────────────────────────────────────────────────────────

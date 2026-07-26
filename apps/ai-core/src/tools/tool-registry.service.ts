@@ -66,12 +66,18 @@ import { MpesaService } from "../connectors/mpesa.service";
 import { NotionService } from "../connectors/notion.service";
 import { SlackService } from "../connectors/slack.service";
 import { DiscordService } from "../connectors/discord.service";
+import { AirtableService } from "../connectors/airtable.service";
+import { JiraService } from "../connectors/jira.service";
+import { CalendlyService } from "../connectors/calendly.service";
 import { createPayPalSnapshotTool } from "./paypal.tools";
 import { createGitHubBriefingTool } from "./github.tools";
 import { createMpesaStatusTool } from "./mpesa.tools";
 import { createNotionSearchTool } from "./notion.tools";
 import { createSlackBriefingTool } from "./slack.tools";
 import { createDiscordSendTool } from "./discord.tools";
+import { createAirtableRecordsTool } from "./airtable.tools";
+import { createJiraSearchTool } from "./jira.tools";
+import { createCalendlyEventsTool } from "./calendly.tools";
 import { createSourceUpdatesTool } from "./source-updates.tools";
 import { TextToQueryService } from "../connectors/text-to-query.service";
 import { TaskRepository } from "../tasks/task.repository";
@@ -133,6 +139,12 @@ export class ToolRegistryService {
     private readonly slack: SlackService,
     @Inject(DiscordService)
     private readonly discord: DiscordService,
+    @Inject(AirtableService)
+    private readonly airtable: AirtableService,
+    @Inject(JiraService)
+    private readonly jira: JiraService,
+    @Inject(CalendlyService)
+    private readonly calendly: CalendlyService,
     @Inject(TextToQueryService)
     private readonly textToQuery: TextToQueryService,
     @Inject(TaskRepository)
@@ -182,6 +194,9 @@ export class ToolRegistryService {
       createNotionSearchTool(this.connectorService, this.notion),
       createSlackBriefingTool(this.connectorService, this.slack),
       createDiscordSendTool(this.connectorService, this.discord),
+      createAirtableRecordsTool(this.connectorService, this.airtable),
+      createJiraSearchTool(this.connectorService, this.jira),
+      createCalendlyEventsTool(this.connectorService, this.calendly),
       createSourceUpdatesTool(
         this.connectorService,
         this.google,

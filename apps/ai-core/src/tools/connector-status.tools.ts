@@ -30,8 +30,15 @@ export function createConnectorStatusTool(connectors: ConnectorService): HeyRizT
     approvalRequired: false,
     sensitiveDataPolicy: "none",
     async execute({ userId, context }) {
-      const connected = (await connectors.list(userId)).filter((account) => account.status === "connected");
-      if (connected.length === 0) {
+      const all = await connectors.list(userId);
+      const connected = all.filter((account) => account.status === "connected");
+      // OAuth succeeded but a follow-up step (e.g. Figma's webhook registration)
+      // didn't — surface the reason instead of silently omitting the connector.
+      const needsAttention = all.filter(
+        (account) => account.status !== "connected" && typeof account.metadata.statusMessage === "string",
+      );
+
+      if (connected.length === 0 && needsAttention.length === 0) {
         return {
           tool: "connector_status",
           status: "ok",
@@ -44,11 +51,27 @@ export function createConnectorStatusTool(connectors: ConnectorService): HeyRizT
         const capability = CAPABILITIES[account.provider] ?? "connected";
         return `• ${account.label}: ${capability}`;
       });
+      const attentionLines = needsAttention.map(
+        (account) => `• ${account.label}: ${account.metadata.statusMessage}`,
+      );
+      const sections = [
+        connected.length > 0 ? `Connected sources · ${connected.length}\n\n${lines.join("\n")}` : undefined,
+        needsAttention.length > 0 ? `Needs attention\n\n${attentionLines.join("\n")}` : undefined,
+      ].filter(Boolean);
+
       return {
         tool: "connector_status",
         status: "ok",
-        message: `Connected sources · ${connected.length}\n\n${lines.join("\n")}\n\nManage access: ${env.WEB_APP_URL}/dashboard/connectors`,
-        data: { connected: connected.map(({ id, provider, label }) => ({ id, provider, label })) },
+        message: `${sections.join("\n\n")}\n\nManage access: ${env.WEB_APP_URL}/dashboard/connectors`,
+        data: {
+          connected: connected.map(({ id, provider, label }) => ({ id, provider, label })),
+          needsAttention: needsAttention.map(({ id, provider, label, metadata }) => ({
+            id,
+            provider,
+            label,
+            statusMessage: metadata.statusMessage,
+          })),
+        },
       };
     },
   };

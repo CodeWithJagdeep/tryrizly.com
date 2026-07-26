@@ -9,12 +9,21 @@ export type BillingPlanId = "free" | "starter" | "pro" | "business";
 // Rescaled to the $20/$49/$100 sticker prices (was $49/$99/$199) — kept at
 // roughly the same worst-case COGS ratio each tier had before (~30/35/40%).
 export const PLAN_AI_BUDGETS: Record<BillingPlanId, number> = {
-  // "free" is the internal no-access state after a trial ends. It is not a
-  // usable product tier and must never fund chat or background automation.
-  free: 0,
+  // "free" is now a real, marketed tier (see web/app/components/PricingCards.tsx)
+  // rather than a no-access floor — kept deliberately small (~150 credits/mo)
+  // since it has no subscription revenue behind it.
+  free: 0.75,
   starter: 6,
   pro: 17,
   business: 40,
+};
+
+/** Automations a user on each plan may have saved/active at once. `null` = unlimited. */
+export const PLAN_AUTOMATION_LIMITS: Record<BillingPlanId, number | null> = {
+  free: 5,
+  starter: null,
+  pro: null,
+  business: null,
 };
 
 export function isBillingPlanId(value: string): value is BillingPlanId {

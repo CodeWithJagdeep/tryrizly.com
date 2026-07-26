@@ -85,6 +85,20 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  // Discord always-on surface bot (single global bot token — unlike Slack,
+  // Discord bots are installed per-guild via OAuth but authenticate with one
+  // app-wide token, not a per-workspace one). Gateway v10 socket connection
+  // needs DISCORD_BOT_TOKEN + DISCORD_SOCKET_ENABLED; the "Add to Discord"
+  // install link needs DISCORD_CLIENT_ID (+ SECRET for guild-install OAuth).
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  DISCORD_CLIENT_ID: z.string().optional(),
+  DISCORD_CLIENT_SECRET: z.string().optional(),
+  DISCORD_PUBLIC_KEY: z.string().optional(),
+  DISCORD_SURFACE_REDIRECT_URI: z.string().optional(),
+  DISCORD_SOCKET_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
@@ -223,10 +237,90 @@ const schema = z.object({
     .string()
     .url()
     .default("https://marketplace.stripe.com/oauth/v2/authorize"),
+  // Shopify custom-app OAuth. SHOPIFY_CLIENT_SECRET doubles as the HMAC key
+  // for verifying X-Shopify-Hmac-Sha256 on incoming webhooks.
+  SHOPIFY_CLIENT_ID: z.string().optional(),
+  SHOPIFY_CLIENT_SECRET: z.string().optional(),
+  SHOPIFY_SCOPES: z.string().default("read_orders,read_inventory"),
+  SHOPIFY_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/shopify/callback"),
+  // Dropbox app secret also keys X-Dropbox-Signature on webhook notifications.
+  DROPBOX_CLIENT_ID: z.string().optional(),
+  DROPBOX_CLIENT_SECRET: z.string().optional(),
+  DROPBOX_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/dropbox/callback"),
+  // Atlassian OAuth 2.0 (3LO) app for Jira Cloud. Token exchange also requires
+  // a follow-up call to the accessible-resources endpoint to get the cloudId
+  // every subsequent Jira API call needs — see completeJiraOAuth.
+  JIRA_CLIENT_ID: z.string().optional(),
+  JIRA_CLIENT_SECRET: z.string().optional(),
+  JIRA_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/jira/callback"),
+  // Calendly OAuth app. Webhook subscriptions are still registered per
+  // connected account (scope "user") using the OAuth access token in place
+  // of the old pasted Personal Access Token — each subscription returns its
+  // own signing key, stored on the account; there is no app-wide signing key.
+  CALENDLY_CLIENT_ID: z.string().optional(),
+  CALENDLY_CLIENT_SECRET: z.string().optional(),
+  CALENDLY_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/calendly/callback"),
+  // Figma OAuth app. Webhook signatures are keyed by a per-webhook "passcode"
+  // we generate at registration time, not this secret.
+  FIGMA_CLIENT_ID: z.string().optional(),
+  FIGMA_CLIENT_SECRET: z.string().optional(),
+  FIGMA_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/figma/callback"),
   STRIPE_APP_REDIRECT_URI: z
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/stripe/callback"),
+  // Intuit (QuickBooks) OAuth2. Webhooks are configured once, app-wide, in the
+  // Intuit Developer dashboard (not per-connection via API) — the verifier
+  // token below is the app-level HMAC key Intuit signs every webhook with.
+  QUICKBOOKS_CLIENT_ID: z.string().optional(),
+  QUICKBOOKS_CLIENT_SECRET: z.string().optional(),
+  QUICKBOOKS_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/quickbooks/callback"),
+  INTUIT_WEBHOOK_VERIFIER_TOKEN: z.string().optional(),
+  // Xero OAuth2 + webhooks. XERO_WEBHOOK_SIGNING_KEY is the app-level key from
+  // the Xero app's Webhooks tab, used both for the intent-to-receive
+  // handshake and every real event's x-xero-signature.
+  XERO_CLIENT_ID: z.string().optional(),
+  XERO_CLIENT_SECRET: z.string().optional(),
+  XERO_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/xero/callback"),
+  XERO_WEBHOOK_SIGNING_KEY: z.string().optional(),
+  // Deel OAuth2. Endpoint URLs below are best-effort from Deel's public docs
+  // at time of writing — verify against Deel's current developer docs before
+  // relying on them in production (see connector.service.ts's Deel section).
+  DEEL_CLIENT_ID: z.string().optional(),
+  DEEL_CLIENT_SECRET: z.string().optional(),
+  DEEL_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/deel/callback"),
+  // Box OAuth2. Webhook signing keys are the two returned when the webhook is
+  // registered (POST /2.0/webhooks) — stored per-connection, not env-level.
+  BOX_CLIENT_ID: z.string().optional(),
+  BOX_CLIENT_SECRET: z.string().optional(),
+  BOX_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/box/callback"),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   LINKEDIN_REDIRECT_URI: z.string().url().optional(),

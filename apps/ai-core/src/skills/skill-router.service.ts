@@ -44,7 +44,7 @@ const RULES: ReadonlyArray<{
   {
     id: "connected_sources",
     pattern:
-      /\b(?:slack|notion|github|discord|connector|connected|integration|source|announcement|latest update|what changed|going on)\b/i,
+      /\b(?:slack|notion|github|discord|airtable|jira|ticket|issue|calendly|connector|connected|integration|source|announcement|latest update|what changed|going on)\b/i,
     reason: "connected-source language",
   },
   {

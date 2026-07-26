@@ -27,7 +27,23 @@ export type AutomationAppId =
   | "pagerduty"
   | "trello"
   | "airtable"
-  | "twilio";
+  | "twilio"
+  | "shopify"
+  | "calendly"
+  | "typeform"
+  | "gumroad"
+  | "lemonsqueezy"
+  | "dropbox"
+  | "figma"
+  | "uptimerobot"
+  | "quickbooks"
+  | "xero"
+  | "wise"
+  | "bamboohr"
+  | "deel"
+  | "box"
+  | "statuspage"
+  | "betterstack";
 
 export type AutomationStepKind = "trigger" | "action";
 
@@ -232,6 +248,31 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   // to poll. Fed by the Notion webhook receiver in apps/gateway instead of
   // SchedulerService's automation-poll cron; see NotionWebhookService.
   notion: ["New Comment"],
+  // Push-only, fed by DiscordSocketService's always-on Gateway v10 connection
+  // (MESSAGE_CREATE events), not polled. Matched by exact channelId — see
+  // AiCoreService.discordChannelEvent.
+  discord: ["New Message"],
+  // Everything below is push-only, fed by that app's webhook receiver in
+  // apps/gateway (not polled) — see AiCoreService.<app>WebhookEvent and the
+  // matching apps/gateway/src/<app>-webhook*.ts files.
+  shopify: ["New Order", "Low Inventory"],
+  calendly: ["Booking Created", "Booking Cancelled"],
+  typeform: ["New Submission"],
+  gumroad: ["New Sale"],
+  lemonsqueezy: ["New Sale"],
+  dropbox: ["File Changed"],
+  figma: ["New Comment"],
+  uptimerobot: ["Monitor Down", "Monitor Up"],
+  quickbooks: ["New Invoice", "Invoice Paid"],
+  xero: ["New Invoice"],
+  wise: ["New Transaction"],
+  deel: ["New Contract", "Payment Completed"],
+  box: ["File Changed"],
+  statuspage: ["New Incident", "Incident Update"],
+  betterstack: ["Incident Started", "Incident Resolved"],
+  // Poll-only, no webhook on standard BambooHR API tiers — see
+  // SchedulerService.pollOneAutomation's "bamboohr" branch.
+  bamboohr: ["New Time Off Request", "New Hire"],
 };
 
 /** Which action events actually run, per app. Everything else is UI-only. */

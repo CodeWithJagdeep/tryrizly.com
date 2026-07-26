@@ -26,6 +26,10 @@
       "types": "./dist/slack-surface.d.ts",
       "default": "./dist/slack-surface.js"
     },
+    "./discord-surface": {
+      "types": "./dist/discord-surface.d.ts",
+      "default": "./dist/discord-surface.js"
+    },
     "./email": {
       "types": "./dist/email.d.ts",
       "default": "./dist/email.js"

@@ -161,6 +161,26 @@ export class TelegramService {
     }
 
     const key = await this.userIdForChat(chatId);
+
+    // Fires alongside the chat reply below, never instead of it — Telegram
+    // has no separate "channel" concept, so the owner's own DM is the only
+    // message stream there is, and it doubles as both chat input and an
+    // automation trigger source. Fire-and-forget: a trigger-dispatch hiccup
+    // must never block or break the normal assistant reply.
+    this.gateway
+      .sendToAiCore("automation.telegram.event", {
+        userId: key,
+        chatId: String(chatId),
+        messageId: String(update.update_id ?? `${chatId}:${Date.now()}`),
+        text,
+      })
+      .catch((error) => {
+        logger.warn("telegram automation trigger dispatch failed", {
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
     const pending = await this.approvals.list(key);
 
     if (pending.length > 0 && LIST.test(text)) {

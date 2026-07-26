@@ -277,6 +277,19 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   // (MESSAGE_CREATE events), not polled. Matched by exact channelId — see
   // AiCoreService.discordChannelEvent.
   discord: ["New Message"],
+  // Push-only, fed by TelegramService.handleUpdate's owner-linked chat
+  // stream (the same DM stream that serves chat replies) — see
+  // AiCoreService.telegramMessageEvent. Resolved directly by userId, no
+  // channelId matching needed (Telegram has no channel concept here).
+  telegram: ["New Message"],
+  // Push-only, fed by SlackSocketService's Socket Mode connection.
+  // "New Message Posted to Channel" is matched by exact channelId (see
+  // AiCoreService.slackChannelEvent); "New Mention"/"New Reaction Added"
+  // are workspace-wide for whichever user is linked to that Slack team (see
+  // AiCoreService.slackWorkspaceEvent). Needs new OAuth scopes AND new
+  // Slack app Event Subscriptions — see SLACK_SURFACE_BOT_SCOPES's comment;
+  // existing installs must reauthorize via "Add to Slack" before this works.
+  slack: ["New Message Posted to Channel", "New Mention", "New Reaction Added"],
   // Everything below is push-only, fed by that app's webhook receiver in
   // apps/gateway (not polled) — see AiCoreService.<app>WebhookEvent and the
   // matching apps/gateway/src/<app>-webhook*.ts files.
@@ -305,7 +318,14 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
 
 /** Which action events actually run, per app. Everything else is UI-only. */
 export const LIVE_ACTION_EVENTS: Record<string, string[]> = {
-  slack: ["Send Channel Message", "Send Direct Message"],
+  // "Send Channel Message" is NOT live despite the name suggesting channel
+  // targeting — the current implementation just sends to the linked Slack
+  // DM, identical to "Send Direct Message" (see automation-run.worker.service.ts's
+  // slack branch). Leaving it listed here would be actively misleading, not
+  // just "coming soon" — it appears to work but silently does the wrong
+  // thing. Re-add once real channel-targeting (channel picker + channels:read/
+  // chat:write.public scopes) is built.
+  slack: ["Send Direct Message"],
   telegram: ["Send Message", "Notify Me"],
   calcom: ["Create Booking"],
   discord: ["Send Message"],

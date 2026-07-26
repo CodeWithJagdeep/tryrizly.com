@@ -1,5 +1,6 @@
 import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { AuthRepository } from "./auth/auth.repository";
+import { GatewayService } from "./gateway.service";
 import {
   SlackSurfaceService,
   type SlackSurfaceAction,
@@ -42,7 +43,11 @@ type SocketEnvelope = {
       user?: string;
       text?: string;
       bot_id?: string;
+      ts?: string;
       files?: Array<{ mimetype?: string; url_private?: string; url_private_download?: string }>;
+      // reaction_added shape
+      reaction?: string;
+      item?: { type?: string; channel?: string; ts?: string };
     };
     team?: { id?: string };
     user?: { id?: string };
@@ -76,6 +81,8 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
     private readonly surface: SlackSurfaceService,
     @Inject(AuthRepository)
     private readonly authRepo: AuthRepository,
+    @Inject(GatewayService)
+    private readonly gateway: GatewayService,
   ) {}
 
   onModuleInit(): void {
@@ -161,13 +168,57 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
 
     if (envelope.type === "events_api") {
       const event = payload.event;
-      if (!event || event.type !== "message") return;
+      if (!event || !payload.team_id) return;
+
+      // Channel-based automation triggers — requires the app's Event
+      // Subscriptions to include message.channels/app_mention/reaction_added
+      // (a dashboard config, see SLACK_SURFACE_BOT_SCOPES's comment) and the
+      // new OAuth scopes; older installs won't have either until reauthorized.
+      if (event.type === "message" && event.channel_type === "channel") {
+        if (event.bot_id || event.subtype) return; // human channel messages only
+        if (!event.user || !event.channel || !event.text) return;
+        if (payload.event_id && !this.markSeen(payload.event_id)) return;
+        await this.forwardChannelTrigger("New Message Posted to Channel", {
+          teamId: payload.team_id,
+          channelId: event.channel,
+          userId: event.user,
+          text: event.text,
+          messageId: `${event.channel}:${event.ts ?? Date.now()}`,
+        });
+        return;
+      }
+
+      if (event.type === "app_mention") {
+        if (!event.user || !event.channel || !event.text) return;
+        if (payload.event_id && !this.markSeen(payload.event_id)) return;
+        await this.forwardWorkspaceTrigger("New Mention", payload.team_id, {
+          channelId: event.channel,
+          userId: event.user,
+          text: event.text,
+          messageId: `${event.channel}:${event.ts ?? Date.now()}`,
+        });
+        return;
+      }
+
+      if (event.type === "reaction_added") {
+        if (!event.user || !event.item?.channel || !event.reaction) return;
+        if (payload.event_id && !this.markSeen(payload.event_id)) return;
+        await this.forwardWorkspaceTrigger("New Reaction Added", payload.team_id, {
+          channelId: event.item.channel,
+          userId: event.user,
+          reaction: event.reaction,
+          messageId: `${event.item.channel}:${event.item.ts ?? Date.now()}:${event.reaction}`,
+        });
+        return;
+      }
+
+      if (event.type !== "message") return;
       // DMs only, humans only: skip bot echoes (incl. our own replies). Allow
       // the "file_share" subtype through (voice notes land there) but still
       // drop other subtypes (message_changed / message_deleted, etc).
       if (event.channel_type !== "im" || event.bot_id) return;
       if (event.subtype && event.subtype !== "file_share") return;
-      if (!payload.team_id || !event.user || !event.channel) return;
+      if (!event.user || !event.channel) return;
       if (payload.event_id && !this.markSeen(payload.event_id)) return;
 
       let text = event.text;
@@ -263,6 +314,49 @@ export class SlackSocketService implements OnModuleInit, OnModuleDestroy {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+  }
+
+  /**
+   * "New Message Posted to Channel" — mirrors Discord's discordChannelEvent:
+   * forwarded as-is, matched in ai-core by exact channelId equality against
+   * the flow's trigger config, no per-user resolution needed here.
+   */
+  private async forwardChannelTrigger(
+    title: "New Message Posted to Channel",
+    input: { teamId: string; channelId: string; userId: string; text: string; messageId: string },
+  ): Promise<void> {
+    try {
+      await this.gateway.sendToAiCore("automation.slack.channelEvent", { title, ...input });
+    } catch (error) {
+      logger.warn("slack channel trigger forward to ai-core failed", {
+        channelId: input.channelId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * "New Mention" / "New Reaction Added" — no channelId to match on, so
+   * unlike Discord/channel-message these are scoped by resolving which of
+   * our users are linked into this Slack team, here in gateway (ai-core has
+   * no view of slack_links, that's gateway/AuthRepository's collection).
+   */
+  private async forwardWorkspaceTrigger(
+    title: "New Mention" | "New Reaction Added",
+    teamId: string,
+    input: { channelId: string; userId: string; text?: string; reaction?: string; messageId: string },
+  ): Promise<void> {
+    const userIds = await this.authRepo.findUserIdsByTeamId(teamId).catch(() => []);
+    if (userIds.length === 0) return;
+    try {
+      await this.gateway.sendToAiCore("automation.slack.workspaceEvent", { title, teamId, userIds, ...input });
+    } catch (error) {
+      logger.warn("slack workspace trigger forward to ai-core failed", {
+        teamId,
+        title,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

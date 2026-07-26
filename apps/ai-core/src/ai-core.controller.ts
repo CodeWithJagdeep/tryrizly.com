@@ -728,6 +728,38 @@ export class AiCoreController {
     return this.aiCoreService.resolveBetterStackWebhookSecret(payload.secret);
   }
 
+  @MessagePattern("automation.telegram.event")
+  telegramMessageEvent(
+    @Payload() payload: { userId: string; chatId: string; messageId: string; text: string },
+  ) {
+    return this.aiCoreService.telegramMessageEvent(payload);
+  }
+
+  @MessagePattern("automation.slack.channelEvent")
+  slackChannelEvent(
+    @Payload()
+    payload: { teamId: string; channelId: string; userId: string; text: string; messageId: string },
+  ) {
+    return this.aiCoreService.slackChannelEvent(payload);
+  }
+
+  @MessagePattern("automation.slack.workspaceEvent")
+  slackWorkspaceEvent(
+    @Payload()
+    payload: {
+      title: "New Mention" | "New Reaction Added";
+      teamId: string;
+      userIds: string[];
+      channelId: string;
+      userId: string;
+      text?: string;
+      reaction?: string;
+      messageId: string;
+    },
+  ) {
+    return this.aiCoreService.slackWorkspaceEvent(payload);
+  }
+
   @MessagePattern("connector.discord.channelMessage")
   discordChannelMessage(
     @Payload()

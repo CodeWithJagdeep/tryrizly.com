@@ -419,6 +419,117 @@ export class AiCoreController {
     return this.aiCoreService.automationCalendarList(payload);
   }
 
+  @MessagePattern("automation.gmail.sendEmail")
+  automationGmailSendEmail(
+    @Payload() payload: { userId?: string; to: string; subject: string; body: string },
+  ) {
+    return this.aiCoreService.automationGmailSendEmail(payload);
+  }
+
+  @MessagePattern("automation.gmail.createDraft")
+  automationGmailCreateDraft(
+    @Payload() payload: { userId?: string; to: string; subject: string; body: string },
+  ) {
+    return this.aiCoreService.automationGmailCreateDraft(payload);
+  }
+
+  @MessagePattern("automation.gmail.reply")
+  automationGmailReply(
+    @Payload()
+    payload: {
+      userId?: string;
+      messageId: string;
+      to?: string;
+      subject?: string;
+      body: string;
+    },
+  ) {
+    return this.aiCoreService.automationGmailReply(payload);
+  }
+
+  @MessagePattern("automation.gmail.addLabel")
+  automationGmailAddLabel(
+    @Payload() payload: { userId?: string; messageId: string; label: string },
+  ) {
+    return this.aiCoreService.automationGmailAddLabel(payload);
+  }
+
+  @MessagePattern("automation.calendar.createEvent")
+  automationCalendarCreateEvent(
+    @Payload()
+    payload: {
+      userId?: string;
+      summary: string;
+      start: string;
+      end: string;
+      description?: string;
+      location?: string;
+      attendees?: string[];
+    },
+  ) {
+    return this.aiCoreService.automationCalendarCreateEvent(payload);
+  }
+
+  @MessagePattern("automation.calendar.updateEvent")
+  automationCalendarUpdateEvent(
+    @Payload()
+    payload: {
+      userId?: string;
+      eventId: string;
+      start?: string;
+      end?: string;
+      attendees?: string[];
+      notifyAttendee?: boolean;
+    },
+  ) {
+    return this.aiCoreService.automationCalendarUpdateEvent(payload);
+  }
+
+  @MessagePattern("automation.calendar.freeBusy")
+  automationCalendarFreeBusy(
+    @Payload() payload: { userId?: string; timeMin: string; timeMax: string },
+  ) {
+    return this.aiCoreService.automationCalendarFreeBusy(payload);
+  }
+
+  @MessagePattern("automation.calcom.listBookings")
+  automationCalcomListBookings(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationCalcomListBookings(payload);
+  }
+
+  @MessagePattern("automation.jira.searchNewIssues")
+  automationJiraSearchNewIssues(
+    @Payload() payload: { userId?: string; projectKey?: string },
+  ) {
+    return this.aiCoreService.automationJiraSearchNewIssues(payload);
+  }
+
+  @MessagePattern("automation.pagerduty.listIncidents")
+  automationPagerDutyListIncidents(
+    @Payload() payload: { userId?: string; serviceId?: string },
+  ) {
+    return this.aiCoreService.automationPagerDutyListIncidents(payload);
+  }
+
+  @MessagePattern("automation.trello.listCards")
+  automationTrelloListCards(
+    @Payload() payload: { userId?: string; listId: string },
+  ) {
+    return this.aiCoreService.automationTrelloListCards(payload);
+  }
+
+  @MessagePattern("automation.mongo.pollNew")
+  automationMongoPollNew(
+    @Payload() payload: { userId?: string; collection: string },
+  ) {
+    return this.aiCoreService.automationMongoPollNew(payload);
+  }
+
+  @MessagePattern("automation.drive.listRecentFiles")
+  automationDriveListRecentFiles(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationDriveListRecentFiles(payload);
+  }
+
   @MessagePattern("connector.notion.webhook")
   notionWebhook(@Payload() payload: { event: Record<string, unknown> }) {
     return this.aiCoreService.notionWebhookEvent(payload.event);

@@ -10,6 +10,10 @@ export type CalendarEvent = {
   organizer?: string;
   status?: string;
   description?: string;
+  /** Google's last-modified timestamp — used by the "New or Updated Event"
+   * poll trigger to detect edits (encoded into the dedup item id alongside
+   * the event id, since the trigger cursor only tracks a flat id set). */
+  updated?: string;
 };
 
 export type CreateCalendarEventInput = {

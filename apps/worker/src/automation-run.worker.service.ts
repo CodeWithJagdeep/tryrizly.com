@@ -495,6 +495,7 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
   private async runAction(
     userId: string,
     app: string,
+    title: string,
     config: Record<string, unknown>,
     triggerPayload: Record<string, unknown>,
   ): Promise<AutomationStepEvidence> {
@@ -650,6 +651,151 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       });
     }
 
+    if (app === "gmail") {
+      // Gmail has four live actions sharing one app id — the step's title
+      // (its display name from the catalog, e.g. "Send Email") is what
+      // disambiguates which one runs, since config alone can't tell them
+      // apart (mirrors how Telegram's two actions are distinguished, except
+      // Telegram's happen to behave identically so it never needed this).
+      if (title === "Send Email") {
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string; threadId?: string }>(
+            "automation.gmail.sendEmail",
+            {
+              userId,
+              to: requiredInterpolated("gmail_to", config.to, triggerPayload),
+              subject: requiredInterpolated("gmail_subject", config.subject, triggerPayload),
+              body: interpolate(String(config.body ?? ""), triggerPayload),
+            },
+          ),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "gmail_send_failed");
+        return ack("gmail", { resourceId: result.id });
+      }
+      if (title === "Create Draft") {
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string }>("automation.gmail.createDraft", {
+            userId,
+            to: requiredInterpolated("gmail_to", config.to, triggerPayload),
+            subject: requiredInterpolated("gmail_subject", config.subject, triggerPayload),
+            body: interpolate(String(config.body ?? ""), triggerPayload),
+          }),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "gmail_draft_failed");
+        return ack("gmail", { resourceId: result.id });
+      }
+      if (title === "Reply to Email") {
+        // The trigger payload for any Gmail poll item carries `id` (see
+        // GmailThreadSummary) — ai-core fetches that message to resolve the
+        // real threadId/Message-ID header rather than trusting the payload's
+        // own (worker-side) fields for those, since the worker never sees the
+        // RFC822 Message-ID header, only the Gmail API's internal id.
+        const messageId = requiredInterpolated(
+          "gmail_reply_message_id",
+          config.messageId ?? "{{id}}",
+          triggerPayload,
+        );
+        const to = config.to ? interpolate(String(config.to), triggerPayload) : undefined;
+        const subject = config.subject ? interpolate(String(config.subject), triggerPayload) : undefined;
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string }>("automation.gmail.reply", {
+            userId,
+            messageId,
+            to,
+            subject,
+            body: requiredInterpolated("gmail_reply_body", config.body, triggerPayload),
+          }),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "gmail_reply_failed");
+        return ack("gmail", { resourceId: result.id });
+      }
+      if (title === "Add Label to Email") {
+        const messageId = requiredInterpolated(
+          "gmail_label_message_id",
+          config.messageId ?? "{{id}}",
+          triggerPayload,
+        );
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string }>("automation.gmail.addLabel", {
+            userId,
+            messageId,
+            label: requiredInterpolated("gmail_label", config.label, triggerPayload),
+          }),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "gmail_add_label_failed");
+        return ack("gmail", { resourceId: result.id });
+      }
+      throw new Error(`unsupported_gmail_action:${title}`);
+    }
+
+    if (app === "calendar") {
+      if (title === "Create Detailed Event") {
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string; url?: string }>(
+            "automation.calendar.createEvent",
+            {
+              userId,
+              summary: requiredInterpolated("calendar_summary", config.summary ?? config.title, triggerPayload),
+              start: requiredInterpolated("calendar_start", config.start, triggerPayload),
+              end: requiredInterpolated("calendar_end", config.end, triggerPayload),
+              description: interpolate(String(config.description ?? ""), triggerPayload),
+              location: interpolate(String(config.location ?? ""), triggerPayload),
+              attendees: String(config.attendees ?? "")
+                .split(",")
+                .map((a) => interpolate(a.trim(), triggerPayload))
+                .filter(Boolean),
+            },
+          ),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "calendar_create_event_failed");
+        return ack("calendar", { resourceId: result.id, resourceUrl: result.url });
+      }
+      if (title === "Update Event") {
+        const eventId = requiredInterpolated(
+          "calendar_update_event_id",
+          config.eventId ?? "{{id}}",
+          triggerPayload,
+        );
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; id?: string }>("automation.calendar.updateEvent", {
+            userId,
+            eventId,
+            start: config.start ? interpolate(String(config.start), triggerPayload) : undefined,
+            end: config.end ? interpolate(String(config.end), triggerPayload) : undefined,
+            attendees: config.attendees
+              ? String(config.attendees)
+                  .split(",")
+                  .map((a) => interpolate(a.trim(), triggerPayload))
+                  .filter(Boolean)
+              : undefined,
+            notifyAttendee: config.notifyAttendee !== false,
+          }),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "calendar_update_event_failed");
+        return ack("calendar", { resourceId: result.id });
+      }
+      if (title === "Find Availability") {
+        // Read-only — no dedicated free/busy trigger exists, this reuses the
+        // Calendar API's standard freeBusy endpoint (see GoogleService.freeBusy).
+        const result = await firstValueFrom(
+          this.aiCore.send<{ ok: boolean; error?: string; busy?: Array<{ start: string; end: string }> }>(
+            "automation.calendar.freeBusy",
+            {
+              userId,
+              timeMin: requiredInterpolated("calendar_free_busy_time_min", config.timeMin, triggerPayload),
+              timeMax: requiredInterpolated("calendar_free_busy_time_max", config.timeMax, triggerPayload),
+            },
+          ),
+        );
+        if (!result?.ok) throw new Error(result?.error ?? "calendar_free_busy_failed");
+        return ack("calendar", {
+          kind: "data_result",
+          metadata: { busyCount: (result.busy ?? []).length },
+        });
+      }
+      throw new Error(`unsupported_calendar_action:${title}`);
+    }
+
     if (app === "jira") {
       const result = await firstValueFrom(
         this.aiCore.send<{ ok: boolean; error?: string; key?: string; url?: string }>("automation.jira.createIssue", {
@@ -784,6 +930,7 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       const evidence = await this.runAction(
         input.userId,
         input.app,
+        input.title,
         input.config,
         input.payload,
       );

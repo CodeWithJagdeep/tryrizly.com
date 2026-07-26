@@ -141,7 +141,62 @@ export class GoogleService {
     return { connected: true, event: toCalendarEvent(item) };
   }
 
+  /**
+   * Free/busy query — there's no dedicated "Find Availability" endpoint, this
+   * is the standard Calendar API way to get it (POST /freeBusy against the
+   * user's primary calendar).
+   */
+  async freeBusy(
+    userId: string,
+    range: { timeMin: Date; timeMax: Date },
+  ): Promise<GoogleResult<{ busy: Array<{ start: string; end: string }> }>> {
+    const res = await this.gfetch(
+      userId,
+      "calendar",
+      `${CALENDAR_BASE}/freeBusy`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          timeMin: range.timeMin.toISOString(),
+          timeMax: range.timeMax.toISOString(),
+          items: [{ id: "primary" }],
+        }),
+      },
+    );
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as {
+      calendars?: Record<string, { busy?: Array<{ start: string; end: string }> }>;
+    };
+    return { connected: true, busy: data.calendars?.primary?.busy ?? [] };
+  }
+
   // --- Drive / Sheets / Docs (google_workspace grant) ---------------------
+
+  /** Most recently created files first — backs the Drive "New File" poll trigger. */
+  async listRecentDriveFiles(
+    userId: string,
+    input: { maxResults?: number } = {},
+  ): Promise<
+    GoogleResult<{
+      files: Array<{ id: string; name: string; createdTime: string; webViewLink?: string }>;
+    }>
+  > {
+    const params = new URLSearchParams({
+      orderBy: "createdTime desc",
+      pageSize: String(input.maxResults ?? 20),
+      fields: "files(id,name,createdTime,webViewLink)",
+    });
+    const res = await this.gfetch(
+      userId,
+      "google_workspace",
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+    );
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as {
+      files?: Array<{ id: string; name: string; createdTime: string; webViewLink?: string }>;
+    };
+    return { connected: true, files: data.files ?? [] };
+  }
 
   /** Simple (non-resumable) upload — fine for the small text payloads an automation step produces. */
   async uploadDriveFile(
@@ -615,6 +670,49 @@ export class GoogleService {
     };
   }
 
+  /** Name -> id lookup — the Gmail API's modify endpoint only accepts label ids. */
+  async listLabels(
+    userId: string,
+    accountId?: string,
+  ): Promise<GoogleResult<{ labels: Array<{ id: string; name: string }> }>> {
+    const res = await this.gfetch(
+      userId,
+      "gmail",
+      `${GMAIL_BASE}/users/me/labels`,
+      {},
+      accountId,
+    );
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as {
+      labels?: Array<{ id: string; name: string }>;
+    };
+    return { connected: true, labels: data.labels ?? [] };
+  }
+
+  async modifyMessageLabels(
+    userId: string,
+    messageId: string,
+    input: { addLabelIds?: string[]; removeLabelIds?: string[] },
+    accountId?: string,
+  ): Promise<GoogleResult<{ labelIds: string[] }>> {
+    const res = await this.gfetch(
+      userId,
+      "gmail",
+      `${GMAIL_BASE}/users/me/messages/${messageId}/modify`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          addLabelIds: input.addLabelIds ?? [],
+          removeLabelIds: input.removeLabelIds ?? [],
+        }),
+      },
+      accountId,
+    );
+    if (!res.connected) return res;
+    const data = (await res.response.json()) as { labelIds?: string[] };
+    return { connected: true, labelIds: data.labelIds ?? [] };
+  }
+
   async sendMessage(
     userId: string,
     input: SendOrDraftInput,
@@ -813,6 +911,7 @@ type GoogleCalendarItem = {
   location?: string;
   hangoutLink?: string;
   status?: string;
+  updated?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   organizer?: { email?: string };
@@ -850,6 +949,7 @@ function toCalendarEvent(item: GoogleCalendarItem): CalendarEvent {
     organizer: item.organizer?.email,
     status: item.status,
     description: item.description,
+    updated: item.updated,
   };
 }
 

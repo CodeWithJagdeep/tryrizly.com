@@ -50,6 +50,9 @@ import { XeroWebhookAuthService } from "./xero-webhook-auth.service";
 import { WiseWebhookAuthService } from "./wise-webhook-auth.service";
 import { DeelWebhookAuthService } from "./deel-webhook-auth.service";
 import { BoxWebhookAuthService } from "./box-webhook-auth.service";
+import { StripeWebhookAuthService } from "./stripe-webhook-auth.service";
+import { RazorpayWebhookAuthService } from "./razorpay-webhook-auth.service";
+import { PayPalWebhookAuthService } from "./paypal-webhook-auth.service";
 import { logger } from "@heyriz/shared/logger";
 
 type ProxyPayload = Record<string, unknown>;
@@ -127,6 +130,12 @@ export class GatewayController {
     private readonly deelWebhookAuth: DeelWebhookAuthService,
     @Inject(BoxWebhookAuthService)
     private readonly boxWebhookAuth: BoxWebhookAuthService,
+    @Inject(StripeWebhookAuthService)
+    private readonly stripeWebhookAuth: StripeWebhookAuthService,
+    @Inject(RazorpayWebhookAuthService)
+    private readonly razorpayWebhookAuth: RazorpayWebhookAuthService,
+    @Inject(PayPalWebhookAuthService)
+    private readonly paypalWebhookAuth: PayPalWebhookAuthService,
   ) {}
 
   @Post("api/public/rate-limit")
@@ -1379,6 +1388,73 @@ export class GatewayController {
             });
           });
       }
+    }
+    return { ok: true };
+  }
+
+  /** Stripe "New Payment"/"Failed Charge"/"New Subscription" pushes. See StripeWebhookAuthService (t=/v1= signature, 5-min replay window, per-account or try-all secret resolution). */
+  @Post("api/connectors/stripe/webhook")
+  @HttpCode(200)
+  async stripeWebhook(
+    @Headers("stripe-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.stripeWebhookAuth.handle(request.rawBody, signature);
+    if (result) {
+      this.gatewayService.sendToAiCore("connector.stripe.webhook", result).catch((error) => {
+        logger.warn("stripe webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
+  }
+
+  /** Razorpay "New Payment"/"Failed Payment" pushes. See RazorpayWebhookAuthService (plain HMAC, try-all secret resolution). */
+  @Post("api/connectors/razorpay/webhook")
+  @HttpCode(200)
+  async razorpayWebhook(
+    @Headers("x-razorpay-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.razorpayWebhookAuth.handle(request.rawBody, signature);
+    if (result) {
+      this.gatewayService.sendToAiCore("connector.razorpay.webhook", result).catch((error) => {
+        logger.warn("razorpay webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
+  }
+
+  /** PayPal "New Payment"/"New Refund" pushes. See PayPalWebhookAuthService (no local HMAC — verified via PayPal's own API, try-all across accounts). */
+  @Post("api/connectors/paypal/webhook")
+  @HttpCode(200)
+  async paypalWebhook(
+    @Headers("paypal-auth-algo") authAlgo: string | undefined,
+    @Headers("paypal-cert-url") certUrl: string | undefined,
+    @Headers("paypal-transmission-id") transmissionId: string | undefined,
+    @Headers("paypal-transmission-sig") transmissionSig: string | undefined,
+    @Headers("paypal-transmission-time") transmissionTime: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.paypalWebhookAuth.handle(request.rawBody, {
+      authAlgo,
+      certUrl,
+      transmissionId,
+      transmissionSig,
+      transmissionTime,
+    });
+    if (result) {
+      this.gatewayService.sendToAiCore("connector.paypal.webhook", result).catch((error) => {
+        logger.warn("paypal webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
     return { ok: true };
   }

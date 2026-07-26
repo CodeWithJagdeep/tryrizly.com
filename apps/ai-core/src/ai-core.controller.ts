@@ -643,6 +643,57 @@ export class AiCoreController {
     return this.aiCoreService.getDeelSigningKey(payload.organizationId);
   }
 
+  @MessagePattern("connector.stripe.webhook")
+  stripeWebhook(
+    @Payload() payload: { userId: string; type: string; eventId: string; data: Record<string, unknown> },
+  ) {
+    return this.aiCoreService.stripeWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.stripe.webhookSecretByAccount")
+  getStripeWebhookSecretByAccount(@Payload() payload: { stripeAccountId: string }) {
+    return this.aiCoreService.getStripeWebhookSecretByAccount(payload.stripeAccountId);
+  }
+
+  @MessagePattern("connector.stripe.allWebhookSecrets")
+  getAllStripeWebhookSecrets() {
+    return this.aiCoreService.getAllStripeWebhookSecrets();
+  }
+
+  @MessagePattern("connector.razorpay.webhook")
+  razorpayWebhook(@Payload() payload: { userId: string; event: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.razorpayWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.razorpay.allWebhookSecrets")
+  getAllRazorpayWebhookSecrets() {
+    return this.aiCoreService.getAllRazorpayWebhookSecrets();
+  }
+
+  @MessagePattern("automation.razorpay.createInvoice")
+  automationRazorpayCreateInvoice(
+    @Payload() payload: { userId?: string; email?: string; amount?: number; currency?: string; description?: string },
+  ) {
+    return this.aiCoreService.automationRazorpayCreateInvoice(payload);
+  }
+
+  @MessagePattern("connector.paypal.webhook")
+  paypalWebhook(@Payload() payload: { userId: string; event: Record<string, unknown> }) {
+    return this.aiCoreService.paypalWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.paypal.allWebhookAccounts")
+  getAllPayPalWebhookAccounts() {
+    return this.aiCoreService.getAllPayPalWebhookAccounts();
+  }
+
+  @MessagePattern("automation.paypal.createInvoice")
+  automationPayPalCreateInvoice(
+    @Payload() payload: { userId?: string; email?: string; amount?: number; currency?: string; description?: string },
+  ) {
+    return this.aiCoreService.automationPayPalCreateInvoice(payload);
+  }
+
   @MessagePattern("connector.box.webhook")
   boxWebhook(@Payload() payload: { folderId: string; payload: Record<string, unknown> }) {
     return this.aiCoreService.boxWebhookEvent(payload);

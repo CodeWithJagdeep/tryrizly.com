@@ -583,6 +583,40 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       return ack("stripe", { resourceId: result.id });
     }
 
+    if (app === "razorpay") {
+      const amountRaw = interpolate(String(config.amount ?? ""), triggerPayload);
+      const amount = Number(amountRaw);
+      if (!amountRaw || !Number.isFinite(amount)) throw new Error("razorpay_create_invoice_amount_required");
+      const result = await firstValueFrom(
+        this.aiCore.send<{ ok: boolean; error?: string; id?: string; url?: string }>("automation.razorpay.createInvoice", {
+          userId,
+          email: interpolate(String(config.email ?? ""), triggerPayload) || undefined,
+          amount,
+          currency: interpolate(String(config.currency ?? ""), triggerPayload) || undefined,
+          description: interpolate(String(config.description ?? ""), triggerPayload) || undefined,
+        }),
+      );
+      if (!result?.ok) throw new Error(result?.error ?? "razorpay_create_invoice_failed");
+      return ack("razorpay", { resourceId: result.id, resourceUrl: result.url });
+    }
+
+    if (app === "paypal") {
+      const amountRaw = interpolate(String(config.amount ?? ""), triggerPayload);
+      const amount = Number(amountRaw);
+      if (!amountRaw || !Number.isFinite(amount)) throw new Error("paypal_create_invoice_amount_required");
+      const result = await firstValueFrom(
+        this.aiCore.send<{ ok: boolean; error?: string; id?: string }>("automation.paypal.createInvoice", {
+          userId,
+          email: requiredInterpolated("paypal_email", config.email, triggerPayload),
+          amount,
+          currency: interpolate(String(config.currency ?? ""), triggerPayload) || undefined,
+          description: interpolate(String(config.description ?? ""), triggerPayload) || undefined,
+        }),
+      );
+      if (!result?.ok) throw new Error(result?.error ?? "paypal_create_invoice_failed");
+      return ack("paypal", { resourceId: result.id });
+    }
+
     if (app === "google-drive") {
       const result = await firstValueFrom(
         this.aiCore.send<{ ok: boolean; error?: string; id?: string; url?: string }>("automation.google.uploadFile", {

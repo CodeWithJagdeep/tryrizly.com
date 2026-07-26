@@ -183,6 +183,9 @@ export class ConnectorService {
     if (provider === "bamboohr") await this.prepareBambooHrManualConnect(resolvedSecret, webhookMetadata);
     if (provider === "statuspage") await this.prepareStatuspageManualConnect(resolvedSecret, webhookMetadata);
     if (provider === "betterstack") await this.prepareBetterStackManualConnect(resolvedSecret, webhookMetadata);
+    if (provider === "stripe") await this.prepareStripeManualConnect(resolvedSecret, webhookMetadata);
+    if (provider === "razorpay") await this.prepareRazorpayManualConnect(resolvedSecret, webhookMetadata);
+    if (provider === "paypal") await this.preparePayPalManualConnect(resolvedSecret, webhookMetadata);
 
     const encryptedPayload = this.vault.encrypt(resolvedSecret);
 
@@ -206,7 +209,7 @@ export class ConnectorService {
           label: input.label ?? providerLabel(provider),
           status: "connected",
           encryptedPayload,
-          metadata: { ...existing?.metadata, ...(input.metadata ?? {}) },
+          metadata: { ...existing?.metadata, ...webhookMetadata, ...(input.metadata ?? {}) },
         });
       if (!updated) throw new Error("account_not_found_or_not_owned");
       account = updated;
@@ -221,7 +224,7 @@ export class ConnectorService {
         status: "connected",
         encryptedPayload,
         scopes: input.scopes ?? [],
-        metadata: { setup: "manual", ...(input.metadata ?? {}) },
+        metadata: { setup: "manual", ...webhookMetadata, ...(input.metadata ?? {}) },
       });
     } else {
       account = await this.repository.upsert({
@@ -1158,6 +1161,228 @@ export class ConnectorService {
       if (stored && safeEqual(stored, secret)) return account.userId;
     }
     return undefined;
+  }
+
+  /**
+   * Registers a Stripe webhook_endpoint for charge.succeeded/charge.failed/
+   * customer.subscription.created and stores the `secret` (whsec_...) Stripe
+   * hands back for Stripe-Signature verification. If this is a Stripe Connect
+   * connection (stripeAccountId present), the endpoint is created scoped to
+   * that connected account via the Stripe-Account header — otherwise it's a
+   * plain platform-account endpoint for a manual secret key. Non-fatal on
+   * failure (e.g. a localhost NEXT_PUBLIC_GATEWAY_URL in local dev, which
+   * Stripe rejects as an invalid callback url) — same treatment as Calendly:
+   * the connection still completes, just without live triggers until
+   * reconnected behind a publicly reachable URL.
+   */
+  private async prepareStripeManualConnect(
+    secret: ConnectorSecretPayload,
+    metadata: Record<string, string>,
+  ): Promise<void> {
+    const secretKey = stringSecret(secret.secretKey);
+    if (!secretKey) throw new Error("invalid_connector_payload:stripe");
+
+    const stripeAccountId = stringSecret(secret.stripeAccountId);
+    if (stripeAccountId) metadata.stripeAccountId = stripeAccountId;
+
+    try {
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${secretKey}`,
+        "content-type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2024-06-20",
+      };
+      if (stripeAccountId) headers["Stripe-Account"] = stripeAccountId;
+
+      const params = new URLSearchParams();
+      params.set("url", `${env.NEXT_PUBLIC_GATEWAY_URL}/api/connectors/stripe/webhook`);
+      params.append("enabled_events[]", "charge.succeeded");
+      params.append("enabled_events[]", "charge.failed");
+      params.append("enabled_events[]", "customer.subscription.created");
+
+      const response = await fetch("https://api.stripe.com/v1/webhook_endpoints", {
+        method: "POST",
+        headers,
+        body: params.toString(),
+      });
+      if (!response.ok) {
+        throw new Error(`Couldn't register the Stripe webhook: ${await response.text()}`);
+      }
+      const json = (await response.json()) as { secret?: string };
+      if (!json.secret) throw new Error("Stripe did not return a webhook signing secret");
+      secret.webhookSigningSecret = json.secret;
+    } catch (error) {
+      logger.warn("stripe webhook registration failed; connecting without live triggers", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Registers a Razorpay webhook for payment.captured/payment.failed. Unlike
+   * every other provider here, Razorpay requires the CALLER to supply the
+   * signing secret up front — its API just echoes back whatever `secret` is
+   * sent in the request rather than generating and returning one, so we mint
+   * a random secret ourselves and store that (not anything read from the
+   * response). Non-fatal on failure (e.g. a localhost callback URL in local
+   * dev) — same treatment as Calendly/Stripe above.
+   */
+  private async prepareRazorpayManualConnect(
+    secret: ConnectorSecretPayload,
+    _metadata: Record<string, string>,
+  ): Promise<void> {
+    const keyId = stringSecret(secret.keyId);
+    const keySecret = stringSecret(secret.keySecret);
+    if (!keyId || !keySecret) throw new Error("invalid_connector_payload:razorpay");
+
+    const webhookSecret = randomBytes(24).toString("hex");
+    try {
+      const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+      const response = await fetch("https://api.razorpay.com/v1/webhooks", {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${auth}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          url: `${env.NEXT_PUBLIC_GATEWAY_URL}/api/connectors/razorpay/webhook`,
+          events: ["payment.captured", "payment.failed"],
+          secret: webhookSecret,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Couldn't register the Razorpay webhook: ${await response.text()}`);
+      }
+      secret.webhookSigningSecret = webhookSecret;
+    } catch (error) {
+      logger.warn("razorpay webhook registration failed; connecting without live triggers", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Razorpay webhooks carry no caller-side account identifier at all — same
+   * try-all tradeoff as Stripe's manual (non-Connect) mode: every connected
+   * Razorpay account's stored secret has to be handed to the gateway to try
+   * in turn until one produces a valid HMAC.
+   */
+  async getAllRazorpayWebhookSecrets(): Promise<Array<{ userId: string; secret: string }>> {
+    const accounts = await this.repository.findAllByProvider("razorpay");
+    const out: Array<{ userId: string; secret: string }> = [];
+    for (const account of accounts) {
+      const secret = stringSecret(this.vault.decrypt(account.encryptedPayload).webhookSigningSecret);
+      if (secret) out.push({ userId: account.userId, secret });
+    }
+    return out;
+  }
+
+  /**
+   * Registers a PayPal webhook for PAYMENT.CAPTURE.COMPLETED/REFUNDED.
+   * PayPal doesn't hand back a signing secret the way every other provider
+   * here does — verifying an incoming webhook instead means calling
+   * PayPal's own verify-webhook-signature endpoint per event, keyed by the
+   * `id` this registration call returns. That id is stored as `webhookId`.
+   * Non-fatal on failure (e.g. a localhost callback URL in local dev) —
+   * same treatment as Calendly/Stripe/Razorpay above.
+   */
+  private async preparePayPalManualConnect(
+    secret: ConnectorSecretPayload,
+    _metadata: Record<string, string>,
+  ): Promise<void> {
+    const clientId = stringSecret(secret.clientId);
+    const clientSecret = stringSecret(secret.clientSecret);
+    if (!clientId || !clientSecret) throw new Error("invalid_connector_payload:paypal");
+
+    try {
+      const token = await this.getPayPalAccessToken(clientId, clientSecret);
+      const response = await fetch("https://api-m.paypal.com/v1/notifications/webhooks", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          url: `${env.NEXT_PUBLIC_GATEWAY_URL}/api/connectors/paypal/webhook`,
+          event_types: [{ name: "PAYMENT.CAPTURE.COMPLETED" }, { name: "PAYMENT.CAPTURE.REFUNDED" }],
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Couldn't register the PayPal webhook: ${await response.text()}`);
+      }
+      const json = (await response.json()) as { id?: string };
+      if (!json.id) throw new Error("PayPal did not return a webhook id");
+      secret.webhookId = json.id;
+    } catch (error) {
+      logger.warn("paypal webhook registration failed; connecting without live triggers", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async getPayPalAccessToken(clientId: string, clientSecret: string): Promise<string> {
+    const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const res = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
+      method: "POST",
+      headers: { authorization: `Basic ${auth}`, "content-type": "application/x-www-form-urlencoded" },
+      body: "grant_type=client_credentials",
+    });
+    if (!res.ok) throw new Error(`paypal_auth_${res.status}`);
+    const data = (await res.json()) as { access_token?: string };
+    if (!data.access_token) throw new Error("paypal_auth_no_token");
+    return data.access_token;
+  }
+
+  /**
+   * All connected PayPal accounts' credentials + webhook id, for the
+   * gateway's try-each-account verification loop. PayPal gives no local
+   * HMAC to check — confirming which account a webhook belongs to means
+   * calling PayPal's verify-webhook-signature endpoint once per candidate
+   * account, i.e. an outbound PayPal API call (token fetch + verify) per
+   * candidate per incoming webhook. That's a real efficiency tradeoff, not
+   * an oversight — it's the only resolution strategy PayPal's API leaves
+   * available when there's no account-identifying field in the payload.
+   */
+  async getAllPayPalWebhookAccounts(): Promise<
+    Array<{ userId: string; clientId: string; clientSecret: string; webhookId: string }>
+  > {
+    const accounts = await this.repository.findAllByProvider("paypal");
+    const out: Array<{ userId: string; clientId: string; clientSecret: string; webhookId: string }> = [];
+    for (const account of accounts) {
+      const payload = this.vault.decrypt(account.encryptedPayload);
+      const clientId = stringSecret(payload.clientId);
+      const clientSecret = stringSecret(payload.clientSecret);
+      const webhookId = stringSecret(payload.webhookId);
+      if (clientId && clientSecret && webhookId) out.push({ userId: account.userId, clientId, clientSecret, webhookId });
+    }
+    return out;
+  }
+
+  /** Stripe Connect events carry `account` directly — look up that account's stored webhook secret for verification. */
+  async getStripeWebhookSecretByAccount(
+    stripeAccountId: string,
+  ): Promise<{ userId: string; secret: string } | undefined> {
+    const accounts = await this.repository.findAllByProviderAndMetadataField("stripe", "stripeAccountId", stripeAccountId);
+    for (const account of accounts) {
+      const secret = stringSecret(this.vault.decrypt(account.encryptedPayload).webhookSigningSecret);
+      if (secret) return { userId: account.userId, secret };
+    }
+    return undefined;
+  }
+
+  /**
+   * Plain manual Stripe connections carry no account identifier in the
+   * webhook payload at all — each connected account registered its own
+   * endpoint/secret pair, so the only way to know which one signed an
+   * incoming request is to hand every stored secret to the gateway and let
+   * it try each until one produces a valid HMAC. Deliberate try-all
+   * tradeoff, same as Statuspage/BetterStack's query-param secret match,
+   * used only as the fallback when the event carries no `account` field.
+   */
+  async getAllStripeWebhookSecrets(): Promise<Array<{ userId: string; secret: string }>> {
+    const accounts = await this.repository.findAllByProvider("stripe");
+    const out: Array<{ userId: string; secret: string }> = [];
+    for (const account of accounts) {
+      const secret = stringSecret(this.vault.decrypt(account.encryptedPayload).webhookSigningSecret);
+      if (secret) out.push({ userId: account.userId, secret });
+    }
+    return out;
   }
 
   /** Decrypts the Slack bot token. Returns null if not connected. */

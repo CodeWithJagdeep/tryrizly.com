@@ -23,6 +23,8 @@ import { DiscordService } from "./connectors/discord.service";
 import { GitHubService } from "./connectors/github.service";
 import { NotionService } from "./connectors/notion.service";
 import { StripeService } from "./connectors/stripe.service";
+import { RazorpayService } from "./connectors/razorpay.service";
+import { PayPalService } from "./connectors/paypal.service";
 import { PostgresIntrospectionService } from "./connectors/postgres-introspection.service";
 import { MongoIntrospectionService } from "./connectors/mongo-introspection.service";
 import { JiraService } from "./connectors/jira.service";
@@ -169,6 +171,10 @@ export class AiCoreService {
     private readonly notion: NotionService,
     @Inject(StripeService)
     private readonly stripe: StripeService,
+    @Inject(RazorpayService)
+    private readonly razorpay: RazorpayService,
+    @Inject(PayPalService)
+    private readonly paypal: PayPalService,
     @Inject(PostgresIntrospectionService)
     private readonly postgresIntrospection: PostgresIntrospectionService,
     @Inject(MongoIntrospectionService)
@@ -1331,6 +1337,22 @@ export class AiCoreService {
     return this.connectorService.resolveBetterStackWebhookSecret(secret);
   }
 
+  getStripeWebhookSecretByAccount(stripeAccountId: string) {
+    return this.connectorService.getStripeWebhookSecretByAccount(stripeAccountId);
+  }
+
+  getAllStripeWebhookSecrets() {
+    return this.connectorService.getAllStripeWebhookSecrets();
+  }
+
+  getAllRazorpayWebhookSecrets() {
+    return this.connectorService.getAllRazorpayWebhookSecrets();
+  }
+
+  getAllPayPalWebhookAccounts() {
+    return this.connectorService.getAllPayPalWebhookAccounts();
+  }
+
   getCalendlySigningKey(organizationUri: string) {
     return this.connectorService.getCalendlySigningKey(organizationUri);
   }
@@ -1744,6 +1766,155 @@ export class AiCoreService {
         triggerItemId: `payment:${id}`,
         triggerPayload: body.data,
       });
+    }
+  }
+
+  /**
+   * Stripe "New Payment" / "Failed Charge" / "New Subscription" — gateway
+   * already verified Stripe-Signature (trying every connected account's
+   * webhook secret when the event carried no `account` field) and resolved
+   * exactly which userId it belongs to before forwarding here.
+   */
+  async stripeWebhookEvent(body: {
+    userId: string;
+    type: string;
+    eventId: string;
+    data: Record<string, unknown>;
+  }): Promise<void> {
+    const title =
+      body.type === "charge.succeeded"
+        ? "New Payment"
+        : body.type === "charge.failed"
+          ? "Failed Charge"
+          : body.type === "customer.subscription.created"
+            ? "New Subscription"
+            : undefined;
+    if (!title) return;
+
+    await this.dispatchPushTrigger({
+      app: "stripe",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${body.type}:${body.eventId}`,
+      triggerPayload: body.data,
+    });
+  }
+
+  /**
+   * Razorpay "New Payment" / "Failed Payment" — gateway already verified
+   * X-Razorpay-Signature (trying every connected account's secret, since
+   * Razorpay webhooks carry no account identifier) and resolved exactly
+   * which userId it belongs to before forwarding here.
+   */
+  async razorpayWebhookEvent(body: {
+    userId: string;
+    event: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    const title =
+      body.event === "payment.captured" ? "New Payment" : body.event === "payment.failed" ? "Failed Payment" : undefined;
+    if (!title) return;
+
+    // Razorpay's per-delivery id lives on the nested entity, not the
+    // envelope — payment.captured/payment.failed both nest under `payment`.
+    const payment = (body.payload.payload as Record<string, unknown> | undefined)?.payment as
+      | { entity?: Record<string, unknown> }
+      | undefined;
+    const entityId = typeof payment?.entity?.id === "string" ? payment.entity.id : String(Date.now());
+
+    await this.dispatchPushTrigger({
+      app: "razorpay",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${body.event}:${entityId}`,
+      triggerPayload: payment?.entity ?? body.payload,
+    });
+  }
+
+  /** The automation "Create Invoice" action for Razorpay. */
+  async automationRazorpayCreateInvoice(body: {
+    userId?: string;
+    email?: string;
+    amount?: number;
+    currency?: string;
+    description?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.connectorService.getDataSourceSecret(userId, "razorpay");
+    if (!result.connected || result.provider !== "razorpay") return { ok: false, error: "razorpay_not_connected" };
+    if (!body.amount) return { ok: false, error: "razorpay_create_invoice_amount_required" };
+    try {
+      const invoice = await this.razorpay.createInvoice(result.secret, {
+        email: body.email,
+        amount: body.amount,
+        currency: body.currency,
+        description: body.description,
+      });
+      return { ok: true, id: invoice.id, url: invoice.short_url };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "razorpay_create_invoice_failed",
+      };
+    }
+  }
+
+  /**
+   * PayPal "New Payment" / "New Refund" — gateway already verified the event
+   * via PayPal's own verify-webhook-signature API (trying every connected
+   * account's webhookId/credentials, since PayPal payloads carry no local
+   * signature and no reliable account-identifying field) and resolved
+   * exactly which userId it belongs to before forwarding here.
+   */
+  async paypalWebhookEvent(body: { userId: string; event: Record<string, unknown> }): Promise<void> {
+    const eventType = typeof body.event.event_type === "string" ? body.event.event_type : undefined;
+    const title =
+      eventType === "PAYMENT.CAPTURE.COMPLETED"
+        ? "New Payment"
+        : eventType === "PAYMENT.CAPTURE.REFUNDED"
+          ? "New Refund"
+          : undefined;
+    if (!title) return;
+
+    const resource = (body.event.resource as Record<string, unknown> | undefined) ?? {};
+    const resourceId = typeof resource.id === "string" ? resource.id : undefined;
+    const eventId = typeof body.event.id === "string" ? body.event.id : String(Date.now());
+
+    await this.dispatchPushTrigger({
+      app: "paypal",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${eventType}:${resourceId ?? eventId}`,
+      triggerPayload: resource,
+    });
+  }
+
+  /** The automation "Create Invoice" action for PayPal. */
+  async automationPayPalCreateInvoice(body: {
+    userId?: string;
+    email?: string;
+    amount?: number;
+    currency?: string;
+    description?: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getPayPalSecret(userId);
+    if (!secret) return { ok: false, error: "paypal_not_connected" };
+    if (!body.email) return { ok: false, error: "paypal_create_invoice_email_required" };
+    if (!body.amount) return { ok: false, error: "paypal_create_invoice_amount_required" };
+    try {
+      const invoice = await this.paypal.createInvoice(secret, {
+        email: body.email,
+        amount: body.amount,
+        currency: body.currency,
+        description: body.description,
+      });
+      return { ok: true, id: invoice.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "paypal_create_invoice_failed",
+      };
     }
   }
 

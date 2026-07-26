@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { logger } from "@heyriz/shared/logger";
 import type { PayPalConnectorSecret } from "./connector.types";
 
 const PAYPAL_API = "https://api-m.paypal.com";
@@ -75,5 +76,58 @@ export class PayPalService {
       fields: "transaction_info,payer_info",
     });
     return this.get(secret, `/v1/reporting/transactions?${params.toString()}`);
+  }
+
+  /**
+   * The automation "Create Invoice" action. Lower confidence than the rest
+   * of this file: PayPal's invoicing API is v2 (not v1, despite v1 hosting
+   * the reporting/oauth endpoints above), and creating a usable invoice is a
+   * two-step flow — POST /v2/invoicing/invoices makes a draft the recipient
+   * never sees, then POST .../send actually delivers it. This uses the
+   * smallest body PayPal's docs describe as sufficient (one line item, one
+   * recipient email) but hasn't been exercised against a live PayPal
+   * sandbox, so treat the exact required-field set as approximate.
+   */
+  async createInvoice(
+    secret: PayPalConnectorSecret,
+    input: { email: string; amount: number; currency?: string; description?: string },
+  ): Promise<{ id: string }> {
+    const token = await this.getAccessToken(secret);
+    const currency = input.currency || "USD";
+
+    const createRes = await fetch(`${PAYPAL_API}/v2/invoicing/invoices`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        detail: { currency_code: currency },
+        primary_recipients: [{ billing_info: { email_address: input.email } }],
+        items: [
+          {
+            name: input.description || "Invoice",
+            quantity: "1",
+            unit_amount: { currency_code: currency, value: input.amount.toFixed(2) },
+          },
+        ],
+      }),
+    });
+    if (!createRes.ok) throw new Error(`paypal_api_${createRes.status}`);
+    const created = (await createRes.json()) as { id?: string };
+    if (!created.id) throw new Error("paypal_create_invoice_no_id");
+
+    // Draft invoices are invisible to the recipient until sent explicitly —
+    // failing to send isn't treated as a hard failure, since the draft did
+    // get created and the id is still useful to the automation.
+    const sendRes = await fetch(`${PAYPAL_API}/v2/invoicing/invoices/${encodeURIComponent(created.id)}/send`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    });
+    if (!sendRes.ok) {
+      logger.warn("paypal invoice created but sending it to the recipient failed", {
+        invoiceId: created.id,
+        status: sendRes.status,
+      });
+    }
+
+    return { id: created.id };
   }
 }

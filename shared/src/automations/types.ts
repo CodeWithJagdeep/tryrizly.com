@@ -255,6 +255,10 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   jira: ["New Issue"],
   pagerduty: ["New Incident"],
   trello: ["New Card"],
+  // Polled (not a webhook — see AGENTS.md/the GitHub connector, which is a
+  // plain PAT with no webhook-registration flow) via SchedulerService's
+  // "github" branches.
+  github: ["New Pull Request", "New Issue", "New Push"],
   mongodb: ["New Document"],
   "google-drive": ["New File"],
   // Both poll a Sheet (the Forms trigger reads the form's own response

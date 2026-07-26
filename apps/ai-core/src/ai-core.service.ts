@@ -2595,6 +2595,50 @@ export class AiCoreService {
     }
   }
 
+  /**
+   * Backs the GitHub "New Issue" poll trigger for a configured repo. At the
+   * default 5-minute poll cadence a single flow makes ~12 calls/hour here —
+   * well under the 5,000/hour authenticated GitHub rate limit even with
+   * several flows sharing one token.
+   */
+  async automationGitHubListIssues(body: { userId?: string; repo: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, issues: [] };
+    try {
+      const issues = await this.github.listNewIssues(secret, body.repo, 20);
+      return { connected: true, issues };
+    } catch {
+      return { connected: false, issues: [] };
+    }
+  }
+
+  /** Backs the GitHub "New Pull Request" poll trigger for a configured repo. */
+  async automationGitHubListPullRequests(body: { userId?: string; repo: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, pullRequests: [] };
+    try {
+      const pullRequests = await this.github.listNewPullRequests(secret, body.repo, 20);
+      return { connected: true, pullRequests };
+    } catch {
+      return { connected: false, pullRequests: [] };
+    }
+  }
+
+  /** Backs the GitHub "New Push" poll trigger for a configured repo's default branch. */
+  async automationGitHubListCommits(body: { userId?: string; repo: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, commits: [] };
+    try {
+      const commits = await this.github.listNewCommits(secret, body.repo, 20);
+      return { connected: true, commits };
+    } catch {
+      return { connected: false, commits: [] };
+    }
+  }
+
   /** The automation "Create Page" action for Notion. */
   async automationNotionCreatePage(body: {
     userId?: string;

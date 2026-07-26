@@ -957,6 +957,95 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       newItems = (result.cards ?? [])
         .filter((c) => !seen.has(c.id))
         .map((c) => ({ itemId: c.id, payload: { ...c } }));
+    } else if (trigger.app === "github" && trigger.title === "New Issue") {
+      const repo = String(trigger.config?.repo ?? "").trim();
+      if (!repo) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          issues?: Array<{
+            number: number;
+            title: string;
+            html_url: string;
+            state: string;
+            created_at: string;
+            user?: { login?: string };
+          }>;
+        }>("automation.github.listNewIssues", { userId: flow.userId, repo }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.issues ?? [])
+        .filter((i) => !seen.has(String(i.number)))
+        .map((i) => ({
+          itemId: String(i.number),
+          payload: {
+            number: i.number,
+            title: i.title,
+            url: i.html_url,
+            state: i.state,
+            createdAt: i.created_at,
+            author: i.user?.login,
+          },
+        }));
+    } else if (trigger.app === "github" && trigger.title === "New Pull Request") {
+      const repo = String(trigger.config?.repo ?? "").trim();
+      if (!repo) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          pullRequests?: Array<{
+            number: number;
+            title: string;
+            html_url: string;
+            state: string;
+            created_at: string;
+            user?: { login?: string };
+          }>;
+        }>("automation.github.listNewPullRequests", { userId: flow.userId, repo }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.pullRequests ?? [])
+        .filter((p) => !seen.has(String(p.number)))
+        .map((p) => ({
+          itemId: String(p.number),
+          payload: {
+            number: p.number,
+            title: p.title,
+            url: p.html_url,
+            state: p.state,
+            createdAt: p.created_at,
+            author: p.user?.login,
+          },
+        }));
+    } else if (trigger.app === "github" && trigger.title === "New Push") {
+      // sha is omitted from the underlying request — GitHub defaults commit
+      // listing to the repo's default branch, so no separate lookup is needed.
+      const repo = String(trigger.config?.repo ?? "").trim();
+      if (!repo) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          commits?: Array<{
+            sha: string;
+            html_url: string;
+            commit: { message: string; author?: { name?: string; date?: string } };
+            author?: { login?: string } | null;
+          }>;
+        }>("automation.github.listNewCommits", { userId: flow.userId, repo }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.commits ?? [])
+        .filter((c) => !seen.has(c.sha))
+        .map((c) => ({
+          itemId: c.sha,
+          payload: {
+            sha: c.sha,
+            message: c.commit.message,
+            author: c.author?.login ?? c.commit.author?.name,
+            date: c.commit.author?.date,
+            url: c.html_url,
+          },
+        }));
     } else if (trigger.app === "mongodb") {
       const collection = String(trigger.config?.collection ?? "").trim();
       if (!collection) return;

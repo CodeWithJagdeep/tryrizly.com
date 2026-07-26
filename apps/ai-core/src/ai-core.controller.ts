@@ -752,6 +752,27 @@ export class AiCoreController {
     return this.aiCoreService.automationGitHubCreateIssue(payload);
   }
 
+  @MessagePattern("automation.github.listNewIssues")
+  automationGitHubListIssues(
+    @Payload() payload: { userId?: string; repo: string },
+  ) {
+    return this.aiCoreService.automationGitHubListIssues(payload);
+  }
+
+  @MessagePattern("automation.github.listNewPullRequests")
+  automationGitHubListPullRequests(
+    @Payload() payload: { userId?: string; repo: string },
+  ) {
+    return this.aiCoreService.automationGitHubListPullRequests(payload);
+  }
+
+  @MessagePattern("automation.github.listNewCommits")
+  automationGitHubListCommits(
+    @Payload() payload: { userId?: string; repo: string },
+  ) {
+    return this.aiCoreService.automationGitHubListCommits(payload);
+  }
+
   @MessagePattern("automation.notion.createPage")
   automationNotionCreatePage(
     @Payload()

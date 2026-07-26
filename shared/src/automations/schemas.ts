@@ -67,6 +67,22 @@ register("trigger", "discord", ["New Message"], z.object({
   channelName: z.string().trim().max(200).optional(),
   mode: z.enum(["notify", "summarize"]).default("notify"),
 }).strict());
+// No config needed — TelegramService resolves the exact userId from the
+// owner-linked chatId before this ever reaches a flow filter, unlike
+// Discord/Slack which need a channelId (or nothing at all matches).
+register("trigger", "telegram", ["New Message"], z.object({}).strict());
+// channelId only, mirroring Discord's trigger config exactly — matched by
+// exact-string equality in AiCoreService.slackChannelEvent, never resolved
+// via AI. No channelName field yet: unlike Discord there's no synced
+// channel catalog on the Slack side to resolve a typed name against, so the
+// flow builder has no picker for this — the raw channel ID must be entered
+// (or wired up later once such a resolver exists).
+register("trigger", "slack", ["New Message Posted to Channel"], z.object({
+  channelId: shortText,
+}).strict());
+// Workspace-wide for whichever of our users is linked into that Slack team —
+// no channelId to scope by, see AiCoreService.slackWorkspaceEvent.
+register("trigger", "slack", ["New Mention", "New Reaction Added"], z.object({}).strict());
 register("trigger", "shopify", ["New Order"], z.object({ account }).strict());
 register("trigger", "shopify", ["Low Inventory"], z.object({
   // Fires when available drops to or below this threshold; unset means "any decrease".

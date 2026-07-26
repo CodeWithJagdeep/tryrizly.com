@@ -1246,6 +1246,34 @@ export class AiCoreService {
   }
 
   /**
+   * Telegram "New Message" — unlike Discord's channel-based dispatch,
+   * Telegram already knows the exact userId via the owner-linked chatId
+   * (resolved in gateway's TelegramService before this call), so there's no
+   * flow-matching-by-channel step: just filter this one user's active flows.
+   */
+  async telegramMessageEvent(body: {
+    userId: string;
+    chatId: string;
+    messageId: string;
+    text: string;
+  }): Promise<void> {
+    if (!body.userId || !body.text.trim()) return;
+
+    await this.dispatchPushTrigger({
+      app: "telegram",
+      title: "New Message",
+      userIds: [body.userId],
+      triggerItemId: body.messageId,
+      triggerPayload: {
+        chatId: body.chatId,
+        messageId: body.messageId,
+        text: body.text,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+
+  /**
    * Push counterpart to SchedulerService.pollOneAutomation for the "New
    * Comment" Notion trigger — gateway's webhook receiver already verified
    * the signature before forwarding here. Resolves which of our users have
@@ -2051,6 +2079,94 @@ export class AiCoreService {
         });
       }
     }
+  }
+
+  /**
+   * Slack "New Message Posted to Channel" — mirrors discordChannelEvent
+   * exactly: matched by exact channelId equality against the flow's trigger
+   * config, no userId scoping needed (the channelId already pins the flow
+   * to whichever workspace/user created it). Requires the new
+   * channels:history/channels:read scopes plus a message.channels Event
+   * Subscription on the Slack app — see SLACK_SURFACE_BOT_SCOPES's comment.
+   */
+  async slackChannelEvent(body: {
+    teamId: string;
+    channelId: string;
+    userId: string;
+    text: string;
+    messageId: string;
+  }): Promise<void> {
+    if (!body.channelId || !body.text.trim()) return;
+
+    const result = await gatewayInternalFetch<{ flows?: AutomationFlow[] }>(
+      "/api/automations/_internal/active",
+    );
+    const flows = (result?.flows ?? []).filter((flow) => {
+      const trigger = flow.steps[0];
+      return (
+        trigger?.kind === "trigger" &&
+        trigger.app === "slack" &&
+        trigger.title === "New Message Posted to Channel" &&
+        trigger.config?.channelId === body.channelId
+      );
+    });
+    if (flows.length === 0) return;
+
+    for (const flow of flows) {
+      try {
+        await enqueueAutomationRun({
+          flowId: flow.id,
+          userId: flow.userId,
+          triggerItemId: body.messageId,
+          triggerPayload: {
+            teamId: body.teamId,
+            channelId: body.channelId,
+            slackUserId: body.userId,
+            text: body.text,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch (error) {
+        logger.warn("slack channel event: enqueue failed", {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  /**
+   * Slack "New Mention" / "New Reaction Added" — no channelId to match on,
+   * so scoping happens by userId instead: gateway's SlackSocketService
+   * already resolved which of our users are linked into this team (it owns
+   * slack_links, ai-core doesn't), and passes them in as userIds.
+   */
+  async slackWorkspaceEvent(body: {
+    title: "New Mention" | "New Reaction Added";
+    teamId: string;
+    userIds: string[];
+    channelId: string;
+    userId: string;
+    text?: string;
+    reaction?: string;
+    messageId: string;
+  }): Promise<void> {
+    if (body.userIds.length === 0) return;
+
+    await this.dispatchPushTrigger({
+      app: "slack",
+      title: body.title,
+      userIds: body.userIds,
+      triggerItemId: body.messageId,
+      triggerPayload: {
+        teamId: body.teamId,
+        channelId: body.channelId,
+        slackUserId: body.userId,
+        text: body.text,
+        reaction: body.reaction,
+        timestamp: new Date().toISOString(),
+      },
+    });
   }
 
   /**

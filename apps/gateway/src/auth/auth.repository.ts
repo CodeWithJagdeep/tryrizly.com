@@ -538,6 +538,22 @@ export class AuthRepository {
     return records.map((r) => ({ slackKey: r.slackKey, userId: r.userId, dmChannelId: r.dmChannelId }));
   }
 
+  /**
+   * Every one of our userIds linked into a given Slack workspace — used to
+   * scope workspace-wide triggers ("New Mention", "New Reaction Added") that
+   * have no channelId to match on. slackKey is `teamId:slackUserId`, so a
+   * prefix match finds every user linked to that team (multiple users can
+   * share one workspace once the bot's installed there).
+   */
+  async findUserIdsByTeamId(teamId: string): Promise<string[]> {
+    const db = await getDb();
+    const records = await db
+      .collection<{ slackKey: string; userId: string }>("slack_links")
+      .find({ slackKey: { $regex: `^${teamId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:` } })
+      .toArray();
+    return [...new Set(records.map((r) => r.userId))];
+  }
+
   /** Web Push subscriptions — fallback notification channel for users without Telegram. */
   async savePushSubscription(
     userId: string,

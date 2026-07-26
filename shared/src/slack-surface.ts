@@ -253,8 +253,28 @@ export async function transcribeSlackAudio(
  * files:read is required to download voice-note audio from url_private —
  * workspaces installed before this scope was added must reauthorize
  * ("Add to Slack" again) for voice notes to work; text chat is unaffected.
+ *
+ * channels:history / channels:read / reactions:read / app_mentions:read were
+ * added for the channel-based triggers ("New Message Posted to Channel",
+ * "New Mention", "New Reaction Added"). ANY workspace installed before this
+ * change has a bot token without these scopes — those channel triggers will
+ * silently never fire until that workspace's admin reauthorizes via "Add to
+ * Slack" again. Scopes alone aren't enough either: the Slack app's own Event
+ * Subscriptions (api.slack.com/apps → your app → Event Subscriptions →
+ * Subscribe to bot events) must ALSO add message.channels, app_mention, and
+ * reaction_added, or Socket Mode never delivers these events regardless of
+ * scope — that's a dashboard change, not something this code change does.
  */
-export const SLACK_SURFACE_BOT_SCOPES = ["chat:write", "im:history", "im:write", "files:read"] as const;
+export const SLACK_SURFACE_BOT_SCOPES = [
+  "chat:write",
+  "im:history",
+  "im:write",
+  "files:read",
+  "channels:history",
+  "channels:read",
+  "reactions:read",
+  "app_mentions:read",
+] as const;
 
 /**
  * The "Add to Slack" authorize URL. `state` carries the account link token so

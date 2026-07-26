@@ -355,6 +355,57 @@ export class ConnectorRepository implements OnModuleDestroy {
     return result.rows;
   }
 
+  /**
+   * Generic cross-user lookup by a metadata field — the webhook counterpart
+   * to findAllByProviderAndWorkspace for providers keyed by something other
+   * than "workspaceId" (Shopify's shop domain, Figma's team id, etc).
+   */
+  async findAllByProviderAndMetadataField(
+    provider: ConnectorProvider,
+    field: string,
+    value: string,
+  ): Promise<ConnectedAccount[]> {
+    if (!this.pool) {
+      return [...inMemoryAccounts.values()].filter(
+        (a) => a.provider === provider && (a.metadata?.[field] as string | undefined) === value,
+      );
+    }
+
+    await this.ensureTable();
+    const result = await this.pool.query<ConnectedAccount>(
+      `
+      select
+        id, user_id as "userId", provider, auth_type as "authType", label, status,
+        encrypted_payload as "encryptedPayload", scopes, metadata,
+        created_at as "createdAt", updated_at as "updatedAt"
+      from connected_accounts
+      where provider = $1 and metadata->>$2 = $3
+      `,
+      [provider, field, value],
+    );
+    return result.rows;
+  }
+
+  /** All connected accounts for a provider, across every user — for verify-by-trying-each-secret webhook flows (e.g. UptimeRobot). */
+  async findAllByProvider(provider: ConnectorProvider): Promise<ConnectedAccount[]> {
+    if (!this.pool) {
+      return [...inMemoryAccounts.values()].filter((a) => a.provider === provider && a.status === "connected");
+    }
+    await this.ensureTable();
+    const result = await this.pool.query<ConnectedAccount>(
+      `
+      select
+        id, user_id as "userId", provider, auth_type as "authType", label, status,
+        encrypted_payload as "encryptedPayload", scopes, metadata,
+        created_at as "createdAt", updated_at as "updatedAt"
+      from connected_accounts
+      where provider = $1 and status = 'connected'
+      `,
+      [provider],
+    );
+    return result.rows;
+  }
+
   /** Find all accounts for a given provider (e.g. multiple Postgres connections). */
   async findAll(
     userId: string,

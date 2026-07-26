@@ -22,6 +22,7 @@ import { GitHubService } from "./connectors/github.service";
 import { MpesaService } from "./connectors/mpesa.service";
 import { DiscordService } from "./connectors/discord.service";
 import { JiraService } from "./connectors/jira.service";
+import { CalendlyService } from "./connectors/calendly.service";
 import { PagerDutyService } from "./connectors/pagerduty.service";
 import { TrelloService } from "./connectors/trello.service";
 import { AirtableService } from "./connectors/airtable.service";
@@ -117,6 +118,7 @@ import { PromptAssemblerService } from "./prompt/prompt-assembler.service";
     MpesaService,
     DiscordService,
     JiraService,
+    CalendlyService,
     PagerDutyService,
     TrelloService,
     AirtableService,

@@ -39,6 +39,17 @@ import {
   type PubSubPushEnvelope,
 } from "./gmail-push-auth.service";
 import { NotionWebhookAuthService } from "./notion-webhook-auth.service";
+import { ShopifyWebhookAuthService } from "./shopify-webhook-auth.service";
+import { CalendlyWebhookAuthService } from "./calendly-webhook-auth.service";
+import { TypeformWebhookAuthService } from "./typeform-webhook-auth.service";
+import { LemonSqueezyWebhookAuthService } from "./lemonsqueezy-webhook-auth.service";
+import { DropboxWebhookAuthService } from "./dropbox-webhook-auth.service";
+import { FigmaWebhookAuthService } from "./figma-webhook-auth.service";
+import { QuickBooksWebhookAuthService } from "./quickbooks-webhook-auth.service";
+import { XeroWebhookAuthService } from "./xero-webhook-auth.service";
+import { WiseWebhookAuthService } from "./wise-webhook-auth.service";
+import { DeelWebhookAuthService } from "./deel-webhook-auth.service";
+import { BoxWebhookAuthService } from "./box-webhook-auth.service";
 import { logger } from "@heyriz/shared/logger";
 
 type ProxyPayload = Record<string, unknown>;
@@ -94,6 +105,28 @@ export class GatewayController {
     private readonly gmailPushAuth: GmailPushAuthService,
     @Inject(NotionWebhookAuthService)
     private readonly notionWebhookAuth: NotionWebhookAuthService,
+    @Inject(ShopifyWebhookAuthService)
+    private readonly shopifyWebhookAuth: ShopifyWebhookAuthService,
+    @Inject(CalendlyWebhookAuthService)
+    private readonly calendlyWebhookAuth: CalendlyWebhookAuthService,
+    @Inject(TypeformWebhookAuthService)
+    private readonly typeformWebhookAuth: TypeformWebhookAuthService,
+    @Inject(LemonSqueezyWebhookAuthService)
+    private readonly lemonSqueezyWebhookAuth: LemonSqueezyWebhookAuthService,
+    @Inject(DropboxWebhookAuthService)
+    private readonly dropboxWebhookAuth: DropboxWebhookAuthService,
+    @Inject(FigmaWebhookAuthService)
+    private readonly figmaWebhookAuth: FigmaWebhookAuthService,
+    @Inject(QuickBooksWebhookAuthService)
+    private readonly quickBooksWebhookAuth: QuickBooksWebhookAuthService,
+    @Inject(XeroWebhookAuthService)
+    private readonly xeroWebhookAuth: XeroWebhookAuthService,
+    @Inject(WiseWebhookAuthService)
+    private readonly wiseWebhookAuth: WiseWebhookAuthService,
+    @Inject(DeelWebhookAuthService)
+    private readonly deelWebhookAuth: DeelWebhookAuthService,
+    @Inject(BoxWebhookAuthService)
+    private readonly boxWebhookAuth: BoxWebhookAuthService,
   ) {}
 
   @Post("api/public/rate-limit")
@@ -851,6 +884,9 @@ export class GatewayController {
     @Query("returnTo") returnTo: string | undefined,
     @Query("region") region: string | undefined,
     @Query("scopeProfile") scopeProfile: string | undefined,
+    @Query("shopDomain") shopDomain: string | undefined,
+    @Query("teamId") teamId: string | undefined,
+    @Query("folderId") folderId: string | undefined,
   ) {
     this.requireInternal(secret);
     const oauthProvider = this.requireConnectorOAuthProvider(provider);
@@ -864,6 +900,9 @@ export class GatewayController {
       returnTo,
       calComRegion: region === "eu" ? "eu" : undefined,
       scopeProfile: scopeProfile === "automation" ? "automation" : undefined,
+      shopDomain,
+      teamId,
+      folderId,
     });
   }
 
@@ -1027,6 +1066,423 @@ export class GatewayController {
     return { ok: true };
   }
 
+  /** Shopify order/inventory pushes. See ShopifyWebhookAuthService for the HMAC check. */
+  @Post("api/connectors/shopify/webhook")
+  @HttpCode(200)
+  async shopifyWebhook(
+    @Headers("x-shopify-hmac-sha256") hmac: string | undefined,
+    @Headers("x-shopify-shop-domain") shopDomain: string | undefined,
+    @Headers("x-shopify-topic") topic: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody || !shopDomain || !topic) return { ok: true };
+    if (!this.shopifyWebhookAuth.verify(request.rawBody, hmac)) return { ok: true };
+
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(request.rawBody.toString("utf8"));
+    } catch {
+      return { ok: true };
+    }
+    this.gatewayService.sendToAiCore("connector.shopify.webhook", { topic, shopDomain, payload }).catch((error) => {
+      logger.warn("shopify webhook forward to ai-core failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    return { ok: true };
+  }
+
+  /** Calendly booking created/cancelled pushes. See CalendlyWebhookAuthService. */
+  @Post("api/connectors/calendly/webhook")
+  @HttpCode(200)
+  async calendlyWebhook(
+    @Headers("calendly-webhook-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const body = await this.calendlyWebhookAuth.handle(request.rawBody, signature);
+    if (body) {
+      const event = typeof body.event === "string" ? body.event : "";
+      const payload = (body.payload as Record<string, unknown> | undefined) ?? {};
+      this.gatewayService.sendToAiCore("connector.calendly.webhook", { event, payload }).catch((error) => {
+        logger.warn("calendly webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
+  }
+
+  /** Typeform "New Submission" pushes. See TypeformWebhookAuthService. */
+  @Post("api/connectors/typeform/webhook")
+  @HttpCode(200)
+  async typeformWebhook(
+    @Headers("typeform-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const body = await this.typeformWebhookAuth.handle(request.rawBody, signature);
+    if (body) {
+      const formResponse = (body.form_response as Record<string, unknown> | undefined) ?? {};
+      this.gatewayService.sendToAiCore("connector.typeform.webhook", { formResponse }).catch((error) => {
+        logger.warn("typeform webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Gumroad "New Sale" pings — unsigned by design. ai-core is the one that
+   * confirms seller_id matches a connected account before dispatching, so
+   * this just forwards the parsed body; @Body() works here because Gumroad
+   * posts application/x-www-form-urlencoded, which Nest's default body
+   * parser still decodes into a plain object.
+   */
+  @Post("api/connectors/gumroad/webhook")
+  @HttpCode(200)
+  async gumroadWebhook(@Body() body: Record<string, unknown>): Promise<{ ok: true }> {
+    this.gatewayService.sendToAiCore("connector.gumroad.webhook", body).catch((error) => {
+      logger.warn("gumroad webhook forward to ai-core failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    return { ok: true };
+  }
+
+  /** Lemon Squeezy "New Sale" pushes. See LemonSqueezyWebhookAuthService. */
+  @Post("api/connectors/lemonsqueezy/webhook")
+  @HttpCode(200)
+  async lemonSqueezyWebhook(
+    @Headers("x-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.lemonSqueezyWebhookAuth.handle(request.rawBody, signature);
+    if (result) {
+      this.gatewayService
+        .sendToAiCore("connector.lemonsqueezy.webhook", { storeId: result.storeId, payload: result.body })
+        .catch((error) => {
+          logger.warn("lemon squeezy webhook forward to ai-core failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Dropbox's webhook lifecycle also has two phases, like Notion's, but the
+   * verification step is a plain GET echo instead of a manual dashboard
+   * paste: Dropbox calls this with ?challenge=X once at registration and the
+   * response body must be that exact string, verbatim, with no wrapping.
+   */
+  @Get("api/connectors/dropbox/webhook")
+  dropboxWebhookChallenge(
+    @Query("challenge") challenge: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    res.status(200).send(challenge ?? "");
+  }
+
+  @Post("api/connectors/dropbox/webhook")
+  @HttpCode(200)
+  async dropboxWebhook(
+    @Headers("x-dropbox-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody || !this.dropboxWebhookAuth.verify(request.rawBody, signature)) {
+      return { ok: true };
+    }
+    let body: { list_folder?: { accounts?: string[] } };
+    try {
+      body = JSON.parse(request.rawBody.toString("utf8"));
+    } catch {
+      return { ok: true };
+    }
+    const accountIds = body.list_folder?.accounts ?? [];
+    if (accountIds.length > 0) {
+      this.gatewayService.sendToAiCore("connector.dropbox.webhook", { accountIds }).catch((error) => {
+        logger.warn("dropbox webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return { ok: true };
+  }
+
+  /** Figma "New Comment" pushes. See FigmaWebhookAuthService. */
+  @Post("api/connectors/figma/webhook")
+  @HttpCode(200)
+  async figmaWebhook(
+    @Headers("x-figma-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.figmaWebhookAuth.handle(request.rawBody, signature);
+    if (result) {
+      this.gatewayService
+        .sendToAiCore("connector.figma.webhook", { teamId: result.teamId, payload: result.body })
+        .catch((error) => {
+          logger.warn("figma webhook forward to ai-core failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+    return { ok: true };
+  }
+
+  /**
+   * QuickBooks (Intuit) webhook — signed with the app-level verifier token
+   * (INTUIT_WEBHOOK_VERIFIER_TOKEN), not a per-connection secret. See
+   * QuickBooksWebhookAuthService.
+   */
+  @Post("api/connectors/quickbooks/webhook")
+  @HttpCode(200)
+  async quickBooksWebhook(
+    @Headers("intuit-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody || !this.quickBooksWebhookAuth.verify(request.rawBody, signature)) {
+      return { ok: true };
+    }
+    let body: {
+      eventNotifications?: Array<{
+        realmId?: string;
+        dataChangeEvent?: { entities?: Array<{ name?: string; id?: string; operation?: string }> };
+      }>;
+    };
+    try {
+      body = JSON.parse(request.rawBody.toString("utf8"));
+    } catch {
+      return { ok: true };
+    }
+    this.gatewayService
+      .sendToAiCore("connector.quickbooks.webhook", { notifications: body.eventNotifications ?? [] })
+      .catch((error) => {
+        logger.warn("quickbooks webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
+  /**
+   * Xero webhook — both the "intent to receive" handshake ping (empty
+   * events[]) and real events land here; XeroWebhookAuthService enforces the
+   * 401-on-bad-signature rule the handshake specifically requires.
+   */
+  @Post("api/connectors/xero/webhook")
+  @HttpCode(200)
+  async xeroWebhook(
+    @Headers("x-xero-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+    @Res() res: RedirectResponse,
+  ): Promise<void> {
+    if (!request.rawBody) {
+      res.status(401).send("");
+      return;
+    }
+    const body = this.xeroWebhookAuth.verify(request.rawBody, signature);
+    if (!body) {
+      res.status(401).send("");
+      return;
+    }
+    const events = (body.events as Array<Record<string, unknown>> | undefined) ?? [];
+    if (events.length > 0) {
+      this.gatewayService.sendToAiCore("connector.xero.webhook", { events }).catch((error) => {
+        logger.warn("xero webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    res.status(200).send("");
+  }
+
+  /** Wise "New Transaction" pushes. See WiseWebhookAuthService (RSA, not HMAC). */
+  @Post("api/connectors/wise/webhook")
+  @HttpCode(200)
+  async wiseWebhook(
+    @Headers("x-signature-sha256") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody || !(await this.wiseWebhookAuth.verify(request.rawBody, signature))) {
+      return { ok: true };
+    }
+    let body: { data?: { resource?: { profile_id?: number; account_id?: number } }; event_type?: string };
+    try {
+      body = JSON.parse(request.rawBody.toString("utf8"));
+    } catch {
+      return { ok: true };
+    }
+    if (body.event_type !== "balances#credit") return { ok: true };
+    this.gatewayService
+      .sendToAiCore("connector.wise.webhook", {
+        profileId: body.data?.resource?.profile_id != null ? String(body.data.resource.profile_id) : undefined,
+        payload: body,
+      })
+      .catch((error) => {
+        logger.warn("wise webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
+  @Post("api/connectors/deel/webhook")
+  @HttpCode(200)
+  async deelWebhook(
+    @Headers("x-deel-signature") signature: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    let body: { event?: string; data?: Record<string, unknown>; meta?: { organization_id?: string } };
+    try {
+      body = JSON.parse(request.rawBody.toString("utf8"));
+    } catch {
+      return { ok: true };
+    }
+    const organizationId = body.meta?.organization_id;
+    if (!organizationId || !(await this.deelWebhookAuth.verify(request.rawBody, signature, organizationId))) {
+      return { ok: true };
+    }
+    this.gatewayService
+      .sendToAiCore("connector.deel.webhook", { event: body.event, data: body.data ?? {}, organizationId })
+      .catch((error) => {
+        logger.warn("deel webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
+  /** Box "File Changed" pushes. See BoxWebhookAuthService (two rotating signing keys + replay window). */
+  @Post("api/connectors/box/webhook")
+  @HttpCode(200)
+  async boxWebhook(
+    @Headers("box-signature-primary") primarySignature: string | undefined,
+    @Headers("box-signature-secondary") secondarySignature: string | undefined,
+    @Headers("box-delivery-timestamp") deliveryTimestamp: string | undefined,
+    @Req() request: { rawBody?: Buffer },
+  ): Promise<{ ok: true }> {
+    if (!request.rawBody) return { ok: true };
+    const result = await this.boxWebhookAuth.handle(request.rawBody, primarySignature, secondarySignature, deliveryTimestamp);
+    if (result) {
+      const trigger = typeof result.body.trigger === "string" ? result.body.trigger : undefined;
+      if (trigger === "FILE.UPLOADED") {
+        this.gatewayService
+          .sendToAiCore("connector.box.webhook", { folderId: result.folderId, payload: result.body })
+          .catch((error) => {
+            logger.warn("box webhook forward to ai-core failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+      }
+    }
+    return { ok: true };
+  }
+
+  /** Statuspage "New Incident"/"Incident Update" pushes — no signature support, secret is a query param like UptimeRobot. */
+  @Post("api/connectors/statuspage/webhook")
+  @HttpCode(200)
+  async statuspageWebhook(
+    @Query("secret") secret: string | undefined,
+    @Body() body: { incident?: { id?: string; status?: string; name?: string } },
+  ): Promise<{ ok: true }> {
+    if (!secret || !body.incident?.id || !body.incident.status) return { ok: true };
+    const userId = await this.gatewayService
+      .sendToAiCore<string | undefined>("connector.statuspage.resolveSecret", { secret })
+      .catch(() => undefined);
+    if (!userId) {
+      logger.warn("statuspage webhook: secret did not match a connected account; dropping");
+      return { ok: true };
+    }
+    this.gatewayService
+      .sendToAiCore("connector.statuspage.webhook", {
+        userId,
+        incidentId: body.incident.id,
+        status: body.incident.status,
+        name: body.incident.name,
+      })
+      .catch((error) => {
+        logger.warn("statuspage webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
+  /** Better Stack "Incident Started"/"Incident Resolved" pushes — no signature support, secret is a query param like UptimeRobot. */
+  @Post("api/connectors/betterstack/webhook")
+  @HttpCode(200)
+  async betterStackWebhook(
+    @Query("secret") secret: string | undefined,
+    @Body() body: { incident?: { id?: string; status?: string; name?: string } },
+  ): Promise<{ ok: true }> {
+    if (!secret || !body.incident?.id || !body.incident.status) return { ok: true };
+    const userId = await this.gatewayService
+      .sendToAiCore<string | undefined>("connector.betterstack.resolveSecret", { secret })
+      .catch(() => undefined);
+    if (!userId) {
+      logger.warn("betterstack webhook: secret did not match a connected account; dropping");
+      return { ok: true };
+    }
+    this.gatewayService
+      .sendToAiCore("connector.betterstack.webhook", {
+        userId,
+        incidentId: body.incident.id,
+        status: body.incident.status,
+        name: body.incident.name,
+      })
+      .catch((error) => {
+        logger.warn("betterstack webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
+  /**
+   * UptimeRobot has no HMAC signing at all — the query-param secret the user
+   * pastes into their Alert Contact URL is both identity and verification.
+   * ai-core resolves it against every connected account's stored
+   * webhookSecret (safeEqual) and returns the owning userId, or nothing.
+   */
+  @Post("api/connectors/uptimerobot/webhook")
+  @HttpCode(200)
+  async uptimeRobotWebhook(
+    @Query("secret") secret: string | undefined,
+    @Body()
+    body: {
+      monitorID?: string;
+      monitorFriendlyName?: string;
+      alertTypeFriendlyName?: string;
+    },
+  ): Promise<{ ok: true }> {
+    if (!secret || !body.monitorID || !body.alertTypeFriendlyName) return { ok: true };
+    const userId = await this.gatewayService
+      .sendToAiCore<string | undefined>("connector.uptimerobot.resolveSecret", { secret })
+      .catch(() => undefined);
+    if (!userId) {
+      logger.warn("uptimerobot webhook: secret did not match a connected account; dropping");
+      return { ok: true };
+    }
+    this.gatewayService
+      .sendToAiCore("connector.uptimerobot.webhook", {
+        userId,
+        monitorId: body.monitorID,
+        monitorFriendlyName: body.monitorFriendlyName,
+        alertTypeFriendlyName: body.alertTypeFriendlyName,
+      })
+      .catch((error) => {
+        logger.warn("uptimerobot webhook forward to ai-core failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return { ok: true };
+  }
+
   @Get("api/connectors/github/callback")
   async completeGitHubConnectorOAuth(
     @Query("code") code: string,
@@ -1089,16 +1545,275 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/shopify/callback")
+  async completeShopifyConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("shop") shop: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (!code || !shop) {
+      res.status(400).send("Missing Shopify OAuth code or shop");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "shopify"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/dropbox/callback")
+  async completeDropboxConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Dropbox OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "dropbox"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/figma/callback")
+  async completeFigmaConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Figma OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "figma"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  /** Intuit returns realmId (the company id) as its own callback query param, separate from code/state. */
+  @Get("api/connectors/quickbooks/callback")
+  async completeQuickBooksConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("realmId") realmId: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code || !realmId) {
+      res.status(400).send("Missing QuickBooks OAuth code or realmId");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state, realmId });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "quickbooks"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/xero/callback")
+  async completeXeroConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Xero OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "xero"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/deel/callback")
+  async completeDeelConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Deel OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "deel"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/box/callback")
+  async completeBoxConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Box OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "box"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/jira/callback")
+  async completeJiraConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Jira OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "jira"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
+  @Get("api/connectors/calendly/callback")
+  async completeCalendlyConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Calendly OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "calendly"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   private requireConnectorOAuthProvider(
     provider: string,
-  ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" {
+  ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" | "shopify" | "dropbox" | "figma" | "quickbooks" | "xero" | "deel" | "box" | "jira" | "calendly" {
     if (
       provider === "gmail" ||
       provider === "calendar" ||
       provider === "calcom" ||
       provider === "notion" ||
       provider === "github" ||
-      provider === "stripe"
+      provider === "stripe" ||
+      provider === "shopify" ||
+      provider === "dropbox" ||
+      provider === "figma" ||
+      provider === "quickbooks" ||
+      provider === "xero" ||
+      provider === "deel" ||
+      provider === "box" ||
+      provider === "jira" ||
+      provider === "calendly"
     ) {
       return provider;
     }

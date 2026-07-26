@@ -794,6 +794,28 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       newItems = (result.events ?? [])
         .filter((e) => e.hangoutLink && !seen.has(e.id))
         .map((e) => ({ itemId: e.id, payload: { ...e } }));
+    } else if (trigger.app === "bamboohr" && trigger.title === "New Time Off Request") {
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          requests?: Array<{ id: string; [key: string]: unknown }>;
+        }>("automation.bamboohr.listTimeOffRequests", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.requests ?? [])
+        .filter((r) => !seen.has(r.id))
+        .map((r) => ({ itemId: r.id, payload: { ...r } }));
+    } else if (trigger.app === "bamboohr" && trigger.title === "New Hire") {
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          employees?: Array<{ id: string; [key: string]: unknown }>;
+        }>("automation.bamboohr.listNewHires", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.employees ?? [])
+        .filter((e) => !seen.has(e.id))
+        .map((e) => ({ itemId: e.id, payload: { ...e } }));
     } else {
       return;
     }

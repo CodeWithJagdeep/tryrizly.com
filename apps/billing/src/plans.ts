@@ -10,18 +10,18 @@ export function billingPlans(): BillingPlan[] {
       id: "free",
       name: "Free",
       kind: "free",
-      // Not a marketed/selectable plan — this is the internal fallback state
-      // for an account with no active trial/subscription/purchase (post-trial
-      // floor, or pre-trial before signup completes). requirePlan("free") in
-      // billing.service.ts depends on this entry existing; don't remove it.
-      description: "Upgrade required after the trial ends.",
+      // Real marketed tier (web/app/components/PricingCards.tsx) as well as
+      // the fallback state for an account with no active trial/subscription/
+      // purchase. requirePlan("free") in billing.service.ts depends on this
+      // entry existing; don't remove it.
+      description: "Try Rizly with a small number of automations, on us.",
       currency,
       amount: 0,
       trialDays: 0,
       aiBudgetUsd: PLAN_AI_BUDGETS.free,
       credits: PLAN_CREDITS.free,
       seats: 1,
-      features: ["Upgrade required"],
+      features: ["5 automations", "Basic AI (limited credits/month)", "Telegram & Slack delivery"],
     },
     {
       id: "starter",

@@ -29,6 +29,32 @@ describe("SkillRouterService", () => {
     expect(llmCalls).toBe(0);
   });
 
+  it("routes a Jira/Airtable question to connected_sources without an LLM call", async () => {
+    let llmCalls = 0;
+    const registry = new AgentSkillRegistryService();
+    const router = new SkillRouterService(
+      registry,
+      {
+        hasProvider: () => true,
+        complete: async () => {
+          llmCalls += 1;
+          return '{"skill_ids":[]}';
+        },
+      } as never,
+    );
+
+    const route = await router.route({
+      userId: "u1",
+      message: "Any open Jira issues assigned to me, and what's new in Airtable?",
+    });
+
+    expect(route.skillIds).toEqual(expect.arrayContaining(["connected_sources"]));
+    expect(route.toolNames).toEqual(
+      expect.arrayContaining(["jira_search", "airtable_records"]),
+    );
+    expect(llmCalls).toBe(0);
+  });
+
   it("inherits capabilities from recent history for an ambiguous follow-up", async () => {
     const registry = new AgentSkillRegistryService();
     const router = new SkillRouterService(

@@ -55,6 +55,9 @@ const ALL_TOOL_NAMES = [
   "slack_briefing",
   "discord_send",
   "source_updates",
+  "airtable_records",
+  "jira_search",
+  "calendly_events",
   "business_snapshot",
   "memory_recall",
   "remember_fact",
@@ -156,7 +159,7 @@ const SKILLS: readonly AgentSkill[] = [
     id: "connected_sources",
     version: 1,
     description:
-      "Connector status and live updates from Slack, Notion, GitHub, Discord, and multiple connected sources.",
+      "Connector status and live updates from Slack, Notion, GitHub, Discord, Airtable, Jira, Calendly, and multiple connected sources.",
     tools: [
       "connector_status",
       "github_briefing",
@@ -164,6 +167,9 @@ const SKILLS: readonly AgentSkill[] = [
       "slack_briefing",
       "discord_send",
       "source_updates",
+      "airtable_records",
+      "jira_search",
+      "calendly_events",
     ],
     contextScopes: ["connectors"],
     instructions: [
@@ -171,6 +177,7 @@ const SKILLS: readonly AgentSkill[] = [
       "For ambiguous latest/changed/announcement questions, use source_updates across plausible connected sources and compare timestamps.",
       "Report decisions, blockers, deadlines, requested actions, freshness, links, and coverage gaps. Do not imply inaccessible sources were searched.",
       "discord_send is an external write and requires exact approval.",
+      "airtable_records needs a base id and table name — ask for them if not already known. jira_search defaults to the principal's own unresolved issues when given no arguments. calendly_events defaults to upcoming bookings; pass status 'canceled' only when asked about cancellations.",
     ].join("\n"),
   },
   {

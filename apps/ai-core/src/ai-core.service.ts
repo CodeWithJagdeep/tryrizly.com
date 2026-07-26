@@ -945,6 +945,54 @@ export class AiCoreService {
   }
 
   /**
+   * Shared fan-out for every push/webhook-only trigger (Notion, Discord, and
+   * the Shopify/Calendly/Typeform/Gumroad/Lemon Squeezy/Dropbox/Figma/
+   * UptimeRobot receivers below): given the userIds a webhook already
+   * resolved to, find their active flows whose trigger matches app+title and
+   * enqueue a run per flow. Idempotency is the caller's job (triggerItemId).
+   */
+  private async dispatchPushTrigger(input: {
+    app: string;
+    title: string;
+    userIds: string[];
+    triggerItemId: string;
+    triggerPayload: Record<string, unknown>;
+  }): Promise<void> {
+    if (input.userIds.length === 0) return;
+
+    const result = await gatewayInternalFetch<{ flows?: AutomationFlow[] }>(
+      "/api/automations/_internal/active",
+    );
+    const userIdSet = new Set(input.userIds);
+    const flows = (result?.flows ?? []).filter((flow) => {
+      const trigger = flow.steps[0];
+      return (
+        userIdSet.has(flow.userId) &&
+        trigger?.kind === "trigger" &&
+        trigger.app === input.app &&
+        trigger.title === input.title
+      );
+    });
+    if (flows.length === 0) return;
+
+    for (const flow of flows) {
+      try {
+        await enqueueAutomationRun({
+          flowId: flow.id,
+          userId: flow.userId,
+          triggerItemId: input.triggerItemId,
+          triggerPayload: input.triggerPayload,
+        });
+      } catch (error) {
+        logger.warn(`${input.app} webhook: enqueue failed`, {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  /**
    * Push counterpart to SchedulerService.pollOneAutomation for the "New
    * Comment" Notion trigger — gateway's webhook receiver already verified
    * the signature before forwarding here. Resolves which of our users have
@@ -1000,6 +1048,586 @@ export class AiCoreService {
         });
       } catch (error) {
         logger.warn("notion webhook: enqueue failed", {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  /** Thin passthroughs so gateway's webhook controllers can verify a signature/secret before this service resolves+dispatches the event — see connector.service.ts for the actual lookups. */
+  resolveUptimeRobotWebhookSecret(secret: string) {
+    return this.connectorService.resolveUptimeRobotWebhookSecret(secret);
+  }
+
+  getLemonSqueezyWebhookSecret(storeId: string) {
+    return this.connectorService.getLemonSqueezyWebhookSecret(storeId);
+  }
+
+  getFigmaWebhookPasscode(teamId: string) {
+    return this.connectorService.getFigmaWebhookPasscode(teamId);
+  }
+
+  getDeelSigningKey(organizationId: string) {
+    return this.connectorService.getDeelSigningKey(organizationId);
+  }
+
+  getBoxSignatureKeys(folderId: string) {
+    return this.connectorService.getBoxSignatureKeys(folderId);
+  }
+
+  resolveStatuspageWebhookSecret(secret: string) {
+    return this.connectorService.resolveStatuspageWebhookSecret(secret);
+  }
+
+  resolveBetterStackWebhookSecret(secret: string) {
+    return this.connectorService.resolveBetterStackWebhookSecret(secret);
+  }
+
+  getCalendlySigningKey(organizationUri: string) {
+    return this.connectorService.getCalendlySigningKey(organizationUri);
+  }
+
+  getTypeformWebhookSecret(formId: string) {
+    return this.connectorService.getTypeformWebhookSecret(formId);
+  }
+
+  /** Shopify "New Order" / "Low Inventory" — gateway already verified X-Shopify-Hmac-Sha256 before forwarding. */
+  async shopifyWebhookEvent(body: {
+    topic: string;
+    shopDomain: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    const userIds = await this.connectorService.resolveShopifyShopUsers(body.shopDomain);
+    if (userIds.length === 0) return;
+
+    if (body.topic === "orders/create") {
+      const orderId = String(body.payload.id ?? body.payload.order_number ?? "");
+      if (!orderId) return;
+      await this.dispatchPushTrigger({
+        app: "shopify",
+        title: "New Order",
+        userIds,
+        triggerItemId: `order:${orderId}`,
+        triggerPayload: {
+          orderId,
+          orderNumber: body.payload.order_number,
+          totalPrice: body.payload.total_price,
+          currency: body.payload.currency,
+          email: body.payload.email,
+          shopDomain: body.shopDomain,
+        },
+      });
+      return;
+    }
+
+    if (body.topic === "inventory_levels/update") {
+      const inventoryItemId = String(body.payload.inventory_item_id ?? "");
+      const available = Number(body.payload.available);
+      if (!inventoryItemId || !Number.isFinite(available)) return;
+      // "anything decreasing" default — flow-level threshold filtering (if a
+      // trigger sets one) happens in the worker, same as other AI/filter steps;
+      // this push side only needs a cheap idempotency key per notification.
+      await this.dispatchPushTrigger({
+        app: "shopify",
+        title: "Low Inventory",
+        userIds,
+        triggerItemId: `inventory:${inventoryItemId}:${body.payload.updated_at ?? Date.now()}`,
+        triggerPayload: {
+          inventoryItemId,
+          available,
+          locationId: body.payload.location_id,
+          shopDomain: body.shopDomain,
+        },
+      });
+    }
+  }
+
+  /** Calendly "Booking Created" / "Booking Cancelled" — gateway verified X-Calendly-Webhook-Signature before forwarding. */
+  async calendlyWebhookEvent(body: {
+    event: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    const invitee = (body.payload.payload as Record<string, unknown> | undefined) ?? body.payload;
+    const organizationUri = typeof invitee.organization === "string" ? invitee.organization : undefined;
+    const eventUri = typeof invitee.event === "string" ? invitee.event : undefined;
+    const uri = typeof invitee.uri === "string" ? invitee.uri : undefined;
+    if (!organizationUri || !uri) return;
+
+    const userIds = await this.connectorService.resolveCalendlyOrganizationUsers(organizationUri);
+    if (userIds.length === 0) return;
+
+    const title = body.event === "invitee.canceled" ? "Booking Cancelled" : "Booking Created";
+    await this.dispatchPushTrigger({
+      app: "calendly",
+      title,
+      userIds,
+      triggerItemId: uri,
+      triggerPayload: {
+        uri,
+        eventUri,
+        name: invitee.name,
+        email: invitee.email,
+        cancelReason:
+          typeof invitee.cancellation === "object" && invitee.cancellation !== null
+            ? (invitee.cancellation as Record<string, unknown>).reason
+            : undefined,
+      },
+    });
+  }
+
+  /** Typeform "New Submission" — gateway verified Typeform-Signature before forwarding. */
+  async typeformWebhookEvent(body: { formResponse: Record<string, unknown> }): Promise<void> {
+    const formId =
+      typeof body.formResponse.form_id === "string"
+        ? body.formResponse.form_id
+        : ((body.formResponse.definition as Record<string, unknown> | undefined)?.id as string | undefined);
+    const responseId = typeof body.formResponse.token === "string" ? body.formResponse.token : undefined;
+    if (!formId || !responseId) return;
+
+    const userIds = await this.connectorService.resolveTypeformFormUsers(formId);
+    if (userIds.length === 0) return;
+
+    await this.dispatchPushTrigger({
+      app: "typeform",
+      title: "New Submission",
+      userIds,
+      triggerItemId: responseId,
+      triggerPayload: { formId, responseId, submittedAt: body.formResponse.submitted_at, answers: body.formResponse.answers },
+    });
+  }
+
+  /** Gumroad "New Sale" — Gumroad pings have no signature; identity is confirmed by matching seller_id against a connected account. */
+  async gumroadWebhookEvent(body: Record<string, unknown>): Promise<void> {
+    const sellerId = typeof body.seller_id === "string" ? body.seller_id : undefined;
+    const saleId = typeof body.sale_id === "string" ? body.sale_id : undefined;
+    if (!sellerId || !saleId) return;
+
+    const userIds = await this.connectorService.resolveGumroadSellerUsers(sellerId);
+    if (userIds.length === 0) return;
+
+    await this.dispatchPushTrigger({
+      app: "gumroad",
+      title: "New Sale",
+      userIds,
+      triggerItemId: saleId,
+      triggerPayload: {
+        saleId,
+        productName: body.product_name,
+        price: body.price,
+        currency: body.currency,
+        email: body.email,
+      },
+    });
+  }
+
+  /** Lemon Squeezy "New Sale" — gateway verified X-Signature (HMAC keyed by the per-store secret returned at webhook registration). */
+  async lemonSqueezyWebhookEvent(body: { storeId: string; payload: Record<string, unknown> }): Promise<void> {
+    const data = (body.payload.data as Record<string, unknown> | undefined) ?? {};
+    const orderId = typeof data.id === "string" ? data.id : undefined;
+    if (!orderId) return;
+
+    const userIds = await this.connectorService.resolveLemonSqueezyStoreUsers(body.storeId);
+    if (userIds.length === 0) return;
+
+    const attributes = (data.attributes as Record<string, unknown> | undefined) ?? {};
+    await this.dispatchPushTrigger({
+      app: "lemonsqueezy",
+      title: "New Sale",
+      userIds,
+      triggerItemId: orderId,
+      triggerPayload: {
+        orderId,
+        total: attributes.total,
+        currency: attributes.currency,
+        email: attributes.user_email,
+        storeId: body.storeId,
+      },
+    });
+  }
+
+  /**
+   * Dropbox "File Changed" — the webhook notification only names WHICH
+   * accounts changed (no file details), per Dropbox's design; the actual
+   * delta must be pulled with a per-account cursor via files/list_folder/continue.
+   * Gateway has already verified X-Dropbox-Signature before forwarding.
+   */
+  async dropboxWebhookEvent(body: { accountIds: string[] }): Promise<void> {
+    for (const accountId of body.accountIds) {
+      const accounts = await this.connectorService.getDropboxAccountsByAccountId(accountId);
+      for (const account of accounts) {
+        const changes = await this.fetchDropboxDelta(account.accessToken, account.cursor).catch((error) => {
+          logger.warn("dropbox webhook: delta fetch failed", {
+            accountId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        });
+        if (!changes) continue;
+        await this.connectorService.setDropboxCursor(account.userId, changes.cursor);
+        if (changes.entries.length === 0) continue;
+
+        await this.dispatchPushTrigger({
+          app: "dropbox",
+          title: "File Changed",
+          userIds: [account.userId],
+          triggerItemId: `${accountId}:${changes.cursor}`,
+          triggerPayload: {
+            accountId,
+            files: changes.entries.map((entry) => ({ path: entry.path, name: entry.name, tag: entry.tag })),
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Dropbox's delta API: the first call (no stored cursor) just fetches a
+   * fresh cursor scoped to "now" — the file list Dropbox includes at signup
+   * time isn't a change worth firing on. Every notification thereafter calls
+   * list_folder/continue from the stored cursor to get only what's new.
+   */
+  private async fetchDropboxDelta(
+    accessToken: string,
+    cursor: string | undefined,
+  ): Promise<{ cursor: string; entries: Array<{ path?: string; name?: string; tag?: string }> } | null> {
+    if (!cursor) {
+      const res = await fetch("https://api.dropboxapi.com/2/files/list_folder/get_latest_cursor", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ path: "", recursive: true }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { cursor?: string };
+      return json.cursor ? { cursor: json.cursor, entries: [] } : null;
+    }
+
+    const res = await fetch("https://api.dropboxapi.com/2/files/list_folder/continue", {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ cursor }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      cursor?: string;
+      entries?: Array<{ path_display?: string; name?: string; [".tag"]?: string }>;
+    };
+    if (!json.cursor) return null;
+    return {
+      cursor: json.cursor,
+      entries: (json.entries ?? []).map((entry) => ({
+        path: entry.path_display,
+        name: entry.name,
+        tag: entry[".tag"],
+      })),
+    };
+  }
+
+  /**
+   * Figma "New Comment" — gateway verified X-Figma-Signature (HMAC keyed by
+   * the per-webhook "passcode" set at registration) before forwarding.
+   */
+  async figmaWebhookEvent(body: { teamId: string; payload: Record<string, unknown> }): Promise<void> {
+    if (body.payload.event_type !== "FILE_COMMENT") return;
+    const commentId = typeof body.payload.comment_id === "string" ? body.payload.comment_id : undefined;
+    if (!commentId) return;
+
+    const userIds = await this.connectorService.resolveFigmaTeamUsers(body.teamId);
+    if (userIds.length === 0) return;
+
+    await this.dispatchPushTrigger({
+      app: "figma",
+      title: "New Comment",
+      userIds,
+      triggerItemId: commentId,
+      triggerPayload: {
+        commentId,
+        fileKey: body.payload.file_key,
+        fileName: body.payload.file_name,
+        comment: body.payload.comment,
+        triggeredBy: body.payload.triggered_by,
+      },
+    });
+  }
+
+  /** UptimeRobot "Monitor Down" / "Monitor Up" — identity + verification are the same check: the query-param secret must match a connected account's stored webhookSecret (UptimeRobot has no HMAC signing). */
+  async uptimeRobotWebhookEvent(body: {
+    userId: string;
+    monitorId: string;
+    monitorFriendlyName?: string;
+    alertTypeFriendlyName: string;
+  }): Promise<void> {
+    const title = /down/i.test(body.alertTypeFriendlyName) ? "Monitor Down" : "Monitor Up";
+    await this.dispatchPushTrigger({
+      app: "uptimerobot",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${body.monitorId}:${body.alertTypeFriendlyName}:${Date.now()}`,
+      triggerPayload: {
+        monitorId: body.monitorId,
+        monitorFriendlyName: body.monitorFriendlyName,
+        status: body.alertTypeFriendlyName,
+      },
+    });
+  }
+
+  /**
+   * QuickBooks "New Invoice" / "Invoice Paid" — gateway verified
+   * intuit-signature (app-level verifier token) before forwarding. One
+   * notification can carry multiple entity changes across multiple realms.
+   */
+  async quickBooksWebhookEvent(body: {
+    notifications: Array<{
+      realmId?: string;
+      dataChangeEvent?: { entities?: Array<{ name?: string; id?: string; operation?: string }> };
+    }>;
+  }): Promise<void> {
+    for (const notification of body.notifications) {
+      const realmId = notification.realmId;
+      if (!realmId) continue;
+      const entities = notification.dataChangeEvent?.entities ?? [];
+      if (entities.length === 0) continue;
+
+      const userIds = await this.connectorService.resolveQuickBooksRealmUsers(realmId);
+      if (userIds.length === 0) continue;
+
+      for (const entity of entities) {
+        if (!entity.id) continue;
+        if (entity.name === "Invoice" && entity.operation === "Create") {
+          await this.dispatchPushTrigger({
+            app: "quickbooks",
+            title: "New Invoice",
+            userIds,
+            triggerItemId: `invoice:${realmId}:${entity.id}`,
+            triggerPayload: { realmId, invoiceId: entity.id },
+          });
+        } else if (entity.name === "Payment") {
+          await this.dispatchPushTrigger({
+            app: "quickbooks",
+            title: "Invoice Paid",
+            userIds,
+            triggerItemId: `payment:${realmId}:${entity.id}`,
+            triggerPayload: { realmId, paymentId: entity.id },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Xero "New Invoice" — gateway verified x-xero-signature (and already
+   * handled the intent-to-receive handshake) before forwarding. Events only
+   * carry a resourceUrl pointer, so the actual invoice has to be fetched
+   * with the tenant's access token before dispatch.
+   */
+  async xeroWebhookEvent(body: { events: Array<Record<string, unknown>> }): Promise<void> {
+    for (const event of body.events) {
+      if (event.eventCategory !== "INVOICE" || event.eventType !== "CREATE") continue;
+      const tenantId = typeof event.tenantId === "string" ? event.tenantId : undefined;
+      const resourceUrl = typeof event.resourceUrl === "string" ? event.resourceUrl : undefined;
+      const resourceId = typeof event.resourceId === "string" ? event.resourceId : undefined;
+      if (!tenantId || !resourceId) continue;
+
+      const userIds = await this.connectorService.resolveXeroTenantUsers(tenantId);
+      if (userIds.length === 0) continue;
+
+      const secret = await this.connectorService.getXeroSecret(userIds[0]);
+      let invoice: Record<string, unknown> | undefined;
+      if (secret && resourceUrl) {
+        invoice = await fetch(resourceUrl, {
+          headers: { authorization: `Bearer ${secret.accessToken}`, "xero-tenant-id": tenantId, accept: "application/json" },
+        })
+          .then((res) => (res.ok ? res.json() : undefined))
+          .catch(() => undefined);
+      }
+
+      await this.dispatchPushTrigger({
+        app: "xero",
+        title: "New Invoice",
+        userIds,
+        triggerItemId: `invoice:${tenantId}:${resourceId}`,
+        triggerPayload: { tenantId, invoiceId: resourceId, invoice: invoice ?? null },
+      });
+    }
+  }
+
+  /** Wise "New Transaction" — gateway verified X-Signature-SHA256 (RSA) before forwarding. */
+  async wiseWebhookEvent(body: { profileId?: string; payload: Record<string, unknown> }): Promise<void> {
+    if (!body.profileId) return;
+    const userIds = await this.connectorService.resolveWiseProfileUsers(body.profileId);
+    if (userIds.length === 0) return;
+
+    const data = (body.payload.data as Record<string, unknown> | undefined) ?? {};
+    const resource = (data.resource as Record<string, unknown> | undefined) ?? {};
+    const transactionId = String(resource.transaction_id ?? resource.account_id ?? Date.now());
+
+    await this.dispatchPushTrigger({
+      app: "wise",
+      title: "New Transaction",
+      userIds,
+      triggerItemId: `transaction:${body.profileId}:${transactionId}`,
+      triggerPayload: { profileId: body.profileId, ...data },
+    });
+  }
+
+  /**
+   * Deel "New Contract" / "Payment Completed" — gateway verified
+   * DEEL_SIGNATURE_HEADER before forwarding, using organizationId (from the
+   * payload's meta.organization_id) to resolve exactly which connected
+   * account this event belongs to.
+   */
+  async deelWebhookEvent(body: { event?: string; data: Record<string, unknown>; organizationId: string }): Promise<void> {
+    const userIds = await this.connectorService.resolveDeelOrganizationUsers(body.organizationId);
+    if (userIds.length === 0) return;
+
+    const id = String(body.data.id ?? Date.now());
+    if (body.event === "contract.created") {
+      await this.dispatchPushTrigger({
+        app: "deel",
+        title: "New Contract",
+        userIds,
+        triggerItemId: `contract:${id}`,
+        triggerPayload: body.data,
+      });
+    } else if (body.event === "payment.completed") {
+      await this.dispatchPushTrigger({
+        app: "deel",
+        title: "Payment Completed",
+        userIds,
+        triggerItemId: `payment:${id}`,
+        triggerPayload: body.data,
+      });
+    }
+  }
+
+  /** Box "File Changed" — gateway verified box-signature-primary/secondary + replay window before forwarding. */
+  async boxWebhookEvent(body: { folderId: string; payload: Record<string, unknown> }): Promise<void> {
+    const userIds = await this.connectorService.resolveBoxFolderUsers(body.folderId);
+    if (userIds.length === 0) return;
+
+    const source = (body.payload.source as Record<string, unknown> | undefined) ?? {};
+    const fileId = typeof source.id === "string" ? source.id : undefined;
+    if (!fileId) return;
+
+    await this.dispatchPushTrigger({
+      app: "box",
+      title: "File Changed",
+      userIds,
+      triggerItemId: `file:${fileId}:${body.payload.created_at ?? Date.now()}`,
+      triggerPayload: {
+        folderId: body.folderId,
+        fileId,
+        fileName: source.name,
+        trigger: body.payload.trigger,
+      },
+    });
+  }
+
+  /** Statuspage "New Incident" / "Incident Update" — identity + verification are the query-param secret match, same as UptimeRobot. */
+  async statuspageWebhookEvent(body: {
+    userId: string;
+    incidentId: string;
+    status: string;
+    name?: string;
+  }): Promise<void> {
+    const title = body.status === "investigating" ? "New Incident" : "Incident Update";
+    await this.dispatchPushTrigger({
+      app: "statuspage",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${body.incidentId}:${body.status}`,
+      triggerPayload: { incidentId: body.incidentId, status: body.status, name: body.name },
+    });
+  }
+
+  /** Better Stack "Incident Started" / "Incident Resolved" — identity + verification are the query-param secret match, same as UptimeRobot. */
+  async betterStackWebhookEvent(body: {
+    userId: string;
+    incidentId: string;
+    status: string;
+    name?: string;
+  }): Promise<void> {
+    const title = body.status === "resolved" ? "Incident Resolved" : "Incident Started";
+    await this.dispatchPushTrigger({
+      app: "betterstack",
+      title,
+      userIds: [body.userId],
+      triggerItemId: `${body.incidentId}:${body.status}`,
+      triggerPayload: { incidentId: body.incidentId, status: body.status, name: body.name },
+    });
+  }
+
+  /**
+   * Push counterpart to the Discord "New Message" trigger — DiscordSocketService
+   * forwards every guild (non-DM) message here via
+   * DiscordSurfaceService.handleChannelMessage. Channel resolution is 100%
+   * deterministic: flows are matched by exact `trigger.config.channelId`
+   * string equality against the message's channelId, never by name and never
+   * through an LLM call. Name -> channelId resolution happens exactly once,
+   * at automation-creation time, via discord.repository.ts's resolveChannel.
+   */
+  async discordChannelEvent(body: {
+    guildId: string;
+    channelId: string;
+    messageId: string;
+    content: string;
+    authorId: string;
+    messageUrl?: string;
+  }): Promise<void> {
+    if (!body.channelId || !body.messageId || !body.content.trim()) return;
+
+    const result = await gatewayInternalFetch<{ flows?: AutomationFlow[] }>(
+      "/api/automations/_internal/active",
+    );
+    const flows = (result?.flows ?? []).filter((flow) => {
+      const trigger = flow.steps[0];
+      return (
+        trigger?.kind === "trigger" &&
+        trigger.app === "discord" &&
+        trigger.title === "New Message" &&
+        trigger.config?.channelId === body.channelId
+      );
+    });
+    if (flows.length === 0) return;
+
+    for (const flow of flows) {
+      const trigger = flow.steps[0];
+      const mode = trigger.config?.mode === "summarize" ? "summarize" : "notify";
+      let content = body.content;
+
+      if (mode === "summarize") {
+        const summarized = await this.automationAiExtract({
+          userId: flow.userId,
+          prompt: "Summarize this Discord message concisely for a notification digest.",
+          input: body.content,
+          quality: "fast",
+        });
+        if (summarized.ok && typeof summarized.output === "string" && summarized.output.trim()) {
+          content = summarized.output;
+        }
+      }
+
+      const triggerPayload = {
+        messageId: body.messageId,
+        guildId: body.guildId,
+        channelId: body.channelId,
+        authorId: body.authorId,
+        content,
+        rawContent: body.content,
+        messageUrl: body.messageUrl,
+        mode,
+        timestamp: new Date().toISOString(),
+      };
+
+      try {
+        await enqueueAutomationRun({
+          flowId: flow.id,
+          userId: flow.userId,
+          triggerItemId: body.messageId,
+          triggerPayload,
+        });
+      } catch (error) {
+        logger.warn("discord channel event: enqueue failed", {
           flowId: flow.id,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -1571,6 +2199,62 @@ export class AiCoreService {
             ? error.message
             : "airtable_create_record_failed",
       };
+    }
+  }
+
+  /**
+   * Backs the BambooHR "New Time Off Request" poller. BambooHR has no
+   * webhook on standard API tiers, so this — like Airtable/Gmail/Calendar —
+   * is fed entirely by SchedulerService.pollOneAutomation. Auth is HTTP
+   * Basic with the API key as username and the literal "x" as password,
+   * BambooHR's documented convention.
+   */
+  async automationBambooHrListTimeOffRequests(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getBambooHrSecret(userId);
+    if (!secret) return { connected: false, requests: [] };
+    try {
+      const start = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+      const end = new Date(Date.now() + 60 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+      const auth = Buffer.from(`${secret.apiKey}:x`).toString("base64");
+      const response = await fetch(
+        `https://api.bamboohr.com/api/gateway.php/${encodeURIComponent(secret.subdomain)}/v1/time_off/requests?start=${start}&end=${end}`,
+        { headers: { authorization: `Basic ${auth}`, accept: "application/json" } },
+      );
+      if (!response.ok) return { connected: false, requests: [] };
+      const requests = (await response.json()) as Array<Record<string, unknown>>;
+      return { connected: true, requests: requests.map((r) => ({ ...r, id: String(r.id) })) };
+    } catch {
+      return { connected: false, requests: [] };
+    }
+  }
+
+  /**
+   * Backs the BambooHR "New Hire" poller. Uses the employee directory
+   * (simplest endpoint with a hireDate field) rather than a custom report —
+   * filtered to hires within a rolling 14-day window client-side, since the
+   * directory endpoint has no date-range filter of its own.
+   */
+  async automationBambooHrListNewHires(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getBambooHrSecret(userId);
+    if (!secret) return { connected: false, employees: [] };
+    try {
+      const auth = Buffer.from(`${secret.apiKey}:x`).toString("base64");
+      const response = await fetch(
+        `https://api.bamboohr.com/api/gateway.php/${encodeURIComponent(secret.subdomain)}/v1/employees/directory`,
+        { headers: { authorization: `Basic ${auth}`, accept: "application/json" } },
+      );
+      if (!response.ok) return { connected: false, employees: [] };
+      const json = (await response.json()) as { employees?: Array<Record<string, unknown>> };
+      const cutoff = Date.now() - 14 * 24 * 60 * 60_000;
+      const employees = (json.employees ?? []).filter((e) => {
+        const hireDate = typeof e.hireDate === "string" ? Date.parse(e.hireDate) : NaN;
+        return Number.isFinite(hireDate) && hireDate >= cutoff;
+      });
+      return { connected: true, employees: employees.map((e) => ({ ...e, id: String(e.id) })) };
+    } catch {
+      return { connected: false, employees: [] };
     }
   }
 

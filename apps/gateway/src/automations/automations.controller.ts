@@ -67,12 +67,19 @@ export class AutomationsController {
   ) {
     requireInternalSecret(secret);
     if (!body.userId || !body.name) return { error: "userId and name are required" };
-    const flow = await this.automations.save(body.userId, {
-      id: body.id,
-      name: body.name,
-      steps: body.steps ?? [],
-    });
-    return { flow };
+    try {
+      const flow = await this.automations.save(body.userId, {
+        id: body.id,
+        name: body.name,
+        steps: body.steps ?? [],
+      });
+      return { flow };
+    } catch (error) {
+      if (error instanceof Error && error.message === "automation_limit_reached") {
+        return { error: "automation_limit_reached" };
+      }
+      throw error;
+    }
   }
 
   /** The flow-builder chat panel — proxied to ai-core's dedicated builder agent. */

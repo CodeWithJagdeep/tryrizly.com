@@ -424,6 +424,163 @@ export class AiCoreController {
     return this.aiCoreService.notionWebhookEvent(payload.event);
   }
 
+  @MessagePattern("connector.shopify.webhook")
+  shopifyWebhook(
+    @Payload() payload: { topic: string; shopDomain: string; payload: Record<string, unknown> },
+  ) {
+    return this.aiCoreService.shopifyWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.calendly.webhook")
+  calendlyWebhook(@Payload() payload: { event: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.calendlyWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.typeform.webhook")
+  typeformWebhook(@Payload() payload: { formResponse: Record<string, unknown> }) {
+    return this.aiCoreService.typeformWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.gumroad.webhook")
+  gumroadWebhook(@Payload() payload: Record<string, unknown>) {
+    return this.aiCoreService.gumroadWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.lemonsqueezy.webhook")
+  lemonSqueezyWebhook(@Payload() payload: { storeId: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.lemonSqueezyWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.dropbox.webhook")
+  dropboxWebhook(@Payload() payload: { accountIds: string[] }) {
+    return this.aiCoreService.dropboxWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.figma.webhook")
+  figmaWebhook(@Payload() payload: { teamId: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.figmaWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.uptimerobot.webhook")
+  uptimeRobotWebhook(
+    @Payload()
+    payload: {
+      userId: string;
+      monitorId: string;
+      monitorFriendlyName?: string;
+      alertTypeFriendlyName: string;
+    },
+  ) {
+    return this.aiCoreService.uptimeRobotWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.uptimerobot.resolveSecret")
+  resolveUptimeRobotSecret(@Payload() payload: { secret: string }) {
+    return this.aiCoreService.resolveUptimeRobotWebhookSecret(payload.secret);
+  }
+
+  @MessagePattern("connector.calendly.signingKey")
+  getCalendlySigningKey(@Payload() payload: { organizationUri: string }) {
+    return this.aiCoreService.getCalendlySigningKey(payload.organizationUri);
+  }
+
+  @MessagePattern("connector.typeform.webhookSecret")
+  getTypeformWebhookSecret(@Payload() payload: { formId: string }) {
+    return this.aiCoreService.getTypeformWebhookSecret(payload.formId);
+  }
+
+  @MessagePattern("connector.lemonsqueezy.webhookSecret")
+  getLemonSqueezyWebhookSecret(@Payload() payload: { storeId: string }) {
+    return this.aiCoreService.getLemonSqueezyWebhookSecret(payload.storeId);
+  }
+
+  @MessagePattern("connector.figma.webhookPasscode")
+  getFigmaWebhookPasscode(@Payload() payload: { teamId: string }) {
+    return this.aiCoreService.getFigmaWebhookPasscode(payload.teamId);
+  }
+
+  @MessagePattern("connector.quickbooks.webhook")
+  quickBooksWebhook(
+    @Payload()
+    payload: {
+      notifications: Array<{
+        realmId?: string;
+        dataChangeEvent?: { entities?: Array<{ name?: string; id?: string; operation?: string }> };
+      }>;
+    },
+  ) {
+    return this.aiCoreService.quickBooksWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.xero.webhook")
+  xeroWebhook(@Payload() payload: { events: Array<Record<string, unknown>> }) {
+    return this.aiCoreService.xeroWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.wise.webhook")
+  wiseWebhook(@Payload() payload: { profileId?: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.wiseWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.deel.webhook")
+  deelWebhook(@Payload() payload: { event?: string; data: Record<string, unknown>; organizationId: string }) {
+    return this.aiCoreService.deelWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.deel.signingKey")
+  getDeelSigningKey(@Payload() payload: { organizationId: string }) {
+    return this.aiCoreService.getDeelSigningKey(payload.organizationId);
+  }
+
+  @MessagePattern("connector.box.webhook")
+  boxWebhook(@Payload() payload: { folderId: string; payload: Record<string, unknown> }) {
+    return this.aiCoreService.boxWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.box.signatureKeys")
+  getBoxSignatureKeys(@Payload() payload: { folderId: string }) {
+    return this.aiCoreService.getBoxSignatureKeys(payload.folderId);
+  }
+
+  @MessagePattern("connector.statuspage.webhook")
+  statuspageWebhook(
+    @Payload() payload: { userId: string; incidentId: string; status: string; name?: string },
+  ) {
+    return this.aiCoreService.statuspageWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.statuspage.resolveSecret")
+  resolveStatuspageSecret(@Payload() payload: { secret: string }) {
+    return this.aiCoreService.resolveStatuspageWebhookSecret(payload.secret);
+  }
+
+  @MessagePattern("connector.betterstack.webhook")
+  betterStackWebhook(
+    @Payload() payload: { userId: string; incidentId: string; status: string; name?: string },
+  ) {
+    return this.aiCoreService.betterStackWebhookEvent(payload);
+  }
+
+  @MessagePattern("connector.betterstack.resolveSecret")
+  resolveBetterStackSecret(@Payload() payload: { secret: string }) {
+    return this.aiCoreService.resolveBetterStackWebhookSecret(payload.secret);
+  }
+
+  @MessagePattern("connector.discord.channelMessage")
+  discordChannelMessage(
+    @Payload()
+    payload: {
+      guildId: string;
+      channelId: string;
+      messageId: string;
+      content: string;
+      authorId: string;
+      messageUrl?: string;
+    },
+  ) {
+    return this.aiCoreService.discordChannelEvent(payload);
+  }
+
   @MessagePattern("automation.ai.extract")
   automationAiExtract(
     @Payload()
@@ -636,6 +793,16 @@ export class AiCoreController {
     },
   ) {
     return this.aiCoreService.automationAirtableCreateRecord(payload);
+  }
+
+  @MessagePattern("automation.bamboohr.listTimeOffRequests")
+  automationBambooHrListTimeOffRequests(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationBambooHrListTimeOffRequests(payload);
+  }
+
+  @MessagePattern("automation.bamboohr.listNewHires")
+  automationBambooHrListNewHires(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationBambooHrListNewHires(payload);
   }
 
   @MessagePattern("automation.airtable.listRecords")

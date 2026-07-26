@@ -58,6 +58,36 @@ register("trigger", "airtable", ["New Record"], z.object({
   table: shortText,
   account,
 }).strict());
+// channelId is the only value ever matched at trigger time (deterministic
+// exact-string equality, never resolved via AI) — see
+// discord.repository.ts's resolveChannel, run once at creation time when the
+// principal types a channel name/#name, and AiCoreService.discordChannelEvent.
+register("trigger", "discord", ["New Message"], z.object({
+  channelId: shortText,
+  channelName: z.string().trim().max(200).optional(),
+  mode: z.enum(["notify", "summarize"]).default("notify"),
+}).strict());
+register("trigger", "shopify", ["New Order"], z.object({ account }).strict());
+register("trigger", "shopify", ["Low Inventory"], z.object({
+  // Fires when available drops to or below this threshold; unset means "any decrease".
+  threshold: z.number().int().min(0).max(1_000_000).optional(),
+  account,
+}).strict());
+register("trigger", "calendly", ["Booking Created", "Booking Cancelled"], z.object({ account }).strict());
+register("trigger", "typeform", ["New Submission"], z.object({ account }).strict());
+register("trigger", "gumroad", ["New Sale"], z.object({ account }).strict());
+register("trigger", "lemonsqueezy", ["New Sale"], z.object({ account }).strict());
+register("trigger", "dropbox", ["File Changed"], z.object({ account }).strict());
+register("trigger", "figma", ["New Comment"], z.object({ account }).strict());
+register("trigger", "uptimerobot", ["Monitor Down", "Monitor Up"], z.object({ account }).strict());
+register("trigger", "quickbooks", ["New Invoice", "Invoice Paid"], z.object({ account }).strict());
+register("trigger", "xero", ["New Invoice"], z.object({ account }).strict());
+register("trigger", "wise", ["New Transaction"], z.object({ account }).strict());
+register("trigger", "deel", ["New Contract", "Payment Completed"], z.object({ account }).strict());
+register("trigger", "box", ["File Changed"], z.object({ account }).strict());
+register("trigger", "statuspage", ["New Incident", "Incident Update"], z.object({ account }).strict());
+register("trigger", "betterstack", ["Incident Started", "Incident Resolved"], z.object({ account }).strict());
+register("trigger", "bamboohr", ["New Time Off Request", "New Hire"], z.object({ account }).strict());
 
 register("action", "slack", ["Send Channel Message", "Send Direct Message"], z.object({
   message: templateText,

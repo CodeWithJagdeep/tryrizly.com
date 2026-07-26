@@ -661,10 +661,12 @@ export class BillingService {
       };
     }
 
+    // Free is now a real, usable tier (small AI budget + automation cap
+    // enforced elsewhere) rather than an access wall, so it reports active.
     return {
       plan: this.freePlan(),
       access: {
-        active: false,
+        active: true,
         state: "free",
         expiresAt: null,
       },

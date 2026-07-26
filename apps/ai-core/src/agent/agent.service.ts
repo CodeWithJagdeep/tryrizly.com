@@ -1407,6 +1407,14 @@ function errorMessage(error: unknown): string {
 
 function toolFailure(tool: string, error: unknown): ToolExecutionResult {
   const detail = errorMessage(error);
+  // Log the raw detail server-side for debugging, but never embed it in the
+  // message field: this can end up shown verbatim to the user (e.g. via the
+  // "Here's what I have: <last tool message>" fallback when the agent loop
+  // breaks early), so a raw upstream/provider error — like a Grok/OpenAI
+  // "Error in input stream" — must never reach the chat as if it were an
+  // answer. The model still gets the real detail via the OBSERVATION content
+  // built from this result elsewhere, this only governs what a human sees.
+  logger.warn("tool execution failed", { tool, detail });
   if (
     /\b(?:timeout|timed out|429|rate.?limit|econn|enotfound|fetch failed|api_5\d\d)\b/i.test(
       detail,
@@ -1415,7 +1423,7 @@ function toolFailure(tool: string, error: unknown): ToolExecutionResult {
     return {
       tool,
       status: "transient_error",
-      message: `Temporary tool failure: ${detail}`,
+      message: "Temporary tool failure — try that again in a moment.",
     };
   }
   if (
@@ -1426,24 +1434,24 @@ function toolFailure(tool: string, error: unknown): ToolExecutionResult {
     return {
       tool,
       status: "needs_connection",
-      message: `Connector needs attention: ${detail}`,
+      message: "That connector needs attention — check its connection in Settings.",
     };
   }
   if (/\b(?:forbidden|permission|scope|403)\b/i.test(detail)) {
     return {
       tool,
       status: "forbidden",
-      message: `Tool access denied: ${detail}`,
+      message: "Tool access denied — the connected account doesn't have permission for that.",
     };
   }
   if (/\b(?:invalid|missing|required|malformed)\b/i.test(detail)) {
     return {
       tool,
       status: "invalid_input",
-      message: `Invalid tool input: ${detail}`,
+      message: "That request was missing something required — try rephrasing it.",
     };
   }
-  return { tool, status: "not_implemented", message: `Tool failed: ${detail}` };
+  return { tool, status: "not_implemented", message: "That didn't go through — try again." };
 }
 
 /** Friendly live-progress phrasing per tool, distinct from describeAction's approval-preview phrasing ("send this email" vs "Sending your email…"). Falls back to a humanized tool name. */

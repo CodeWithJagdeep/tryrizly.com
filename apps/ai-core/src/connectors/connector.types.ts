@@ -28,7 +28,25 @@ export type ConnectorProvider =
   | "pagerduty"
   | "trello"
   | "airtable"
-  | "twilio";
+  | "twilio"
+  // Push/webhook-only connectors — see apps/gateway's <provider>-webhook-*.ts
+  // receivers and AiCoreService.<provider>WebhookEvent.
+  | "shopify"
+  | "calendly"
+  | "typeform"
+  | "gumroad"
+  | "lemonsqueezy"
+  | "dropbox"
+  | "figma"
+  | "uptimerobot"
+  | "quickbooks"
+  | "xero"
+  | "wise"
+  | "bamboohr"
+  | "deel"
+  | "box"
+  | "statuspage"
+  | "betterstack";
 
 export type ConnectorAuthType = "oauth" | "manual";
 
@@ -88,7 +106,21 @@ export type DeleteConnectorInput = {
 };
 
 export type GoogleOAuthProvider = "gmail" | "calendar" | "google_workspace";
-export type ConnectorOAuthProvider = GoogleOAuthProvider | "calcom" | "notion" | "github" | "stripe";
+export type ConnectorOAuthProvider =
+  | GoogleOAuthProvider
+  | "calcom"
+  | "notion"
+  | "github"
+  | "stripe"
+  | "shopify"
+  | "dropbox"
+  | "figma"
+  | "quickbooks"
+  | "xero"
+  | "deel"
+  | "box"
+  | "jira"
+  | "calendly";
 
 export type StartOAuthInput = {
   userId?: string;
@@ -102,12 +134,23 @@ export type StartOAuthInput = {
   /** Which Cal.com OAuth client to use - they're separate approved apps per
    * data-residency org, not a single client that works everywhere. */
   calComRegion?: "global" | "eu";
+  /** Shopify's authorize URL is per-store; required only when provider === "shopify". */
+  shopDomain?: string;
+  /** Figma has no "list my teams" API — the team to register a webhook for
+   * has to come from the user; required only when provider === "figma". */
+  teamId?: string;
+  /** Box has no "watch my whole account" webhook — the folder to register a
+   * webhook against has to come from the user; required only when provider === "box". */
+  folderId?: string;
 };
 
 export type CompleteOAuthInput = {
   userId?: string;
   code: string;
   state?: string;
+  /** Intuit returns this as a separate callback query param (not embeddable
+   * in `state`, which we control) identifying which QuickBooks company authorized. */
+  realmId?: string;
 };
 
 export type StartCalComOAuthInput = {
@@ -167,11 +210,91 @@ export type MpesaConnectorSecret = {
   shortcode: string;
   environment: "sandbox" | "production";
 };
-export type JiraConnectorSecret = { siteUrl: string; email: string; apiToken: string };
+/**
+ * Manual (siteUrl/email/apiToken, Basic auth) and OAuth (accessToken/cloudId,
+ * Bearer auth) are mutually exclusive shapes — jira.service.ts branches on
+ * which fields are present. cloudId is required for every OAuth API call
+ * (fetched once via the accessible-resources endpoint at connect time).
+ */
+export type JiraConnectorSecret = {
+  siteUrl?: string;
+  email?: string;
+  apiToken?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  cloudId?: string;
+};
 export type PagerDutyConnectorSecret = { apiKey: string; fromEmail: string };
 export type TrelloConnectorSecret = { apiKey: string; token: string };
 export type AirtableConnectorSecret = { apiKey: string };
 export type TwilioConnectorSecret = { accountSid: string; authToken: string; fromNumber: string };
+export type ShopifyConnectorSecret = { shopDomain: string; accessToken: string };
+/** apiToken is the Calendly Personal Access Token; userUri/organizationUri and
+ * webhookSigningKey are captured at connect-time (see ConnectorService.connectCalendly). */
+export type CalendlyConnectorSecret = {
+  apiToken?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  userUri?: string;
+  organizationUri?: string;
+  webhookSigningKey?: string;
+  webhookSubscriptionUri?: string;
+};
+export type TypeformConnectorSecret = { apiToken: string; formId?: string; webhookSecret?: string };
+export type GumroadConnectorSecret = { accessToken: string; sellerId?: string };
+export type LemonSqueezyConnectorSecret = { apiKey: string; storeId?: string; webhookSecret?: string };
+export type DropboxConnectorSecret = { accessToken: string; refreshToken?: string; accountId: string };
+export type FigmaConnectorSecret = {
+  accessToken: string;
+  refreshToken?: string;
+  teamId?: string;
+  webhookPasscode?: string;
+  /** Figma's webhook id, needed to DELETE it on disconnect. */
+  webhookId?: string;
+};
+export type UptimeRobotConnectorSecret = { apiKey: string; webhookSecret: string };
+export type QuickBooksConnectorSecret = {
+  accessToken: string;
+  refreshToken: string;
+  realmId: string;
+  expiresAt: number;
+};
+export type XeroConnectorSecret = {
+  accessToken: string;
+  refreshToken: string;
+  tenantId: string;
+  expiresAt: number;
+};
+export type WiseConnectorSecret = {
+  apiToken: string;
+  profileId: string;
+  /** Returned by POST /v3/profiles/{profileId}/webhooks/subscriptions, needed to delete it on disconnect. */
+  webhookSubscriptionId?: string;
+};
+export type BambooHrConnectorSecret = { subdomain: string; apiKey: string };
+export type DeelConnectorSecret = {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  /** Per-webhook signing secret Deel returns at subscription creation. */
+  webhookSigningSecret?: string;
+  /** Deel organization id (GET /rest/organizations) — webhook payloads carry this in meta.organization_id, so it's how an incoming event resolves back to the right connected account. */
+  organizationId?: string;
+};
+export type BoxConnectorSecret = {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  folderId: string;
+  /** Box's key-rotation design: verification must accept either signing key. */
+  primarySignatureKey?: string;
+  secondarySignatureKey?: string;
+  webhookId?: string;
+};
+export type StatuspageConnectorSecret = { pageId: string; apiKey?: string; webhookSecret: string };
+export type BetterStackConnectorSecret = { apiKey: string; webhookSecret: string };
 
 export type DataSourceSecretResult =
   | { connected: false }

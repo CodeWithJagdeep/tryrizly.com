@@ -5,8 +5,10 @@ import {
   validateAutomationFlowForActivation,
   validateAutomationReleasePolicy,
 } from "@heyriz/shared/automations/schemas";
+import { PLAN_AUTOMATION_LIMITS } from "@heyriz/shared/billing/plan-budgets";
 import { env } from "@heyriz/shared/env";
 import { AutomationRepository } from "./automation.repository";
+import { BillingGatewayService } from "../billing/billing.service";
 
 export type SaveFlowInput = {
   id?: string;
@@ -14,11 +16,15 @@ export type SaveFlowInput = {
   steps: AutomationStep[];
 };
 
+type BillingStatus = { plan?: { id?: string } };
+
 @Injectable()
 export class AutomationsService {
   constructor(
     @Inject(AutomationRepository)
     private readonly repo: AutomationRepository,
+    @Inject(BillingGatewayService)
+    private readonly billing: BillingGatewayService,
   ) {}
 
   list(userId: string) {
@@ -32,6 +38,25 @@ export class AutomationsService {
   async save(userId: string, input: SaveFlowInput) {
     const steps = (input.steps ?? []).map((step) => ({ ...step, config: step.config ?? {} }));
     const current = input.id ? await this.repo.getFlow(userId, input.id) : null;
+
+    // Flow ids are generated client-side (see web's newFlowId()), so `input.id`
+    // is always set — the real "is this a brand-new automation" signal is
+    // whether a row exists yet. Only creating one counts against the plan cap;
+    // editing an existing flow never should, or a user at the limit could get
+    // locked out of fixing their own automations.
+    if (!current) {
+      const status = await this.billing
+        .send<BillingStatus>("billing.status", { userId })
+        .catch(() => null);
+      const planId = status?.plan?.id ?? "free";
+      const limit = PLAN_AUTOMATION_LIMITS[planId as keyof typeof PLAN_AUTOMATION_LIMITS] ?? null;
+      if (limit !== null) {
+        const existing = await this.repo.listFlows(userId);
+        if (existing.length >= limit) {
+          throw new Error("automation_limit_reached");
+        }
+      }
+    }
     const validation = validateAutomationFlowForActivation({ name: input.name, steps });
     const release = validateAutomationReleasePolicy(
       { steps },

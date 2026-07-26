@@ -73,7 +73,7 @@ export class BudgetGateService {
       if (!Number.isFinite(budgetUsd)) {
         return { state: "ok", spendUsd, budgetUsd, ratio: 0, rolloverCredits };
       }
-      if (planId === "free" || budgetUsd <= 0) {
+      if (budgetUsd <= 0) {
         return {
           state: "exceeded",
           spendUsd,

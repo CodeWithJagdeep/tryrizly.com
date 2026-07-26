@@ -645,7 +645,23 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         ];
       }
     } else if (trigger.app === "gmail") {
-      const query = String(trigger.config?.query ?? "").trim();
+      // "New Email Matching Search"/"New Label"/"New Labeled Email"/
+      // "New Labeled Conversation" all require the user's own Gmail search
+      // string (config.query, the same "Advanced" field the flow-builder's
+      // gmail config panel exposes for every gmail trigger) — there's no
+      // dedicated "label" picker field, so label-scoped variants are
+      // configured the same way ("label:SomeName ..."). "New Label" in
+      // particular only detects messages matching that query that we haven't
+      // seen yet, NOT a genuine "label object was just created" event — Gmail
+      // has no cheap endpoint to poll for that, so this is an approximation.
+      const configuredQuery = String(trigger.config?.query ?? "").trim();
+      const defaultQueryByTitle: Record<string, string> = {
+        "New Email": "in:inbox newer_than:14d",
+        "New Attachment": "has:attachment newer_than:14d",
+        "New Starred Email": "is:starred newer_than:2d",
+        "New Conversation": "in:inbox newer_than:14d",
+      };
+      const query = configuredQuery || defaultQueryByTitle[trigger.title] || "";
       if (!query) return;
       // Which connected Gmail account this trigger targets (multi-account) — the
       // flow-builder stores the chosen connector row id in the step config.
@@ -670,13 +686,33 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         }),
       );
       if (!result?.connected) return;
-      const selection = selectNewGmailTriggerItems(
-        result.messages ?? [],
+      const rawMessages = result.messages ?? [];
+      // "New Conversation"/"New Labeled Conversation" fire once per thread
+      // (the first time we see it), not once per message — approximate,
+      // since a thread that already had messages outside our search window
+      // before activation still looks "new" the first time it's matched.
+      const dedupeOnThread =
+        trigger.title === "New Conversation" ||
+        trigger.title === "New Labeled Conversation";
+      const selection = selectNewGmailTriggerItems<{ id: string; internalDate?: string }>(
+        dedupeOnThread
+          ? rawMessages.map((m) => ({ id: m.threadId, internalDate: m.internalDate }))
+          : rawMessages,
         flow.cursor,
         flow.updatedAt,
       );
-      newItems = selection.newItems
-        .map((m) => ({ itemId: m.id, payload: { ...m } }));
+      if (dedupeOnThread) {
+        const newThreadIds = new Set(selection.newItems.map((m) => m.id));
+        const seenThreadIds = new Set<string>();
+        newItems = rawMessages
+          .filter((m) => newThreadIds.has(m.threadId) && !seenThreadIds.has(m.threadId))
+          .map((m) => {
+            seenThreadIds.add(m.threadId);
+            return { itemId: m.threadId, payload: { ...m } };
+          });
+      } else {
+        newItems = selection.newItems.map((m) => ({ itemId: m.id, payload: { ...m } }));
+      }
       if (selection.baselineEstablished) {
         for (const id of selection.seenIds) seen.add(id);
         cursorNeedsUpdate = true;
@@ -685,6 +721,80 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
           existingMatches: selection.seenIds.length,
         });
       }
+    } else if (trigger.app === "calendar" && trigger.title === "Event Start") {
+      // A tight forward window, mirroring the "google-meet" Meet-link poller
+      // below — "about to start" means it falls inside whichever poll window
+      // catches its start time.
+      const timeMin = now.toISOString();
+      const timeMax = new Date(
+        now.getTime() + env.AUTOMATION_POLL_MINUTES * 60_000,
+      ).toISOString();
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          events: Array<{ id: string; summary?: string; start?: unknown; end?: unknown }>;
+        }>("automation.calendar.list", {
+          userId: flow.userId,
+          timeMin,
+          timeMax,
+          maxResults: 25,
+        }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.events ?? [])
+        .filter((e) => !seen.has(e.id))
+        .map((e) => ({ itemId: e.id, payload: { ...e } }));
+    } else if (trigger.app === "calendar" && trigger.title === "Event Cancelled") {
+      // The Calendar API's default event list omits cancelled/deleted events
+      // entirely (no showDeleted param is sent), so a "known id from the last
+      // poll that's no longer in the window" is the closest cheap signal for
+      // "cancelled" — approximate: a rescheduled-out-of-window event would
+      // look identical to a genuine cancellation.
+      const timeMin = now.toISOString();
+      const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          events: Array<{ id: string; summary?: string; status?: string }>;
+        }>("automation.calendar.list", {
+          userId: flow.userId,
+          timeMin,
+          timeMax,
+          maxResults: 50,
+        }),
+      );
+      if (!result?.connected) return;
+      const currentIds = new Set((result.events ?? []).map((e) => e.id));
+      const previouslyKnownIds = [...seen];
+      newItems = previouslyKnownIds
+        .filter((id) => !currentIds.has(id))
+        .map((id) => ({ itemId: `cancelled:${id}`, payload: { id, cancelled: true } }));
+      // Reset the known-id set to exactly this poll's window so the next
+      // poll's diff is against what we just saw, not an ever-growing history.
+      seen.clear();
+      for (const id of currentIds) seen.add(id);
+      cursorNeedsUpdate = true;
+    } else if (trigger.app === "calendar" && trigger.title === "New or Updated Event") {
+      const timeMin = now.toISOString();
+      const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          events: Array<{ id: string; summary?: string; updated?: string; start?: unknown; end?: unknown }>;
+        }>("automation.calendar.list", {
+          userId: flow.userId,
+          timeMin,
+          timeMax,
+          maxResults: 50,
+        }),
+      );
+      if (!result?.connected) return;
+      // Encoding `updated` into the dedup id (instead of just the event id)
+      // means an edited event looks "new" again — the cursor only tracks a
+      // flat id set, so this avoids needing a second cursor field.
+      newItems = (result.events ?? [])
+        .map((e) => ({ itemId: `${e.id}:${e.updated ?? ""}`, payload: { ...e } }))
+        .filter((item) => !seen.has(item.itemId));
     } else if (trigger.app === "calendar") {
       const timeMin = now.toISOString();
       const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
@@ -794,6 +904,84 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       newItems = (result.events ?? [])
         .filter((e) => e.hangoutLink && !seen.has(e.id))
         .map((e) => ({ itemId: e.id, payload: { ...e } }));
+    } else if (trigger.app === "calcom") {
+      // Polls every upcoming booking on the account — CalComBooking has no
+      // eventTypeId field to scope by, so (unlike the "Create Booking" action)
+      // there's no per-event-type config for this trigger.
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          bookings?: Array<{ id: number; uid: string; title: string; startTime: string }>;
+        }>("automation.calcom.listBookings", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.bookings ?? [])
+        .filter((b) => !seen.has(b.uid))
+        .map((b) => ({ itemId: b.uid, payload: { ...b } }));
+    } else if (trigger.app === "jira") {
+      const projectKey = String(trigger.config?.projectKey ?? "").trim() || undefined;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          issues?: Array<{ key: string; summary: string; status: string; updated: string; url: string }>;
+        }>("automation.jira.searchNewIssues", { userId: flow.userId, projectKey }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.issues ?? [])
+        .filter((i) => !seen.has(i.key))
+        .map((i) => ({ itemId: i.key, payload: { ...i } }));
+    } else if (trigger.app === "pagerduty") {
+      // config.serviceId is the same field the "Create Incident" action uses
+      // — reused here to optionally scope the poll to one service.
+      const serviceId = String(trigger.config?.serviceId ?? "").trim() || undefined;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          incidents?: Array<{ id: string; title: string; status: string; createdAt: string; url?: string }>;
+        }>("automation.pagerduty.listIncidents", { userId: flow.userId, serviceId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.incidents ?? [])
+        .filter((i) => !seen.has(i.id))
+        .map((i) => ({ itemId: i.id, payload: { ...i } }));
+    } else if (trigger.app === "trello") {
+      const listId = String(trigger.config?.listId ?? "").trim();
+      if (!listId) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          cards?: Array<{ id: string; name: string; dateLastActivity: string; url: string }>;
+        }>("automation.trello.listCards", { userId: flow.userId, listId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.cards ?? [])
+        .filter((c) => !seen.has(c.id))
+        .map((c) => ({ itemId: c.id, payload: { ...c } }));
+    } else if (trigger.app === "mongodb") {
+      const collection = String(trigger.config?.collection ?? "").trim();
+      if (!collection) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{ connected: boolean; documents?: Array<Record<string, unknown>> }>(
+          "automation.mongo.pollNew",
+          { userId: flow.userId, collection },
+        ),
+      );
+      if (!result?.connected) return;
+      newItems = (result.documents ?? [])
+        .map((d) => ({ ...d, _id: String((d as { _id?: unknown })._id ?? "") }))
+        .filter((d) => d._id && !seen.has(d._id))
+        .map((d) => ({ itemId: d._id, payload: d }));
+    } else if (trigger.app === "google-drive") {
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          files?: Array<{ id: string; name: string; createdTime: string; webViewLink?: string }>;
+        }>("automation.drive.listRecentFiles", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.files ?? [])
+        .filter((f) => !seen.has(f.id))
+        .map((f) => ({ itemId: f.id, payload: { ...f } }));
     } else if (trigger.app === "bamboohr" && trigger.title === "New Time Off Request") {
       const result = await firstValueFrom(
         this.aiCore.send<{

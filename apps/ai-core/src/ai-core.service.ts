@@ -935,6 +935,161 @@ export class AiCoreService {
     return { connected: true, events: res.events };
   }
 
+  /** The automation "Send Email" action for Gmail. */
+  async automationGmailSendEmail(body: {
+    userId?: string;
+    to: string;
+    subject: string;
+    body: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.sendMessage(userId, {
+      to: body.to,
+      subject: body.subject,
+      body: body.body,
+    });
+    return this.gmailSendResultToAck(res);
+  }
+
+  /** The automation "Create Draft" action for Gmail. */
+  async automationGmailCreateDraft(body: {
+    userId?: string;
+    to: string;
+    subject: string;
+    body: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.createDraft(userId, {
+      to: body.to,
+      subject: body.subject,
+      body: body.body,
+    });
+    if (!res.connected) return { ok: false, error: "gmail_not_connected" };
+    return { ok: true, id: res.draftId, threadId: res.threadId };
+  }
+
+  /**
+   * The automation "Reply to Email" action for Gmail. `messageId` is the
+   * Gmail trigger item's `id` field — fetched first (metadata only) so the
+   * reply threads off the message's real RFC822 `Message-ID` header, not the
+   * internal Gmail id (which is what `threadId`/`inReplyTo` need to actually
+   * mean anything to other mail clients). Mirrors the chat agent's
+   * `draft_email_reply` tool: "Re: " is only prefixed if not already present,
+   * and `to`/`subject` fall back to the original message's sender/subject.
+   */
+  async automationGmailReply(body: {
+    userId?: string;
+    messageId: string;
+    to?: string;
+    subject?: string;
+    body: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const original = await this.google.getMessage(userId, body.messageId, "metadata");
+    if (!original.connected) return { ok: false, error: "gmail_not_connected" };
+    const to = body.to?.trim() || original.message.from;
+    if (!to) return { ok: false, error: "gmail_reply_missing_recipient" };
+    const baseSubject = body.subject?.trim() || original.message.subject || "";
+    const subject = /^re:/i.test(baseSubject) ? baseSubject : `Re: ${baseSubject}`;
+    const res = await this.google.sendMessage(userId, {
+      to,
+      subject,
+      body: body.body,
+      threadId: original.message.threadId,
+      inReplyTo: original.message.messageIdHeader,
+    });
+    return this.gmailSendResultToAck(res);
+  }
+
+  private gmailSendResultToAck(
+    res: Awaited<ReturnType<GoogleService["sendMessage"]>>,
+  ) {
+    if (!res.connected) return { ok: false, error: "gmail_not_connected" };
+    return { ok: true, id: res.messageId, threadId: res.threadId };
+  }
+
+  /** The automation "Add Label to Email" action for Gmail — resolves the label name to an id first. */
+  async automationGmailAddLabel(body: {
+    userId?: string;
+    messageId: string;
+    label: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const labels = await this.google.listLabels(userId);
+    if (!labels.connected) return { ok: false, error: "gmail_not_connected" };
+    const match = labels.labels.find(
+      (l) => l.name.toLowerCase() === body.label.trim().toLowerCase(),
+    );
+    if (!match) return { ok: false, error: "gmail_label_not_found" };
+    const res = await this.google.modifyMessageLabels(userId, body.messageId, {
+      addLabelIds: [match.id],
+    });
+    if (!res.connected) return { ok: false, error: "gmail_not_connected" };
+    return { ok: true, id: body.messageId };
+  }
+
+  /** The automation "Create Detailed Event" action for Calendar. */
+  async automationCalendarCreateEvent(body: {
+    userId?: string;
+    summary: string;
+    start: string;
+    end: string;
+    description?: string;
+    location?: string;
+    attendees?: string[];
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.createEvent(userId, {
+      summary: body.summary,
+      start: body.start,
+      end: body.end,
+      description: body.description,
+      location: body.location,
+      attendees: body.attendees,
+    });
+    if (!res.connected) return { ok: false, error: "calendar_not_connected" };
+    return { ok: true, id: res.event.id, url: res.event.hangoutLink };
+  }
+
+  /** The automation "Update Event" action for Calendar. */
+  async automationCalendarUpdateEvent(body: {
+    userId?: string;
+    eventId: string;
+    start?: string;
+    end?: string;
+    attendees?: string[];
+    notifyAttendee?: boolean;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.updateEvent(userId, body.eventId, {
+      start: body.start,
+      end: body.end,
+      attendees: body.attendees,
+      notifyAttendee: body.notifyAttendee,
+    });
+    if (!res.connected) return { ok: false, error: "calendar_not_connected" };
+    return { ok: true, id: res.event.id };
+  }
+
+  /**
+   * The automation "Find Availability" action for Calendar — read-only, no
+   * dedicated free/busy trigger exists so this reuses the Calendar API's
+   * standard `/freeBusy` endpoint (GoogleService.freeBusy).
+   */
+  async automationCalendarFreeBusy(body: {
+    userId?: string;
+    timeMin: string;
+    timeMax: string;
+  }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.freeBusy(userId, {
+      timeMin: new Date(body.timeMin),
+      timeMax: new Date(body.timeMax),
+    });
+    if (!res.connected) return { ok: false, error: "calendar_not_connected" };
+    return { ok: true, busy: res.busy };
+  }
+
   /** Cal.com event types, for the flow-builder's "Create Booking" config dropdown. */
   async automationCalcomEventTypes(body: { userId?: string }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
@@ -942,6 +1097,98 @@ export class AiCoreService {
     if (!secret) return { connected: false, eventTypes: [] };
     const eventTypes = await this.calcom.listEventTypes(secret);
     return { connected: true, eventTypes };
+  }
+
+  /** Backs the Cal.com "New Booking" poll trigger. */
+  async automationCalcomListBookings(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getCalComSecret(userId);
+    if (!secret) return { connected: false, bookings: [] };
+    try {
+      const bookings = await this.calcom.listBookings(secret, {
+        status: "upcoming",
+        take: 20,
+      });
+      return { connected: true, bookings };
+    } catch {
+      return { connected: false, bookings: [] };
+    }
+  }
+
+  /** Backs the Jira "New Issue" poll trigger — newest-created-first search over the whole site (or one project, if configured). */
+  async automationJiraSearchNewIssues(body: { userId?: string; projectKey?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getJiraSecret(userId);
+    if (!secret) return { connected: false, issues: [] };
+    try {
+      const jql = body.projectKey
+        ? `project = "${body.projectKey.replace(/["\\]/g, "\\$&")}" ORDER BY created DESC`
+        : "ORDER BY created DESC";
+      const issues = await this.jira.searchIssues(secret, { jql, maxResults: 20 });
+      return { connected: true, issues };
+    } catch {
+      return { connected: false, issues: [] };
+    }
+  }
+
+  /** Backs the PagerDuty "New Incident" poll trigger, optionally scoped to one service. */
+  async automationPagerDutyListIncidents(body: { userId?: string; serviceId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getPagerDutySecret(userId);
+    if (!secret) return { connected: false, incidents: [] };
+    try {
+      const incidents = await this.pagerduty.listIncidents(secret, {
+        limit: 20,
+        serviceId: body.serviceId,
+      });
+      return { connected: true, incidents };
+    } catch {
+      return { connected: false, incidents: [] };
+    }
+  }
+
+  /** Backs the Trello "New Card" poll trigger for a configured list. */
+  async automationTrelloListCards(body: { userId?: string; listId: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getTrelloSecret(userId);
+    if (!secret) return { connected: false, cards: [] };
+    try {
+      const cards = await this.trello.listCards(secret, { listId: body.listId, limit: 20 });
+      return { connected: true, cards };
+    } catch {
+      return { connected: false, cards: [] };
+    }
+  }
+
+  /**
+   * Backs the MongoDB "New Document" poll trigger — same read-only guarantee
+   * as automationMongoFind, but sorted newest-inserted-first (`_id` descending
+   * embeds a creation timestamp) instead of an arbitrary filter, since a
+   * poller needs a stable "what's new" ordering rather than a one-off query.
+   */
+  async automationMongoPollNew(body: { userId?: string; collection: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const result = await this.connectorService.getDataSourceSecret(userId, "mongodb");
+    if (!result.connected || result.provider !== "mongodb") return { connected: false, documents: [] };
+    try {
+      const schema = await this.mongoIntrospection.getSchema(userId, result.secret.connectionUrl);
+      const { documents } = await this.mongoIntrospection.runFind(
+        result.secret.connectionUrl,
+        { collection: body.collection, sort: { _id: -1 }, limit: 20 },
+        schema,
+      );
+      return { connected: true, documents };
+    } catch {
+      return { connected: false, documents: [] };
+    }
+  }
+
+  /** Backs the Google Drive "New File" poll trigger. */
+  async automationDriveListRecentFiles(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const res = await this.google.listRecentDriveFiles(userId, { maxResults: 20 });
+    if (!res.connected) return { connected: false, files: [] };
+    return { connected: true, files: res.files };
   }
 
   /**

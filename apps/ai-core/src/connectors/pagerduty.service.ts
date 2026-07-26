@@ -2,9 +2,47 @@ import { Injectable } from "@nestjs/common";
 import type { PagerDutyConnectorSecret } from "./connector.types";
 
 export type PagerDutyCreatedIncident = { id: string; url?: string };
+export type PagerDutyIncident = {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  url?: string;
+};
 
 @Injectable()
 export class PagerDutyService {
+  /** Newest-created first — backs the "New Incident" poll trigger. */
+  async listIncidents(
+    secret: PagerDutyConnectorSecret,
+    opts: { limit?: number; serviceId?: string } = {},
+  ): Promise<PagerDutyIncident[]> {
+    const params = new URLSearchParams({
+      limit: String(Math.min(opts.limit ?? 20, 50)),
+      sort_by: "created_at:desc",
+    });
+    if (opts.serviceId) params.append("service_ids[]", opts.serviceId);
+    const res = await fetch(`https://api.pagerduty.com/incidents?${params.toString()}`, {
+      headers: {
+        authorization: `Token token=${secret.apiKey}`,
+        accept: "application/vnd.pagerduty+json;version=2",
+        from: secret.fromEmail,
+      },
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("pagerduty_invalid_credentials");
+    if (!res.ok) throw new Error(`pagerduty_api_${res.status}`);
+    const data = (await res.json()) as {
+      incidents?: Array<{ id: string; title: string; status: string; created_at: string; html_url?: string }>;
+    };
+    return (data.incidents ?? []).map((i) => ({
+      id: i.id,
+      title: i.title,
+      status: i.status,
+      createdAt: i.created_at,
+      url: i.html_url,
+    }));
+  }
+
   async createIncident(
     secret: PagerDutyConnectorSecret,
     input: { serviceId: string; title: string; urgency?: "high" | "low"; details?: string },

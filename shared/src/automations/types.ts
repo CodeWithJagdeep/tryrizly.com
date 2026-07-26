@@ -234,8 +234,29 @@ export function auditEventForAutomationStepResult(input: {
 /** Which trigger events actually fire, per app. Everything else is UI-only. */
 export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   schedule: ["Every Day", "Every Hour", "Every Week"],
-  gmail: ["New Email Matching Search"],
-  calendar: ["New Event"],
+  // "New Label" only detects a label being freshly *applied* to a message
+  // (there's no cheap "label object was just created" event to poll) — see
+  // SchedulerService.pollOneAutomation's gmail branch for the exact caveat.
+  gmail: [
+    "New Email Matching Search",
+    "New Email",
+    "New Attachment",
+    "New Conversation",
+    "New Starred Email",
+    "New Label",
+    "New Labeled Email",
+    "New Labeled Conversation",
+  ],
+  // "Event Cancelled" and "New or Updated Event" are approximate: Calendar's
+  // list API doesn't push deletions/updates separately, so both are derived
+  // by diffing successive polls against flow.cursor — see SchedulerService.
+  calendar: ["New Event", "Event Start", "Event Cancelled", "New or Updated Event"],
+  calcom: ["New Booking"],
+  jira: ["New Issue"],
+  pagerduty: ["New Incident"],
+  trello: ["New Card"],
+  mongodb: ["New Document"],
+  "google-drive": ["New File"],
   // Both poll a Sheet (the Forms trigger reads the form's own response
   // sheet) — see AutomationRunWorkerService and SchedulerService.pollOneAutomation.
   "google-sheets": ["New Row"],
@@ -284,6 +305,10 @@ export const LIVE_ACTION_EVENTS: Record<string, string[]> = {
   github: ["Create Issue"],
   notion: ["Create Page"],
   stripe: ["Create Customer"],
+  gmail: ["Send Email", "Create Draft", "Reply to Email", "Add Label to Email"],
+  // "Find Availability" is read-only (Calendar's freeBusy endpoint) but still
+  // an "action" step in the catalog, not a trigger.
+  calendar: ["Create Detailed Event", "Update Event", "Find Availability"],
   "google-drive": ["Upload File"],
   "google-sheets": ["Create Row"],
   "google-docs": ["Create Document"],

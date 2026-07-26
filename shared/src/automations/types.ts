@@ -295,6 +295,9 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   box: ["File Changed"],
   statuspage: ["New Incident", "Incident Update"],
   betterstack: ["Incident Started", "Incident Resolved"],
+  stripe: ["New Payment", "New Subscription", "Failed Charge"],
+  razorpay: ["New Payment", "Failed Payment"],
+  paypal: ["New Payment", "New Refund"],
   // Poll-only, no webhook on standard BambooHR API tiers — see
   // SchedulerService.pollOneAutomation's "bamboohr" branch.
   bamboohr: ["New Time Off Request", "New Hire"],
@@ -309,6 +312,8 @@ export const LIVE_ACTION_EVENTS: Record<string, string[]> = {
   github: ["Create Issue"],
   notion: ["Create Page"],
   stripe: ["Create Customer"],
+  razorpay: ["Create Invoice"],
+  paypal: ["Create Invoice"],
   gmail: ["Send Email", "Create Draft", "Reply to Email", "Add Label to Email"],
   // "Find Availability" is read-only (Calendar's freeBusy endpoint) but still
   // an "action" step in the catalog, not a trigger.

@@ -18,10 +18,12 @@ export type RazorpayQuery = {
 };
 
 /**
- * Read-only Razorpay access. The caller (text-to-query / business_snapshot)
- * only ever picks one of these four enum keys plus pagination/date params —
- * there is no way to construct an arbitrary URL, so there is no reachable
- * path to a write endpoint (capture, refund, payout) by construction.
+ * Mostly read-only Razorpay access. The caller (text-to-query /
+ * business_snapshot) only ever picks one of these four enum keys plus
+ * pagination/date params — there is no way to construct an arbitrary URL
+ * for `fetch`, so there is no reachable path to a write endpoint (capture,
+ * refund, payout) through it. `createInvoice` below is the one deliberate
+ * write path, backing the automation "Create Invoice" action.
  */
 @Injectable()
 export class RazorpayService {
@@ -47,5 +49,32 @@ export class RazorpayService {
 
     const data = (await res.json()) as { items?: unknown[] };
     return { items: data.items ?? [] };
+  }
+
+  /** The automation "Create Invoice" action — the one write path this service exposes. */
+  async createInvoice(
+    secret: RazorpayConnectorSecret,
+    input: { email?: string; amount: number; currency?: string; description?: string },
+  ): Promise<{ id: string; short_url?: string }> {
+    const auth = Buffer.from(`${secret.keyId}:${secret.keySecret}`).toString("base64");
+    const res = await fetch("https://api.razorpay.com/v1/invoices", {
+      method: "POST",
+      headers: { authorization: `Basic ${auth}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "invoice",
+        customer: input.email ? { email: input.email } : undefined,
+        line_items: [
+          {
+            name: input.description || "Invoice",
+            // Razorpay amounts are always in the smallest currency unit (paise for INR).
+            amount: Math.round(input.amount * 100),
+            currency: input.currency || "INR",
+          },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`razorpay_api_${res.status}`);
+    const data = (await res.json()) as { id: string; short_url?: string };
+    return { id: data.id, short_url: data.short_url };
   }
 }

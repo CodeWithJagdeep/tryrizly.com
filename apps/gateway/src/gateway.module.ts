@@ -35,6 +35,9 @@ import { XeroWebhookAuthService } from "./xero-webhook-auth.service";
 import { WiseWebhookAuthService } from "./wise-webhook-auth.service";
 import { DeelWebhookAuthService } from "./deel-webhook-auth.service";
 import { BoxWebhookAuthService } from "./box-webhook-auth.service";
+import { StripeWebhookAuthService } from "./stripe-webhook-auth.service";
+import { RazorpayWebhookAuthService } from "./razorpay-webhook-auth.service";
+import { PayPalWebhookAuthService } from "./paypal-webhook-auth.service";
 import { RedisThrottlerStorage } from "./throttler-redis.storage";
 import { SlackSocketService } from "./slack-socket.service";
 import { SlackSurfaceController } from "./slack-surface.controller";
@@ -80,6 +83,9 @@ import { TelegramService } from "./telegram.service";
     WiseWebhookAuthService,
     DeelWebhookAuthService,
     BoxWebhookAuthService,
+    StripeWebhookAuthService,
+    RazorpayWebhookAuthService,
+    PayPalWebhookAuthService,
     RedisThrottlerStorage,
     TelegramService,
     TelegramPollerService,

@@ -1,4 +1,5 @@
 import { Controller, Get, Headers, Inject, Query, Res } from "@nestjs/common";
+import { AuthRepository } from "./auth/auth.repository";
 import { CONVERSATION_STORE, type ConversationStore } from "./conversation-store";
 import { DiscordRepository } from "./discord.repository";
 import { GatewayService } from "./gateway.service";
@@ -43,6 +44,8 @@ export class DiscordSurfaceController {
     private readonly gateway: GatewayService,
     @Inject(CONVERSATION_STORE)
     private readonly conversations: ConversationStore,
+    @Inject(AuthRepository)
+    private readonly authRepo: AuthRepository,
   ) {}
 
   /** Mirror of api/slack/history for the dashboard's Discord page. */
@@ -59,6 +62,36 @@ export class DiscordSurfaceController {
 
     const turns = await this.conversations.get(`discord:${dmChannelId}`);
     return { linked: true, turns };
+  }
+
+  /** Discord analog of resolveSlackTarget (gateway.controller.ts) — used by the automation-run worker's "Send Message" action. */
+  @Get("resolve")
+  async resolve(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId) return { discordUserId: null };
+    const discordUserId = await this.discordRepo.findDiscordKeyByUserId(userId);
+    return { discordUserId: discordUserId ?? null };
+  }
+
+  /** Every installed guild + its channels, for the flow-builder's "New Message" channel picker. */
+  @Get("channels")
+  async channels(@Headers("x-heyriz-internal-secret") secret: string | undefined) {
+    requireInternalSecret(secret);
+    const guilds = await this.discordRepo.listGuilds();
+    const withChannels = await Promise.all(
+      guilds.map(async (guild) => ({
+        guildId: guild.guildId,
+        guildName: guild.name,
+        channels: (await this.discordRepo.listChannels(guild.guildId)).map((c) => ({
+          channelId: c.channelId,
+          name: c.name,
+        })),
+      })),
+    );
+    return withChannels;
   }
 
   /** Lets callers check before rendering an "Add to Discord" button. */
@@ -126,6 +159,9 @@ export class DiscordSurfaceController {
     if (!linked.ok) {
       return fail("That Discord account is already linked to a different Rizly account.");
     }
+    await this.authRepo
+      .setOnboarding(record.email, { discordLinked: true })
+      .catch(() => undefined);
 
     try {
       await this.gateway.sendToAiCore("connector.save", {

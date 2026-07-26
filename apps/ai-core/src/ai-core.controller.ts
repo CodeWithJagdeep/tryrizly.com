@@ -815,13 +815,6 @@ export class AiCoreController {
     return this.aiCoreService.automationCalcomEventTypes(payload);
   }
 
-  @MessagePattern("automation.discord.postMessage")
-  automationDiscordPostMessage(
-    @Payload() payload: { userId?: string; content: string },
-  ) {
-    return this.aiCoreService.automationDiscordPostMessage(payload);
-  }
-
   @MessagePattern("automation.github.createIssue")
   automationGitHubCreateIssue(
     @Payload()

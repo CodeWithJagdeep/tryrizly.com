@@ -118,6 +118,16 @@ export class DiscordRepository {
     return records.map((r) => ({ guildId: r.guildId, channelId: r.channelId, name: r.name, type: r.type }));
   }
 
+  /** Every installed guild, for the flow-builder's channel picker (paired with listChannels per guild). */
+  async listGuilds(): Promise<Array<{ guildId: string; name: string }>> {
+    const db = await getDb();
+    const records = await db
+      .collection<{ guildId: string; name: string }>("discord_guilds")
+      .find({})
+      .toArray();
+    return records.map((r) => ({ guildId: r.guildId, name: r.name }));
+  }
+
   /**
    * Deterministic, non-AI channel lookup for automation-creation-time name
    * resolution: (a) a raw snowflake is looked up directly, (b) otherwise an
@@ -275,6 +285,15 @@ export class DiscordRepository {
       .collection<{ userId: string; dmChannelId?: string }>("discord_links")
       .findOne({ userId });
     return record?.dmChannelId ?? null;
+  }
+
+  /** Reverse lookup for automations' "Send Message" action — the linked Discord user id (snowflake), if any. */
+  async findDiscordKeyByUserId(userId: string): Promise<string | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ userId: string; discordKey: string }>("discord_links")
+      .findOne({ userId });
+    return record?.discordKey ?? null;
   }
 
   /** Every linked Discord DM, for replaying messages missed during a socket outage. */

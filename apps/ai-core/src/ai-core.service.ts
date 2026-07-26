@@ -2835,26 +2835,6 @@ export class AiCoreService {
     }
   }
 
-  /** The automation "Send Message" action for Discord — webhook-only, same restriction as connectors/discord.service.ts. */
-  async automationDiscordPostMessage(body: {
-    userId?: string;
-    content: string;
-  }) {
-    const userId = body.userId ?? env.DEFAULT_USER_ID;
-    const secret = await this.connectorService.getDiscordSecret(userId);
-    if (!secret?.webhookUrl)
-      return { ok: false, error: "discord_not_connected" };
-    try {
-      await this.discord.postMessage(secret, body.content);
-      return { ok: true };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "discord_send_failed",
-      };
-    }
-  }
-
   /** The automation "Create Issue" action for GitHub. */
   async automationGitHubCreateIssue(body: {
     userId?: string;

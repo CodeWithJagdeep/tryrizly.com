@@ -7,6 +7,7 @@ export type OnboardingState = {
   googleConnected: boolean;
   telegramLinked: boolean;
   slackLinked?: boolean;
+  discordLinked?: boolean;
   /** Set once the About-you onboarding step (name + optional phone) is saved. */
   profileCompleted?: boolean;
   completedAt?: string;

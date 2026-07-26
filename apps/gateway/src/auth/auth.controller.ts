@@ -13,12 +13,15 @@ import { logger } from "@heyriz/shared/logger";
 import { AuthService } from "./auth.service";
 import { EmailThrottlerGuard } from "./email-throttler.guard";
 import { requireInternalSecret } from "../internal-auth";
+import { DiscordRepository } from "../discord.repository";
 
 @Controller("api/auth")
 export class AuthController {
   constructor(
     @Inject(AuthService)
     private readonly auth: AuthService,
+    @Inject(DiscordRepository)
+    private readonly discordRepo: DiscordRepository,
   ) {}
 
   @Post("register")
@@ -282,6 +285,17 @@ export class AuthController {
     this.requireInternal(secret);
     if (!body.email) return { error: "email is required" };
     const token = await this.auth.createSlackLinkToken(body.email);
+    return { token };
+  }
+
+  @Post("onboarding/discord-token")
+  async discordToken(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Body() body: { email?: string },
+  ) {
+    this.requireInternal(secret);
+    if (!body.email) return { error: "email is required" };
+    const token = await this.discordRepo.createDiscordLinkToken(body.email.trim().toLowerCase(), 15 * 60 * 1000);
     return { token };
   }
 

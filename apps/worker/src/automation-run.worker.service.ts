@@ -20,6 +20,7 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { captureException } from "@heyriz/shared/sentry";
 import { sendSlackSurfaceMessage } from "@heyriz/shared/slack-surface";
+import { sendDiscordDm } from "@heyriz/shared/discord-surface";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
 import { enqueueAutomationRun } from "@heyriz/shared/queue/automation-runs";
 import { evaluateFilter, type FilterConfig } from "@heyriz/shared/automations/types";
@@ -530,14 +531,14 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
     }
 
     if (app === "discord") {
+      const res = await fetch(`${gatewayUrl}/api/discord/resolve?userId=${encodeURIComponent(userId)}`, {
+        headers: this.gatewayHeaders(false),
+      });
+      const { discordUserId } = (await res.json().catch(() => ({}))) as { discordUserId?: string | null };
+      if (!discordUserId) throw new Error("discord_not_connected");
       const content = requiredInterpolated("discord_message", config.message, triggerPayload);
-      const result = await firstValueFrom(
-        this.aiCore.send<{ ok: boolean; error?: string }>("automation.discord.postMessage", {
-          userId,
-          content,
-        }),
-      );
-      if (!result?.ok) throw new Error(result?.error ?? "discord_send_failed");
+      const ok = await sendDiscordDm(discordUserId, content, env.DISCORD_BOT_TOKEN);
+      if (!ok) throw new Error("discord_send_failed");
       return ack("discord");
     }
 

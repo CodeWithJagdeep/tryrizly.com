@@ -191,7 +191,7 @@ export function discordInstallUrl(
 export async function exchangeDiscordIdentity(
   code: string,
   redirectUri: string,
-): Promise<{ discordUserId: string } | null> {
+): Promise<{ discordUserId: string; username?: string } | null> {
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_CLIENT_SECRET) return null;
   const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
@@ -218,6 +218,11 @@ export async function exchangeDiscordIdentity(
     logger.error("discord oauth identify http failure", { status: meRes.status });
     return null;
   }
-  const me = (await meRes.json().catch(() => null)) as { id?: string } | null;
-  return me?.id ? { discordUserId: me.id } : null;
+  const me = (await meRes.json().catch(() => null)) as
+    | { id?: string; username?: string; global_name?: string | null }
+    | null;
+  if (!me?.id) return null;
+  // global_name is Discord's newer display name; falls back to the classic
+  // username when unset (bots and older accounts without one).
+  return { discordUserId: me.id, username: me.global_name || me.username };
 }

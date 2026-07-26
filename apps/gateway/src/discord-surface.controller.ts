@@ -168,9 +168,11 @@ export class DiscordSurfaceController {
         userId,
         provider: "discord_surface",
         authType: "oauth",
-        label: "Discord DM",
+        // Shows the actual linked Discord account in the connectors/automation
+        // UI instead of a generic "Discord DM" label for every user.
+        label: identity.username ? `Discord (@${identity.username})` : "Discord DM",
         secret: { discordUserId: identity.discordUserId, guildId: guildId ?? null },
-        metadata: { setup: "discord_oauth" },
+        metadata: { setup: "discord_oauth", discordUsername: identity.username ?? null },
       });
     } catch (err) {
       logger.warn("failed to save discord surface connector record", {

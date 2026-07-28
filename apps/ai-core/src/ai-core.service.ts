@@ -93,7 +93,7 @@ export type ChatPayload = {
   message?: string;
   /** Set true together with `pendingApproval` to approve a previously-proposed action. */
   approve?: boolean;
-  pendingApproval?: { id?: string; tool: string; payload: unknown };
+  pendingApproval?: { id?: string; executionId?: string; tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
   history?: ConversationTurn[];
   /** Where the reply renders: web dashboard (Markdown) or telegram (plain text). Defaults to telegram. */
@@ -535,6 +535,7 @@ export class AiCoreService {
             tool: body.pendingApproval.tool,
             payload: body.pendingApproval.payload,
             id: body.pendingApproval.id,
+            executionId: body.pendingApproval.executionId,
           }
         : undefined;
     const skillSelection = await this.skillRouter.route({
@@ -879,6 +880,11 @@ export class AiCoreService {
     return this.connectorService.startOAuth(body);
   }
 
+  async resolveConnectorOAuthReturnTo(body: { state?: string }) {
+    const returnTo = await this.connectorService.resolveOAuthReturnTo(body.state);
+    return { returnTo };
+  }
+
   async completeConnectorOAuth(body: CompleteOAuthInput) {
     const result = await this.connectorService.completeOAuth(body);
     if (result.provider === "gmail") {
@@ -1106,18 +1112,34 @@ export class AiCoreService {
   }
 
   /** Backs the Cal.com "New Booking" poll trigger. */
-  async automationCalcomListBookings(body: { userId?: string }) {
+  async automationCalcomListBookings(body: {
+    userId?: string;
+    status?: "upcoming" | "past" | "cancelled";
+  }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getCalComSecret(userId);
     if (!secret) return { connected: false, bookings: [] };
     try {
       const bookings = await this.calcom.listBookings(secret, {
-        status: "upcoming",
+        status: body.status ?? "upcoming",
         take: 20,
       });
       return { connected: true, bookings };
     } catch {
       return { connected: false, bookings: [] };
+    }
+  }
+
+  /** Backs the Cal.com "Out of Office Created" poll trigger. */
+  async automationCalcomListOutOfOffice(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getCalComSecret(userId);
+    if (!secret) return { connected: false, entries: [] };
+    try {
+      const entries = await this.calcom.listOutOfOffice(secret);
+      return { connected: true, entries };
+    } catch {
+      return { connected: false, entries: [] };
     }
   }
 
@@ -1150,6 +1172,36 @@ export class AiCoreService {
       return { connected: true, incidents };
     } catch {
       return { connected: false, incidents: [] };
+    }
+  }
+
+  /**
+   * Backs the Dropbox "New Shared File" poll trigger. Unlike "File Changed"/
+   * "New File in Folder" (both fed by the account-wide delta webhook),
+   * sharing state isn't reliably reflected in that delta stream, so this
+   * polls Dropbox's sharing API directly. Dedup against repeats is handled
+   * generically by the poller's per-flow seenIds cursor, same as PagerDuty/Trello.
+   */
+  async automationDropboxListSharedFiles(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getDropboxSecret(userId);
+    if (!secret) return { connected: false, files: [] };
+    try {
+      const res = await fetch("https://api.dropboxapi.com/2/sharing/list_received_files", {
+        method: "POST",
+        headers: { authorization: `Bearer ${secret.accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ limit: 50 }),
+      });
+      if (!res.ok) return { connected: true, files: [] };
+      const json = (await res.json()) as {
+        entries?: Array<{ id?: string; name?: string; preview_url?: string; time_shared?: string }>;
+      };
+      const files = (json.entries ?? [])
+        .filter((e): e is { id: string; name?: string; preview_url?: string; time_shared?: string } => Boolean(e.id))
+        .map((e) => ({ id: e.id, name: e.name, url: e.preview_url, sharedAt: e.time_shared }));
+      return { connected: true, files };
+    } catch {
+      return { connected: false, files: [] };
     }
   }
 
@@ -1574,6 +1626,74 @@ export class AiCoreService {
             files: changes.entries.map((entry) => ({ path: entry.path, name: entry.name, tag: entry.tag })),
           },
         });
+
+        await this.dispatchDropboxFolderTriggers(account.userId, accountId, changes.cursor, changes.entries);
+      }
+    }
+  }
+
+  /**
+   * "New File in Folder" / "New or Updated File in Folder" — unlike "File
+   * Changed" above, these are scoped to one flow's configured folderPath, so
+   * they can't go through the generic dispatchPushTrigger (which only
+   * matches by app+title, not per-flow config). Mirrors discordChannelEvent's
+   * manual flow-matching for the same reason.
+   */
+  private async dispatchDropboxFolderTriggers(
+    userId: string,
+    accountId: string,
+    cursor: string,
+    entries: Array<{ path?: string; name?: string; tag?: string; id?: string }>,
+  ): Promise<void> {
+    const fileEntries = entries.filter((e) => e.tag === "file" && e.path && e.id);
+    if (fileEntries.length === 0) return;
+
+    const result = await gatewayInternalFetch<{ flows?: AutomationFlow[] }>(
+      "/api/automations/_internal/active",
+    );
+    const flows = (result?.flows ?? []).filter((flow) => {
+      const trigger = flow.steps[0];
+      return (
+        flow.userId === userId &&
+        trigger?.kind === "trigger" &&
+        trigger.app === "dropbox" &&
+        (trigger.title === "New File in Folder" || trigger.title === "New or Updated File in Folder")
+      );
+    });
+    if (flows.length === 0) return;
+
+    // Computed once per webhook, shared by every "New File in Folder" flow —
+    // a file id seen for the first time here is new regardless of which
+    // flow's folder it landed in.
+    const newFileIds = await this.connectorService.filterNewDropboxFileIds(
+      userId,
+      fileEntries.map((e) => e.id!),
+    );
+
+    for (const flow of flows) {
+      const trigger = flow.steps[0];
+      const folderPath = normalizeDropboxFolderPath(String(trigger.config?.folderPath ?? ""));
+      let matches = fileEntries.filter((e) => !folderPath || normalizeDropboxFolderPath(e.path!).startsWith(folderPath));
+      if (trigger.title === "New File in Folder") {
+        matches = matches.filter((e) => newFileIds.has(e.id!));
+      }
+      if (matches.length === 0) continue;
+
+      try {
+        await enqueueAutomationRun({
+          flowId: flow.id,
+          userId,
+          triggerItemId: `${accountId}:${cursor}`,
+          triggerPayload: {
+            accountId,
+            files: matches.map((e) => ({ path: e.path, name: e.name, tag: e.tag })),
+          },
+        });
+      } catch (error) {
+        logger.warn("dropbox folder trigger: enqueue failed", {
+          flowId: flow.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }
@@ -1587,7 +1707,7 @@ export class AiCoreService {
   private async fetchDropboxDelta(
     accessToken: string,
     cursor: string | undefined,
-  ): Promise<{ cursor: string; entries: Array<{ path?: string; name?: string; tag?: string }> } | null> {
+  ): Promise<{ cursor: string; entries: Array<{ path?: string; name?: string; tag?: string; id?: string }> } | null> {
     if (!cursor) {
       const res = await fetch("https://api.dropboxapi.com/2/files/list_folder/get_latest_cursor", {
         method: "POST",
@@ -1607,7 +1727,7 @@ export class AiCoreService {
     if (!res.ok) return null;
     const json = (await res.json()) as {
       cursor?: string;
-      entries?: Array<{ path_display?: string; name?: string; [".tag"]?: string }>;
+      entries?: Array<{ path_display?: string; name?: string; id?: string; [".tag"]?: string }>;
     };
     if (!json.cursor) return null;
     return {
@@ -1616,6 +1736,7 @@ export class AiCoreService {
         path: entry.path_display,
         name: entry.name,
         tag: entry[".tag"],
+        id: entry.id,
       })),
     };
   }
@@ -2737,6 +2858,47 @@ export class AiCoreService {
   }
 
   /**
+   * Every base the connected Airtable account can see — backs the flow-builder's
+   * base picker. `connected` reflects whether an Airtable token exists at all;
+   * a token that exists but can't list bases (e.g. it predates the
+   * schema.bases:read scope) comes back as `connected: true, error: ...` so the
+   * UI can tell "never connected" apart from "reconnect for base access"
+   * instead of collapsing both into the same misleading message.
+   */
+  async automationAirtableListBases(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getAirtableSecret(userId);
+    if (!secret) return { connected: false, bases: [] };
+    try {
+      const bases = await this.airtable.listBases(secret);
+      return { connected: true, bases };
+    } catch (error) {
+      return {
+        connected: true,
+        bases: [],
+        error: error instanceof Error ? error.message : "airtable_list_bases_failed",
+      };
+    }
+  }
+
+  /** Every table (+ field schema) in one base — backs the table picker and the Create Record field hints. Same connected/error split as automationAirtableListBases. */
+  async automationAirtableListTables(body: { userId?: string; baseId: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getAirtableSecret(userId);
+    if (!secret) return { connected: false, tables: [] };
+    try {
+      const tables = await this.airtable.listTables(secret, body.baseId);
+      return { connected: true, tables };
+    } catch (error) {
+      return {
+        connected: true,
+        tables: [],
+        error: error instanceof Error ? error.message : "airtable_list_tables_failed",
+      };
+    }
+  }
+
+  /**
    * Backs the BambooHR "New Time Off Request" poller. BambooHR has no
    * webhook on standard API tiers, so this — like Airtable/Gmail/Calendar —
    * is fed entirely by SchedulerService.pollOneAutomation. Auth is HTTP
@@ -2893,16 +3055,55 @@ export class AiCoreService {
     }
   }
 
-  /** Backs the GitHub "New Push" poll trigger for a configured repo's default branch. */
-  async automationGitHubListCommits(body: { userId?: string; repo: string }) {
+  /** Backs the GitHub "New Push" poll trigger for a configured repo, optionally scoped to one branch. */
+  async automationGitHubListCommits(body: { userId?: string; repo: string; branch?: string }) {
     const userId = body.userId ?? env.DEFAULT_USER_ID;
     const secret = await this.connectorService.getGitHubSecret(userId);
     if (!secret) return { connected: false, commits: [] };
     try {
-      const commits = await this.github.listNewCommits(secret, body.repo, 20);
+      const commits = await this.github.listNewCommits(secret, body.repo, 20, body.branch);
       return { connected: true, commits };
     } catch {
       return { connected: false, commits: [] };
+    }
+  }
+
+  /** Backs the GitHub "New Comment on Issue/PR" poll trigger for a configured repo. */
+  async automationGitHubListComments(body: { userId?: string; repo: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, comments: [] };
+    try {
+      const comments = await this.github.listNewComments(secret, body.repo, 20);
+      return { connected: true, comments };
+    } catch {
+      return { connected: false, comments: [] };
+    }
+  }
+
+  /** Every repo the connected GitHub account can see — backs the flow-builder's repo picker. */
+  async automationGitHubListRepos(body: { userId?: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, repos: [] };
+    try {
+      const repos = await this.github.listRepos(secret);
+      return { connected: true, repos };
+    } catch {
+      return { connected: false, repos: [] };
+    }
+  }
+
+  /** Every branch on one repo — backs the "New Push" trigger's branch picker. */
+  async automationGitHubListBranches(body: { userId?: string; repo: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const secret = await this.connectorService.getGitHubSecret(userId);
+    if (!secret) return { connected: false, branches: [] };
+    try {
+      const branches = await this.github.listBranches(secret, body.repo);
+      return { connected: true, branches };
+    } catch {
+      return { connected: false, branches: [] };
     }
   }
 
@@ -3154,6 +3355,13 @@ const LOW_VALUE_EMAIL_CATEGORIES = new Set([
   "general_low",
   "otp",
 ]);
+
+/** Dropbox paths are case-insensitive; normalize to a leading-slash, lowercased form for prefix matching. */
+function normalizeDropboxFolderPath(path: string): string {
+  const trimmed = path.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
 
 function stripHtml(html: string): string {
   return html

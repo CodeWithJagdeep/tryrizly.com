@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
 import { env } from "../env";
 
@@ -31,6 +32,15 @@ export type PendingActionRecord = {
   /** Short one-line label for the "which one?" list. */
   label: string;
   createdAt: string;
+  /**
+   * Globally-unique key for action-execution.ts's exactly-once claim, kept
+   * separate from `id`. `id` is a small per-chat sequential counter that
+   * resets after 30 minutes of inactivity (see seqKey's TTL below) — reusing
+   * it as the execution-dedup key collided with a *different* action's
+   * still-cached claim record (30-day TTL there) once the counter wrapped
+   * back to the same small number, throwing "execution_id_payload_mismatch".
+   */
+  executionId: string;
 };
 
 export type AddPendingActionInput = {
@@ -54,6 +64,7 @@ export async function addPendingAction(
   const id = String(await redis.incr(seqKey(chatId)));
   const record: PendingActionRecord = {
     id,
+    executionId: randomUUID(),
     tool: input.tool,
     payload: input.payload,
     preview: input.preview,

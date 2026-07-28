@@ -78,7 +78,7 @@ export type AgentRunInput = {
   /** Deterministic capability and context selection made before the agent loop. */
   skillSelection?: SkillSelection;
   /** A previously-proposed action the principal has now explicitly approved. */
-  approval?: { id?: string; tool: string; payload: unknown };
+  approval?: { id?: string; executionId?: string; tool: string; payload: unknown };
   /** Recent turns from the same Telegram chat, oldest first. */
   history?: ConversationTurn[];
   /** Where the reply renders: the web dashboard supports Markdown, Telegram is plain text. */
@@ -212,7 +212,7 @@ export class AgentService {
         input.approval.tool,
         input.approval.payload,
         input,
-        { approved: true, executionId: input.approval.id },
+        { approved: true, executionId: input.approval.executionId ?? input.approval.id },
       );
       steps.push(summarize(result));
       toolResults.push(result);
@@ -1465,6 +1465,7 @@ const PROGRESS_LABELS: Record<string, string> = {
   reschedule_calendar_event: "Moving that event…",
   list_calendar_events: "Checking your calendar…",
   list_automations: "Checking your automations…",
+  describe_automation_event: "Checking what that step needs…",
   create_automation: "Building the automation…",
   activate_automation: "Activating the automation…",
   pause_automation: "Pausing the automation…",

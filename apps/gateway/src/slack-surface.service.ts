@@ -390,7 +390,7 @@ export class SlackSurfaceService {
         userId,
         message: "approved",
         approve: true,
-        pendingApproval: { id: pending.id, tool: pending.tool, payload: pending.payload },
+        pendingApproval: { id: pending.id, executionId: pending.executionId, tool: pending.tool, payload: pending.payload },
         history,
       });
 

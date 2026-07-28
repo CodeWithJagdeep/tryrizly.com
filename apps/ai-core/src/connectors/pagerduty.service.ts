@@ -10,6 +10,18 @@ export type PagerDutyIncident = {
   url?: string;
 };
 
+/**
+ * OAuth (accessToken, Bearer auth) already identifies the acting user, so no
+ * "From" header is needed. The manual shape (apiKey) is a generic API key not
+ * tied to a user, so PagerDuty requires the "From" header on every write.
+ */
+function authHeaders(secret: PagerDutyConnectorSecret): Record<string, string> {
+  if (secret.accessToken) {
+    return { authorization: `Bearer ${secret.accessToken}` };
+  }
+  return { authorization: `Token token=${secret.apiKey}`, from: secret.fromEmail! };
+}
+
 @Injectable()
 export class PagerDutyService {
   /** Newest-created first — backs the "New Incident" poll trigger. */
@@ -24,9 +36,8 @@ export class PagerDutyService {
     if (opts.serviceId) params.append("service_ids[]", opts.serviceId);
     const res = await fetch(`https://api.pagerduty.com/incidents?${params.toString()}`, {
       headers: {
-        authorization: `Token token=${secret.apiKey}`,
+        ...authHeaders(secret),
         accept: "application/vnd.pagerduty+json;version=2",
-        from: secret.fromEmail,
       },
     });
     if (res.status === 401 || res.status === 403) throw new Error("pagerduty_invalid_credentials");
@@ -50,10 +61,9 @@ export class PagerDutyService {
     const res = await fetch("https://api.pagerduty.com/incidents", {
       method: "POST",
       headers: {
-        authorization: `Token token=${secret.apiKey}`,
+        ...authHeaders(secret),
         "content-type": "application/json",
         accept: "application/vnd.pagerduty+json;version=2",
-        from: secret.fromEmail,
       },
       body: JSON.stringify({
         incident: {

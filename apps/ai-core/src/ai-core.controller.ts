@@ -333,6 +333,11 @@ export class AiCoreController {
     return this.aiCoreService.completeConnectorOAuth(payload);
   }
 
+  @MessagePattern("connector.oauth.resolveReturnTo")
+  resolveConnectorOAuthReturnTo(@Payload() payload: { state?: string }) {
+    return this.aiCoreService.resolveConnectorOAuthReturnTo(payload);
+  }
+
   @MessagePattern("gmail.listRecent")
   listRecentEmails(
     @Payload() payload: { userId?: string; maxResults?: number },
@@ -493,8 +498,15 @@ export class AiCoreController {
   }
 
   @MessagePattern("automation.calcom.listBookings")
-  automationCalcomListBookings(@Payload() payload: { userId?: string }) {
+  automationCalcomListBookings(
+    @Payload() payload: { userId?: string; status?: "upcoming" | "past" | "cancelled" },
+  ) {
     return this.aiCoreService.automationCalcomListBookings(payload);
+  }
+
+  @MessagePattern("automation.calcom.listOutOfOffice")
+  automationCalcomListOutOfOffice(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationCalcomListOutOfOffice(payload);
   }
 
   @MessagePattern("automation.jira.searchNewIssues")
@@ -509,6 +521,13 @@ export class AiCoreController {
     @Payload() payload: { userId?: string; serviceId?: string },
   ) {
     return this.aiCoreService.automationPagerDutyListIncidents(payload);
+  }
+
+  @MessagePattern("automation.dropbox.listSharedFiles")
+  automationDropboxListSharedFiles(
+    @Payload() payload: { userId?: string },
+  ) {
+    return this.aiCoreService.automationDropboxListSharedFiles(payload);
   }
 
   @MessagePattern("automation.trello.listCards")
@@ -844,9 +863,28 @@ export class AiCoreController {
 
   @MessagePattern("automation.github.listNewCommits")
   automationGitHubListCommits(
-    @Payload() payload: { userId?: string; repo: string },
+    @Payload() payload: { userId?: string; repo: string; branch?: string },
   ) {
     return this.aiCoreService.automationGitHubListCommits(payload);
+  }
+
+  @MessagePattern("automation.github.listNewComments")
+  automationGitHubListComments(
+    @Payload() payload: { userId?: string; repo: string },
+  ) {
+    return this.aiCoreService.automationGitHubListComments(payload);
+  }
+
+  @MessagePattern("automation.github.listRepos")
+  automationGitHubListRepos(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationGitHubListRepos(payload);
+  }
+
+  @MessagePattern("automation.github.listBranches")
+  automationGitHubListBranches(
+    @Payload() payload: { userId?: string; repo: string },
+  ) {
+    return this.aiCoreService.automationGitHubListBranches(payload);
   }
 
   @MessagePattern("automation.notion.createPage")
@@ -1001,6 +1039,16 @@ export class AiCoreController {
     },
   ) {
     return this.aiCoreService.automationAirtableCreateRecord(payload);
+  }
+
+  @MessagePattern("automation.airtable.listBases")
+  automationAirtableListBases(@Payload() payload: { userId?: string }) {
+    return this.aiCoreService.automationAirtableListBases(payload);
+  }
+
+  @MessagePattern("automation.airtable.listTables")
+  automationAirtableListTables(@Payload() payload: { userId?: string; baseId: string }) {
+    return this.aiCoreService.automationAirtableListTables(payload);
   }
 
   @MessagePattern("automation.bamboohr.listTimeOffRequests")

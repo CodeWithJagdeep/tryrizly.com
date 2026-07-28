@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import {
   addPendingAction,
@@ -49,6 +50,7 @@ export class MemoryApprovalStore implements ApprovalStore {
     const id = String(++entry.seq);
     const record: PendingApprovalRecord = {
       id,
+      executionId: randomUUID(),
       tool: input.tool,
       payload: input.payload,
       preview: input.preview,

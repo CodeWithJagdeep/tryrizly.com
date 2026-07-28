@@ -47,6 +47,52 @@ export class AutomationsController {
     return { flows: await this.automations.list(userId) };
   }
 
+  /** Every base the connected Airtable account can see — for the flow-builder's base picker. Must stay ahead of :id below (Nest/Express match route order). */
+  @Get("airtable-bases")
+  async airtableBases(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId) return { connected: false, bases: [] };
+    return this.gateway.sendToAiCore("automation.airtable.listBases", { userId });
+  }
+
+  /** Every table (+ field schema) in one base — for the flow-builder's table picker. */
+  @Get("airtable-tables")
+  async airtableTables(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+    @Query("baseId") baseId: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId || !baseId) return { connected: false, tables: [] };
+    return this.gateway.sendToAiCore("automation.airtable.listTables", { userId, baseId });
+  }
+
+  /** Every repo the connected GitHub account can see — for the flow-builder's repo picker. */
+  @Get("github-repos")
+  async githubRepos(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId) return { connected: false, repos: [] };
+    return this.gateway.sendToAiCore("automation.github.listRepos", { userId });
+  }
+
+  /** Every branch on one repo — for the "New Push" trigger's branch picker. */
+  @Get("github-branches")
+  async githubBranches(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+    @Query("repo") repo: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId || !repo) return { connected: false, branches: [] };
+    return this.gateway.sendToAiCore("automation.github.listBranches", { userId, repo });
+  }
+
   @Get(":id")
   async get(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,

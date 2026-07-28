@@ -245,12 +245,13 @@ export class GatewayController {
 
     // Approval is resolved server-side by opaque id — a client can never smuggle
     // its own tool/payload in as an "approved" action (see approval-store.ts).
-    let approval: { id: string; tool: string; payload: unknown } | undefined;
+    let approval: { id: string; executionId: string; tool: string; payload: unknown } | undefined;
     if (body.approve && body.pendingApprovalId) {
       const pending = await this.approvals.get(userId, body.pendingApprovalId);
       if (pending) {
         approval = {
           id: pending.id,
+          executionId: pending.executionId,
           tool: pending.tool,
           payload: pending.payload,
         };
@@ -315,11 +316,11 @@ export class GatewayController {
       return;
     }
 
-    let approval: { id: string; tool: string; payload: unknown } | undefined;
+    let approval: { id: string; executionId: string; tool: string; payload: unknown } | undefined;
     if (body.approve && body.pendingApprovalId) {
       const pending = await this.approvals.get(userId, body.pendingApprovalId);
       if (pending) {
-        approval = { id: pending.id, tool: pending.tool, payload: pending.payload };
+        approval = { id: pending.id, executionId: pending.executionId, tool: pending.tool, payload: pending.payload };
         await this.approvals.remove(userId, body.pendingApprovalId);
         await appendActionAudit({
           userId,
@@ -633,11 +634,11 @@ export class GatewayController {
     this.requireInternal(secret);
     if (!userId) return { error: "userId is required" };
 
-    const chatId = await this.authRepo.findTelegramChatIdByUserId(userId);
-    if (!chatId) return { linked: false, turns: [] };
+    const link = await this.authRepo.findTelegramLinkByUserId(userId);
+    if (!link) return { linked: false, turns: [] };
 
-    const turns = await this.conversations.get(chatId);
-    return { linked: true, turns };
+    const turns = await this.conversations.get(link.chatId);
+    return { linked: true, turns, displayName: link.displayName };
   }
 
   @Get("api/notifications")
@@ -954,9 +955,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(
-        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
-      );
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
       return;
     }
     if (!code) {
@@ -998,9 +999,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(
-        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
-      );
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
       return;
     }
     if (!code) {
@@ -1020,6 +1021,37 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/airtable/callback")
+  async completeAirtableConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing Airtable OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "airtable"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   @Get("api/connectors/notion/callback")
   async completeNotionConnectorOAuth(
     @Query("code") code: string,
@@ -1029,9 +1061,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(
-        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
-      );
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
       return;
     }
     if (!code) {
@@ -1568,9 +1600,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(
-        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
-      );
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
       return;
     }
     if (!code) {
@@ -1599,9 +1631,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(
-        `${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(errorDescription ?? error)}`,
-      );
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(errorDescription ?? error)}`);
       return;
     }
     if (!code) {
@@ -1653,7 +1685,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1681,7 +1715,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1711,7 +1747,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code || !realmId) {
@@ -1739,7 +1777,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1767,7 +1807,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1795,7 +1837,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1823,7 +1867,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1851,7 +1897,9 @@ export class GatewayController {
     @Res() res: RedirectResponse,
   ) {
     if (error) {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/connectors?error=${encodeURIComponent(error)}`);
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
@@ -1871,9 +1919,39 @@ export class GatewayController {
     res.redirect(`${env.WEB_APP_URL}${returnTo}`);
   }
 
+  @Get("api/connectors/pagerduty/callback")
+  async completePagerDutyConnectorOAuth(
+    @Query("code") code: string,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: RedirectResponse,
+  ) {
+    if (error) {
+      const returnTo = await this.errorReturnTo(state, "/dashboard/connectors");
+      const sep = returnTo.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${returnTo}${sep}error=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      res.status(400).send("Missing PagerDuty OAuth code");
+      return;
+    }
+
+    const result = await this.gatewayService.sendToAiCore<{
+      returnTo?: string;
+      provider?: string;
+    }>("connector.oauth.complete", { code, state });
+
+    const returnTo = sanitizeReturnPath(
+      result.returnTo,
+      `/dashboard/connectors?connected=${result.provider ?? "pagerduty"}`,
+    );
+    res.redirect(`${env.WEB_APP_URL}${returnTo}`);
+  }
+
   private requireConnectorOAuthProvider(
     provider: string,
-  ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" | "shopify" | "dropbox" | "figma" | "quickbooks" | "xero" | "deel" | "box" | "jira" | "calendly" {
+  ): "gmail" | "calendar" | "calcom" | "notion" | "github" | "stripe" | "shopify" | "dropbox" | "figma" | "quickbooks" | "xero" | "deel" | "box" | "jira" | "calendly" | "airtable" | "pagerduty" {
     if (
       provider === "gmail" ||
       provider === "calendar" ||
@@ -1889,7 +1967,9 @@ export class GatewayController {
       provider === "deel" ||
       provider === "box" ||
       provider === "jira" ||
-      provider === "calendly"
+      provider === "calendly" ||
+      provider === "airtable" ||
+      provider === "pagerduty"
     ) {
       return provider;
     }
@@ -1898,6 +1978,28 @@ export class GatewayController {
 
   private requireInternal(secret: string | undefined) {
     requireInternalSecret(secret);
+  }
+
+  /**
+   * Recovers where an OAuth attempt started (e.g. mid-automation) when the
+   * provider redirects back with `?error=...` instead of `?code=...` — the
+   * normal completeOAuth path (which reads returnTo off the consumed state)
+   * never runs on that branch, so every connector error used to bounce the
+   * principal to the generic /dashboard/connectors regardless of where they
+   * actually came from. Falls back to `fallback` if there's no state, it's
+   * invalid, or ai-core is unreachable.
+   */
+  private async errorReturnTo(state: string | undefined, fallback: string): Promise<string> {
+    if (!state) return fallback;
+    try {
+      const result = await this.gatewayService.sendToAiCore<{ returnTo?: string }>(
+        "connector.oauth.resolveReturnTo",
+        { state },
+      );
+      return sanitizeReturnPath(result.returnTo, fallback);
+    } catch {
+      return fallback;
+    }
   }
 }
 

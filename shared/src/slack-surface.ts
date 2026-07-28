@@ -267,6 +267,12 @@ export async function transcribeSlackAudio(
  */
 export const SLACK_SURFACE_BOT_SCOPES = [
   "chat:write",
+  // Lets "Send Channel Message" post to a public channel the bot hasn't been
+  // invited to. Without it, chat:write alone only covers channels the bot is
+  // already a member of, so the action 400s with not_in_channel for every
+  // other channel the picker happily offered. Same reauthorize caveat as the
+  // scopes below — workspaces installed before this must "Add to Slack" again.
+  "chat:write.public",
   "im:history",
   "im:write",
   "files:read",
@@ -337,6 +343,43 @@ export async function exchangeSlackOAuthCode(
     teamName: json.team.name,
     authedUserId: json.authed_user.id,
   };
+}
+
+/**
+ * Looks up the linked Slack user's display name (users.info) so the
+ * connectors/automation UI can show who's actually connected ("Jagdeep")
+ * instead of a generic "Slack DM" label for every account.
+ */
+export async function fetchSlackUserName(
+  slackUserId: string,
+  botToken: string,
+): Promise<string | undefined> {
+  const json = await slackApi("users.info", botToken, { user: slackUserId });
+  const user = json?.user as
+    | { real_name?: string; profile?: { display_name?: string; real_name?: string } }
+    | undefined;
+  return user?.profile?.display_name || user?.profile?.real_name || user?.real_name;
+}
+
+/**
+ * Public channels in the workspace, for the flow-builder's Slack channel
+ * pickers. Mirrors DiscordSurfaceController.channels — only channels a bot
+ * message can actually land in, so archived ones are dropped rather than
+ * offered and then failing at send time. Requires channels:read.
+ */
+export async function fetchSlackChannels(
+  botToken: string,
+): Promise<Array<{ channelId: string; name: string }>> {
+  const json = await slackApi("conversations.list", botToken, {
+    types: "public_channel",
+    exclude_archived: "true",
+    limit: "1000",
+  });
+  const channels = (json?.channels ?? []) as Array<{ id?: string; name?: string; is_archived?: boolean }>;
+  return channels
+    .filter((c): c is { id: string; name: string } => Boolean(c.id && c.name) && !c.is_archived)
+    .map((c) => ({ channelId: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

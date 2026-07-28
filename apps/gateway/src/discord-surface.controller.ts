@@ -26,6 +26,12 @@ function redirectUri(): string | null {
   return env.DISCORD_SURFACE_REDIRECT_URI ?? null;
 }
 
+/** Only a same-site relative path is ever redirected to — guards against an open redirect via a crafted returnTo (e.g. "//evil.com"). */
+function safeReturnTo(returnTo: string | undefined): string {
+  if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
+  return "/dashboard/discord";
+}
+
 /**
  * The "Add to Discord" bot-install OAuth flow, mirroring
  * slack-surface.controller.ts. The web dashboard sends the principal to
@@ -76,19 +82,29 @@ export class DiscordSurfaceController {
     return { discordUserId: discordUserId ?? null };
   }
 
-  /** Every installed guild + its channels, for the flow-builder's "New Message" channel picker. */
+  /** This user's own installed guilds + their channels, for the flow-builder's channel pickers. Scoped by userId so one user can never see or target another user's server. */
   @Get("channels")
-  async channels(@Headers("x-heyriz-internal-secret") secret: string | undefined) {
+  async channels(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
     requireInternalSecret(secret);
-    const guilds = await this.discordRepo.listGuilds();
+    if (!userId) return [];
+    const guilds = await this.discordRepo.listGuilds(userId);
     const withChannels = await Promise.all(
       guilds.map(async (guild) => ({
         guildId: guild.guildId,
         guildName: guild.name,
-        channels: (await this.discordRepo.listChannels(guild.guildId)).map((c) => ({
-          channelId: c.channelId,
-          name: c.name,
-        })),
+        channels: (await this.discordRepo.listChannels(guild.guildId))
+          // Only channels that can actually receive a bot message — excludes
+          // categories (type 4), voice channels, stages, etc. A category
+          // slipping through here is exactly what caused discord_send_failed
+          // (Discord's message-create endpoint 400s on a non-text channel).
+          .filter((c) => c.type === 0 || c.type === 5)
+          .map((c) => ({
+            channelId: c.channelId,
+            name: c.name,
+          })),
       })),
     );
     return withChannels;
@@ -124,8 +140,10 @@ export class DiscordSurfaceController {
     @Query("error") error: string | undefined,
     @Res() res: RedirectResponse,
   ) {
-    const fail = (message: string) => {
-      res.redirect(`${env.WEB_APP_URL}/dashboard/discord?error=${encodeURIComponent(message)}`);
+    const fail = (message: string, returnTo?: string) => {
+      const base = safeReturnTo(returnTo);
+      const sep = base.includes("?") ? "&" : "?";
+      res.redirect(`${env.WEB_APP_URL}${base}${sep}error=${encodeURIComponent(message)}`);
     };
 
     if (error) return fail(error);
@@ -157,7 +175,10 @@ export class DiscordSurfaceController {
     const userId = record.email.trim().toLowerCase();
     const linked = await this.discordRepo.linkDiscordUser(identity.discordUserId, record.email, userId);
     if (!linked.ok) {
-      return fail("That Discord account is already linked to a different Rizly account.");
+      return fail("That Discord account is already linked to a different Rizly account.", record.returnTo);
+    }
+    if (guildId) {
+      await this.discordRepo.setGuildOwner(guildId, userId).catch(() => undefined);
     }
     await this.authRepo
       .setOnboarding(record.email, { discordLinked: true })
@@ -180,6 +201,8 @@ export class DiscordSurfaceController {
       });
     }
 
-    res.redirect(`${env.WEB_APP_URL}/dashboard/discord?connected=1`);
+    const base = safeReturnTo(record.returnTo);
+    const sep = base.includes("?") ? "&" : "?";
+    res.redirect(`${env.WEB_APP_URL}${base}${sep}connected=1`);
   }
 }

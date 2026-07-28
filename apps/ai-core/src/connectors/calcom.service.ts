@@ -21,6 +21,8 @@ export type CalComBooking = {
   location?: string;
   meetingUrl?: string;
   description?: string;
+  /** Uid of the booking this one replaced, if it was created via a reschedule. */
+  fromReschedule?: string;
 };
 
 export type CalComEventType = {
@@ -29,6 +31,15 @@ export type CalComEventType = {
   title: string;
   length: number;
   description?: string;
+};
+
+export type CalComOutOfOffice = {
+  id: number;
+  uuid: string;
+  start: string;
+  end: string;
+  reason?: string;
+  notes?: string;
 };
 
 // v2 endpoints pin a specific accepted snapshot date per resource — see
@@ -56,6 +67,10 @@ export class CalComService {
 
   async listEventTypes(auth: CalComAuth): Promise<CalComEventType[]> {
     return this.listEventTypesV2(bearerTokenFor(auth));
+  }
+
+  async listOutOfOffice(auth: CalComAuth): Promise<CalComOutOfOffice[]> {
+    return this.listOutOfOfficeV2(bearerTokenFor(auth));
   }
 
   async createBooking(
@@ -105,6 +120,18 @@ export class CalComService {
 
     const data = (await res.json()) as { data?: unknown[] };
     return (data.data ?? []).map((e) => this.parseEventTypeV2(e as Record<string, unknown>));
+  }
+
+  // GET /v2/me/ooo — undocumented cal-api-version requirement, so none is
+  // sent (matches https://cal.com/docs/api-reference/v2/out-of-office).
+  private async listOutOfOfficeV2(accessToken: string): Promise<CalComOutOfOffice[]> {
+    const res = await fetch(`${this.v2Base}/me/ooo?take=50&sortStart=desc`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error(`calcom_api_${res.status}`);
+
+    const data = (await res.json()) as { data?: unknown[] };
+    return (data.data ?? []).map((o) => this.parseOutOfOfficeV2(o as Record<string, unknown>));
   }
 
   private async createBookingV2(
@@ -164,6 +191,18 @@ export class CalComService {
       location,
       meetingUrl: location?.startsWith("http") ? location : undefined,
       description: b.description as string | undefined,
+      fromReschedule: (b.fromReschedule as string | null | undefined) ?? undefined,
+    };
+  }
+
+  private parseOutOfOfficeV2(o: Record<string, unknown>): CalComOutOfOffice {
+    return {
+      id: o.id as number,
+      uuid: o.uuid as string,
+      start: o.start as string,
+      end: o.end as string,
+      reason: o.reason as string | undefined,
+      notes: o.notes as string | undefined,
     };
   }
 

@@ -304,9 +304,12 @@ export class AuthRepository {
     chatId: string,
     email: string,
     userId: string,
+    displayName?: string,
   ): Promise<{ ok: true } | { ok: false; linkedEmail: string }> {
     const db = await getDb();
-    const links = db.collection<{ chatId: string; userId: string; email?: string }>("telegram_links");
+    const links = db.collection<{ chatId: string; userId: string; email?: string; displayName?: string }>(
+      "telegram_links",
+    );
 
     const existing = await links.findOne({ chatId });
     if (existing && existing.userId !== userId) {
@@ -316,7 +319,7 @@ export class AuthRepository {
     // Same account relinking (possibly from a new chat): drop any stale link
     // on either side, then write the fresh one.
     await links.deleteMany({ $or: [{ chatId }, { userId }] });
-    await links.insertOne({ chatId, email, userId, linkedAt: new Date() } as never);
+    await links.insertOne({ chatId, email, userId, displayName, linkedAt: new Date() } as never);
     await this.setOnboarding(email, { telegramLinked: true, completedAt: new Date().toISOString() });
     return { ok: true };
   }
@@ -351,6 +354,17 @@ export class AuthRepository {
       userId,
     });
     return record?.chatId ?? null;
+  }
+
+  /** Same lookup as findTelegramChatIdByUserId, plus the linked account's display name for the UI. */
+  async findTelegramLinkByUserId(
+    userId: string,
+  ): Promise<{ chatId: string; displayName?: string } | null> {
+    const db = await getDb();
+    const record = await db
+      .collection<{ chatId: string; userId: string; displayName?: string }>("telegram_links")
+      .findOne({ userId });
+    return record ? { chatId: record.chatId, displayName: record.displayName } : null;
   }
 
   async countTelegramLinks(): Promise<number> {
@@ -430,6 +444,7 @@ export class AuthRepository {
     email: string,
     userId: string,
     dmChannelId?: string,
+    displayName?: string,
   ): Promise<{ ok: true } | { ok: false; linkedEmail: string }> {
     const db = await getDb();
     const links = db.collection<{
@@ -437,6 +452,7 @@ export class AuthRepository {
       userId: string;
       email?: string;
       dmChannelId?: string;
+      displayName?: string;
     }>("slack_links");
 
     const existing = await links.findOne({ slackKey });
@@ -450,11 +466,13 @@ export class AuthRepository {
       email,
       userId,
       dmChannelId,
+      displayName,
       linkedAt: new Date(),
     } as never);
     await this.setOnboarding(email, { slackLinked: true, completedAt: new Date().toISOString() });
     return { ok: true };
   }
+
 
   /** Unlink this user's Slack identity. Returns true if a link was removed. */
   async unlinkSlackUser(userId: string): Promise<boolean> {
@@ -516,12 +534,16 @@ export class AuthRepository {
   /** Full Slack link for a user — slackKey embeds the teamId (`teamId:slackUserId`). */
   async findSlackLinkByUserId(
     userId: string,
-  ): Promise<{ slackKey: string; dmChannelId?: string } | null> {
+  ): Promise<{ slackKey: string; dmChannelId?: string; displayName?: string } | null> {
     const db = await getDb();
     const record = await db
-      .collection<{ userId: string; slackKey: string; dmChannelId?: string }>("slack_links")
+      .collection<{ userId: string; slackKey: string; dmChannelId?: string; displayName?: string }>(
+        "slack_links",
+      )
       .findOne({ userId });
-    return record ? { slackKey: record.slackKey, dmChannelId: record.dmChannelId } : null;
+    return record
+      ? { slackKey: record.slackKey, dmChannelId: record.dmChannelId, displayName: record.displayName }
+      : null;
   }
 
   /**

@@ -291,11 +291,15 @@ export class AuthController {
   @Post("onboarding/discord-token")
   async discordToken(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
-    @Body() body: { email?: string },
+    @Body() body: { email?: string; returnTo?: string },
   ) {
     this.requireInternal(secret);
     if (!body.email) return { error: "email is required" };
-    const token = await this.discordRepo.createDiscordLinkToken(body.email.trim().toLowerCase(), 15 * 60 * 1000);
+    const token = await this.discordRepo.createDiscordLinkToken(
+      body.email.trim().toLowerCase(),
+      15 * 60 * 1000,
+      body.returnTo,
+    );
     return { token };
   }
 

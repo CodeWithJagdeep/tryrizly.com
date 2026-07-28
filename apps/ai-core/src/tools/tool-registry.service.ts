@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import {
   createActivateAutomationTool,
   createAutomationTool,
+  describeAutomationEventTool,
   createPauseAutomationTool,
   listAutomationsTool,
 } from "./automation.tools";
@@ -225,6 +226,7 @@ export class ToolRegistryService {
       createSetAwayModeTool(this.preferences),
       createEndAwayModeTool(this.preferences),
       listAutomationsTool,
+      describeAutomationEventTool,
       createAutomationTool(),
       createActivateAutomationTool(),
       createPauseAutomationTool(),

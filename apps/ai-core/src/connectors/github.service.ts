@@ -42,6 +42,15 @@ export type GitHubCommitPollItem = {
   author?: { login?: string } | null;
 };
 
+export type GitHubCommentPollItem = {
+  id: number;
+  html_url: string;
+  body: string;
+  created_at: string;
+  user?: { login?: string };
+  issue_url: string;
+};
+
 /**
  * GitHub access with a fine-grained or classic personal access token. Reads
  * hit fixed paths; the automation "Create Issue" action is the one mutation
@@ -98,6 +107,25 @@ export class GitHubService {
     return user.login;
   }
 
+  /** Every repo the token can see (owned, collaborator, or org member), most recently pushed first — for the flow-builder's repo picker. */
+  async listRepos(secret: GitHubConnectorSecret): Promise<Array<{ fullName: string; private: boolean }>> {
+    const repos = await this.get<Array<{ full_name: string; private: boolean }>>(
+      secret,
+      "/user/repos?sort=pushed&per_page=100&affiliation=owner,collaborator,organization_member",
+    );
+    return repos.map((r) => ({ fullName: r.full_name, private: r.private }));
+  }
+
+  /** Every branch on one repo — for the "New Push" trigger's branch picker. */
+  async listBranches(secret: GitHubConnectorSecret, repo: string): Promise<string[]> {
+    this.assertRepoFormat(repo);
+    const branches = await this.get<Array<{ name: string }>>(
+      secret,
+      `/repos/${repo}/branches?per_page=100`,
+    );
+    return branches.map((b) => b.name);
+  }
+
   /**
    * Open issues + PRs involving the given login (author, assignee, mentioned,
    * or review-requested), most recently updated first.
@@ -148,19 +176,39 @@ export class GitHubService {
   }
 
   /**
-   * Backs the "New Push" poll trigger. `sha` is intentionally omitted —
-   * GitHub defaults the commits list to the repo's default branch, sparing a
-   * second request to `GET /repos/{repo}` just to read `default_branch`.
+   * Backs the "New Push" poll trigger. `branch` is optional — omitting it
+   * (via `sha`) spares a second request to `GET /repos/{repo}` just to read
+   * `default_branch`, since GitHub defaults the commits list to it anyway.
    */
   async listNewCommits(
     secret: GitHubConnectorSecret,
     repo: string,
     limit = 20,
+    branch?: string,
   ): Promise<GitHubCommitPollItem[]> {
     this.assertRepoFormat(repo);
+    const shaParam = branch ? `&sha=${encodeURIComponent(branch)}` : "";
     return this.get<GitHubCommitPollItem[]>(
       secret,
-      `/repos/${repo}/commits?per_page=${Math.min(limit, 50)}`,
+      `/repos/${repo}/commits?per_page=${Math.min(limit, 50)}${shaParam}`,
+    );
+  }
+
+  /**
+   * Backs the "New Comment on Issue/PR" poll trigger — repo-wide, newest-
+   * created-first. GitHub's `/issues/comments` endpoint covers both issue and
+   * PR comments (a PR is just an issue with a diff, same comment API), so one
+   * call covers both without a separate PR-comments endpoint.
+   */
+  async listNewComments(
+    secret: GitHubConnectorSecret,
+    repo: string,
+    limit = 20,
+  ): Promise<GitHubCommentPollItem[]> {
+    this.assertRepoFormat(repo);
+    return this.get<GitHubCommentPollItem[]>(
+      secret,
+      `/repos/${repo}/issues/comments?sort=created&direction=desc&per_page=${Math.min(limit, 50)}`,
     );
   }
 }

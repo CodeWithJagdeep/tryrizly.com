@@ -20,7 +20,7 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import { captureException } from "@heyriz/shared/sentry";
 import { sendSlackSurfaceMessage } from "@heyriz/shared/slack-surface";
-import { sendDiscordDm } from "@heyriz/shared/discord-surface";
+import { sendDiscordDm, sendDiscordChannelMessage } from "@heyriz/shared/discord-surface";
 import { sendTelegramMessage } from "@heyriz/shared/telegram";
 import { enqueueAutomationRun } from "@heyriz/shared/queue/automation-runs";
 import { evaluateFilter, type FilterConfig } from "@heyriz/shared/automations/types";
@@ -511,9 +511,20 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
         channel?: string | null;
         botToken?: string | null;
       };
-      if (!channel) throw new Error("slack_not_connected");
+      // Branch on title: "Send Channel Message" targets the configured
+      // channel, "Send Direct Message" the principal's own resolved DM. This
+      // used to fall through to `channel` for both, so a channel send landed
+      // silently in the DM — which is why the channel variant was kept out of
+      // LIVE_ACTION_EVENTS rather than shipped as a visible no-op.
+      const isChannelSend = title === "Send Channel Message";
+      const target = isChannelSend
+        ? requiredInterpolated("slack_channel_id", config.channelId, triggerPayload)
+        : channel;
+      // The DM path needs the resolved channel; the channel path only needs the
+      // workspace bot token, so a missing DM channel must not block it.
+      if (!target || (!isChannelSend && !channel)) throw new Error("slack_not_connected");
       const message = requiredInterpolated("slack_message", config.message, triggerPayload);
-      const ok = await sendSlackSurfaceMessage({ channel, text: message, botToken: botToken ?? undefined });
+      const ok = await sendSlackSurfaceMessage({ channel: target, text: message, botToken: botToken ?? undefined });
       if (!ok) throw new Error("slack_send_failed");
       return ack("slack");
     }
@@ -530,13 +541,26 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       return ack("telegram");
     }
 
-    if (app === "discord") {
-      const res = await fetch(`${gatewayUrl}/api/discord/resolve?userId=${encodeURIComponent(userId)}`, {
-        headers: this.gatewayHeaders(false),
-      });
-      const { discordUserId } = (await res.json().catch(() => ({}))) as { discordUserId?: string | null };
-      if (!discordUserId) throw new Error("discord_not_connected");
+    if (app === "discord" && title === "Send Channel Message") {
+      const channelId = requiredInterpolated("discord_channel_id", config.channelId, triggerPayload);
       const content = requiredInterpolated("discord_message", config.message, triggerPayload);
+      const ok = await sendDiscordChannelMessage(channelId, content, env.DISCORD_BOT_TOKEN);
+      if (!ok) throw new Error("discord_send_failed");
+      return ack("discord");
+    }
+
+    if (app === "discord") {
+      const content = requiredInterpolated("discord_message", config.message, triggerPayload);
+      let discordUserId: string | null | undefined;
+      if (config.target === "user") {
+        discordUserId = requiredInterpolated("discord_target_user_id", config.targetUserId, triggerPayload);
+      } else {
+        const res = await fetch(`${gatewayUrl}/api/discord/resolve?userId=${encodeURIComponent(userId)}`, {
+          headers: this.gatewayHeaders(false),
+        });
+        discordUserId = ((await res.json().catch(() => ({}))) as { discordUserId?: string | null }).discordUserId;
+      }
+      if (!discordUserId) throw new Error("discord_not_connected");
       const ok = await sendDiscordDm(discordUserId, content, env.DISCORD_BOT_TOKEN);
       if (!ok) throw new Error("discord_send_failed");
       return ack("discord");
@@ -904,28 +928,6 @@ export class AutomationRunWorkerService implements OnModuleInit, OnModuleDestroy
       );
       if (!result?.ok) throw new Error(result?.error ?? "twilio_send_sms_failed");
       return ack("twilio", { resourceId: result.sid });
-    }
-
-    if (app === "calcom") {
-      const startMs = Date.parse(requiredInterpolated("calcom_start", config.start, triggerPayload));
-      if (Number.isNaN(startMs)) throw new Error("calcom_invalid_start");
-      const result = await firstValueFrom(
-        this.aiCore.send<{ ok: boolean; error?: string; uid?: string; meetingUrl?: string }>(
-          "automation.calcom.createBooking",
-          {
-            userId,
-            eventTypeId: Number(config.eventTypeId),
-            start: new Date(startMs).toISOString(),
-            attendeeName: requiredInterpolated("calcom_attendee_name", config.attendeeName, triggerPayload),
-            attendeeEmail: requiredInterpolated("calcom_attendee_email", config.attendeeEmail, triggerPayload),
-          },
-        ),
-      );
-      if (!result?.ok) throw new Error(result?.error ?? "calcom_booking_failed");
-      return ack("calcom", {
-        resourceId: result.uid,
-        resourceUrl: result.meetingUrl,
-      });
     }
 
     throw new Error(`unsupported_action_app:${app}`);

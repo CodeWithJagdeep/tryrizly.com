@@ -7,6 +7,8 @@ import { env } from "@heyriz/shared/env";
 import { logger } from "@heyriz/shared/logger";
 import {
   exchangeSlackOAuthCode,
+  fetchSlackChannels,
+  fetchSlackUserName,
   openSlackDm,
   sendSlackSurfaceMessage,
   slackAuthorizeUrl,
@@ -56,13 +58,34 @@ export class SlackSurfaceController {
     const dmChannelId = await this.authRepo.findSlackDmChannelByUserId(userId);
     if (!dmChannelId) return { linked: false, turns: [] };
 
+    const link = await this.authRepo.findSlackLinkByUserId(userId);
     const turns = await this.conversations.get(`slack:${dmChannelId}`);
-    return { linked: true, turns };
+    return { linked: true, turns, displayName: link?.displayName };
   }
 
   /** Lets callers check before rendering an "Add to Slack" button — avoids
    * sending users to /install just to hit a 500 when OAuth isn't set up
    * (always true in local dev, since Slack requires an HTTPS redirect). */
+  /** Public channels in this user's linked workspace, for the flow-builder's Slack channel pickers. Scoped by userId so one user can never enumerate another workspace's channels. */
+  @Get("channels")
+  async channels(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Query("userId") userId: string | undefined,
+  ) {
+    requireInternalSecret(secret);
+    if (!userId) return [];
+    const link = await this.authRepo.findSlackLinkByUserId(userId);
+    // Deliberately not requiring dmChannelId (unlike resolveSlackTarget): a
+    // workspace can list channels perfectly well before any DM was opened.
+    if (!link) return [];
+    const teamId = link.slackKey.split(":")[0];
+    const botToken = await this.authRepo.findSlackBotTokenByTeam(teamId);
+    if (!botToken) return [];
+    // Best-effort: a revoked token or a workspace missing channels:read just
+    // yields an empty picker, never a 500 that breaks the config panel.
+    return await fetchSlackChannels(botToken).catch(() => []);
+  }
+
   @Get("config")
   config() {
     return { installConfigured: Boolean(env.SLACK_CLIENT_ID && redirectUri()) };
@@ -117,11 +140,15 @@ export class SlackSurfaceController {
     const userId = record.email.trim().toLowerCase();
     const dmChannelId =
       (await openSlackDm(oauth.authedUserId, oauth.botToken)) ?? undefined;
+    // Best-effort — a lookup failure just falls back to the generic label,
+    // never blocks the actual link.
+    const slackName = await fetchSlackUserName(oauth.authedUserId, oauth.botToken).catch(() => undefined);
     const linked = await this.authRepo.linkSlackUser(
       slackKey,
       record.email,
       userId,
       dmChannelId,
+      slackName,
     );
     if (!linked.ok) {
       return fail("That Slack account is already linked to a different Rizly account.");
@@ -132,13 +159,15 @@ export class SlackSurfaceController {
         userId,
         provider: "slack_surface",
         authType: "oauth",
-        label: "Slack DM",
+        // Shows who's actually linked ("Slack (Jagdeep)") instead of the same
+        // generic label for every account — mirrors the Discord username fix.
+        label: slackName ? `Slack (${slackName})` : "Slack DM",
         secret: {
           teamId: oauth.teamId,
           slackUserId: oauth.authedUserId,
           dmChannelId: dmChannelId ?? null,
         },
-        metadata: { setup: "slack_oauth" },
+        metadata: { setup: "slack_oauth", slackUserName: slackName ?? null },
       });
     } catch (err) {
       logger.warn("failed to save slack surface connector record", {

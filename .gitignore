@@ -43,6 +43,9 @@ yarn-error.log*
 # infra notes with real IPs/instance details — not for git history
 /server.md
 
+# PagerDuty OAuth app credentials dropped at repo root — not for git history
+/page.json
+
 # Claude Code / agent skill files
 .agents/
 .claude/

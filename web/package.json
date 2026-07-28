@@ -10,7 +10,8 @@
     "dev:fresh": "rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "logos:download": "node --env-file=.env.local scripts/download-connector-logos.mjs"
   },
   "dependencies": {
     "@microsoft/clarity": "^1.0.2",

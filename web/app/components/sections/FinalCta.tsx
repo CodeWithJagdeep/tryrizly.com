@@ -14,7 +14,7 @@ export function FinalCta() {
         <Reveal>
           <div className="relative flex flex-col items-start gap-10 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">
+              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">
                 Start today
               </p>
               <h2 className="mt-5 text-balance text-4xl font-medium leading-[1.08] tracking-tight text-white md:text-5xl">
@@ -31,7 +31,7 @@ export function FinalCta() {
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
               <a
                 href="/signup"
-                className="inline-flex h-13 items-center justify-center border-2 border-[#FE7F2D] bg-[#FE7F2D] px-8 text-sm font-semibold text-white transition-colors hover:bg-white hover:border-white hover:text-black"
+                className="inline-flex h-13 items-center justify-center border-2 border-[#D9BEF4] bg-[#D9BEF4] px-8 text-sm font-semibold text-white transition-colors hover:bg-white hover:border-white hover:text-black"
               >
                 Start free trial
               </a>

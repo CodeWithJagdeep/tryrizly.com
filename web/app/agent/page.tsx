@@ -113,7 +113,7 @@ export default function AgentPage() {
             Rizly / The Agent
           </span>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Meet <span className="text-[#FE7F2D]">Riz</span>. <br />
+            Meet <span className="text-[#D9BEF4]">Riz</span>. <br />
             Your inbox stops being your job.
           </h1>
           <p className="text-xl text-gray-500 leading-relaxed max-w-2xl mx-auto mb-10">
@@ -123,7 +123,7 @@ export default function AgentPage() {
           <div className="flex flex-col sm:flex-row justify-center gap-4 mb-14">
             <a
               href="/signup"
-              className="inline-flex items-center justify-center gap-2 border-2 border-black bg-[#FE7F2D] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+              className="inline-flex items-center justify-center gap-2 border-2 border-black bg-[#D9BEF4] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
             >
               Talk to Riz free
             </a>
@@ -136,19 +136,19 @@ export default function AgentPage() {
           </div>
           <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 border-t-2 border-black/10 pt-8 max-w-2xl mx-auto">
             <div>
-              <span className="block text-2xl font-semibold text-[#FE7F2D]">24/7</span>
+              <span className="block text-2xl font-semibold text-[#D9BEF4]">24/7</span>
               <span className="block text-[11px] font-semibold uppercase tracking-widest text-gray-400">Watching</span>
             </div>
             <div>
-              <span className="block text-2xl font-semibold text-[#FE7F2D]">100%</span>
+              <span className="block text-2xl font-semibold text-[#D9BEF4]">100%</span>
               <span className="block text-[11px] font-semibold uppercase tracking-widest text-gray-400">Approval required</span>
             </div>
             <div>
-              <span className="block text-2xl font-semibold text-[#FE7F2D]">3</span>
+              <span className="block text-2xl font-semibold text-[#D9BEF4]">3</span>
               <span className="block text-[11px] font-semibold uppercase tracking-widest text-gray-400">Systems, one memory</span>
             </div>
             <div>
-              <span className="block text-2xl font-semibold text-[#FE7F2D]">&lt; 1 min</span>
+              <span className="block text-2xl font-semibold text-[#D9BEF4]">&lt; 1 min</span>
               <span className="block text-[11px] font-semibold uppercase tracking-widest text-gray-400">To connect Gmail</span>
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function AgentPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">What it actually does</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">What it actually does</span>
             <h2 className="text-2xl md:text-4xl font-semibold">How Riz makes your day easier</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -189,7 +189,7 @@ export default function AgentPage() {
       <section id="domains" className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-black text-white scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">How Riz operates</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">How Riz operates</span>
             <h2 className="text-2xl md:text-4xl font-semibold">Watches, notifies, and waits for you</h2>
             <p className="text-white/40 max-w-2xl mx-auto mt-4">
               The same pattern runs across every system Riz is connected to — here's what it actually looks like for email, meetings, and revenue.
@@ -203,24 +203,24 @@ export default function AgentPage() {
                 </div>
                 <div className="px-6 py-6 space-y-5">
                   <div>
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-2 block">Riz watches</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-2 block">Riz watches</span>
                     <p className="text-sm text-white/60 leading-relaxed">{domain.watches}</p>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-2 block">It notifies you</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-2 block">It notifies you</span>
                     <div className="bg-white text-black rounded-xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed">
                       {domain.notifies}
                     </div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-2 block">You review</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-2 block">You review</span>
                     <div className="flex flex-wrap gap-2">
                       {domain.actions.map((action, index) => (
                         <button
                           key={action}
                           className={
                             index === 0
-                              ? "border-2 border-[#FE7F2D] bg-[#FE7F2D] px-3 py-1.5 text-[12px] font-semibold text-white"
+                              ? "border-2 border-[#D9BEF4] bg-[#D9BEF4] px-3 py-1.5 text-[12px] font-semibold text-white"
                               : "border-2 border-white/20 px-3 py-1.5 text-[12px] font-semibold text-white/70"
                           }
                         >
@@ -241,7 +241,7 @@ export default function AgentPage() {
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="block text-3xl font-semibold text-[#FE7F2D] mb-2">{stat.value}</span>
+              <span className="block text-3xl font-semibold text-[#D9BEF4] mb-2">{stat.value}</span>
               <span className="block text-[12px] font-semibold uppercase tracking-widest text-gray-500">{stat.label}</span>
             </div>
           ))}
@@ -252,7 +252,7 @@ export default function AgentPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">See it reason</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">See it reason</span>
             <h2 className="text-2xl md:text-3xl font-semibold">A question, answered with context</h2>
           </div>
           <div className="overflow-hidden border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
@@ -262,7 +262,7 @@ export default function AgentPage() {
             </div>
             <div className="px-5 py-5 space-y-4">
               <div className="flex justify-end">
-                <div className="bg-[#FE7F2D] text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-sm text-sm">
+                <div className="bg-[#D9BEF4] text-white px-4 py-3 rounded-2xl rounded-tr-sm max-w-sm text-sm">
                   Anything I need to worry about this week?
                 </div>
               </div>
@@ -274,7 +274,7 @@ export default function AgentPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
-                <button className="border-2 border-black bg-[#FE7F2D] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black">
+                <button className="border-2 border-black bg-[#D9BEF4] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black">
                   Draft all three
                 </button>
                 <button className="border-2 border-black bg-white px-4 py-2 text-[13px] font-semibold text-black transition-colors hover:bg-black hover:text-white">
@@ -290,14 +290,14 @@ export default function AgentPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Under the hood</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Under the hood</span>
             <h2 className="text-2xl md:text-4xl font-semibold">Every capability, in detail</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {capabilities.map((item) => (
               <div key={item.title} className="p-8 border-2 border-black bg-[#fcfcfc] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
                 <div className="w-12 h-12 border-2 border-black mb-6 flex items-center justify-center bg-white">
-                  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D]" height="22" width="22" xmlns="http://www.w3.org/2000/svg">
+                  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4]" height="22" width="22" xmlns="http://www.w3.org/2000/svg">
                     <path d={item.icon}></path>
                   </svg>
                 </div>
@@ -313,7 +313,7 @@ export default function AgentPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Design principles</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Design principles</span>
             <h2 className="text-2xl md:text-4xl font-semibold">What makes Riz different</h2>
           </div>
           <div className="space-y-10">
@@ -332,7 +332,7 @@ export default function AgentPage() {
 
       {/* Integrations */}
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white text-center">
-        <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">What Riz can see</span>
+        <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">What Riz can see</span>
         <div className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
           {sources.map((source) => (
             <span key={source} className="border-2 border-black bg-[#fcfcfc] px-4 py-2 text-[13px] font-semibold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
@@ -346,13 +346,13 @@ export default function AgentPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Getting started</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Getting started</span>
             <h2 className="text-2xl md:text-4xl font-semibold">From sign-up to your first brief</h2>
           </div>
           <div className="space-y-6">
             {onboarding.map((item) => (
               <div key={item.step} className="flex gap-6 items-start border-2 border-black p-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <span className="text-2xl font-semibold text-[#FE7F2D] shrink-0 w-10">{item.step}</span>
+                <span className="text-2xl font-semibold text-[#D9BEF4] shrink-0 w-10">{item.step}</span>
                 <div>
                   <h3 className="text-base font-semibold mb-1">{item.title}</h3>
                   <p className="text-sm text-gray-500 leading-relaxed">{item.detail}</p>
@@ -366,13 +366,13 @@ export default function AgentPage() {
       {/* Trust */}
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-black text-white">
         <div className="max-w-4xl mx-auto text-center">
-          <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Boundaries by design</span>
+          <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Boundaries by design</span>
           <h2 className="text-2xl md:text-4xl font-semibold mb-8">An agent with a hard stop</h2>
           <p className="text-lg text-white/50 leading-relaxed mb-10">
             Riz can reason across every connected system, but it can only act with your explicit approval.
             That boundary isn't a setting you have to configure — it's how the agent was built.
           </p>
-          <a href="/trust" className="text-[#FE7F2D] font-semibold hover:text-white transition-colors">
+          <a href="/trust" className="text-[#D9BEF4] font-semibold hover:text-white transition-colors">
             See how trust works →
           </a>
         </div>
@@ -407,7 +407,7 @@ export default function AgentPage() {
         <h2 className="text-2xl md:text-3xl font-semibold mb-6">Talk to Riz for yourself</h2>
         <a
           href="/signup"
-          className="inline-flex items-center gap-2 border-2 border-black bg-[#FE7F2D] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+          className="inline-flex items-center gap-2 border-2 border-black bg-[#D9BEF4] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
         >
           Start free trial
         </a>

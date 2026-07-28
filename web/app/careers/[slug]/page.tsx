@@ -70,7 +70,7 @@ export default async function CareerRolePage({
   return (
     <main className="max-w-[88rem] mx-auto px-10 pt-32 pb-40">
       <Link
-        className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-widest text-gray-400 hover:text-[#FE7F2D] mb-12 transition-colors"
+        className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-widest text-gray-400 hover:text-[#D9BEF4] mb-12 transition-colors"
         href="/careers"
       >
         <BackIcon />
@@ -80,7 +80,7 @@ export default async function CareerRolePage({
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_520px] gap-20">
         <div>
           <div className="mb-12">
-            <div className="flex gap-4 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#FE7F2D] mb-4">
+            <div className="flex gap-4 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#D9BEF4] mb-4">
               <span className="flex items-center gap-1">
                 <CategoryIcon />
                 {role.category}
@@ -95,7 +95,7 @@ export default async function CareerRolePage({
               </span>
             </div>
             <h1 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-8">{role.title}</h1>
-            <p className="text-xl font-semibold text-[#FE7F2D] leading-tight mb-12">{role.tagline}</p>
+            <p className="text-xl font-semibold text-[#D9BEF4] leading-tight mb-12">{role.tagline}</p>
           </div>
 
           <div className="space-y-16">
@@ -109,7 +109,7 @@ export default async function CareerRolePage({
               <ul className="space-y-6">
                 {role.responsibilities.map((item) => (
                   <li key={item} className="flex gap-4 items-start">
-                    <div className="w-2 h-2 mt-2 bg-[#FE7F2D] shrink-0"></div>
+                    <div className="w-2 h-2 mt-2 bg-[#D9BEF4] shrink-0"></div>
                     <span className="text-base font-medium leading-relaxed">{item}</span>
                   </li>
                 ))}
@@ -145,7 +145,7 @@ export default async function CareerRolePage({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {role.ninetyDayPlan.map((milestone) => (
                   <div key={milestone.period} className="border-2 border-black p-6 bg-[#fcfcfc] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-3 block">{milestone.period}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-3 block">{milestone.period}</span>
                     <p className="text-sm text-gray-600 leading-relaxed">{milestone.goal}</p>
                   </div>
                 ))}
@@ -159,7 +159,7 @@ export default async function CareerRolePage({
                   <h4 className="text-base font-semibold uppercase mb-3">Remote setup</h4>
                   <p className="text-sm text-gray-500 leading-relaxed">$4,000 home-office stipend, plus $1,000 annually for refreshes.</p>
                 </div>
-                <div className="p-8 bg-[#FE7F2D]/5">
+                <div className="p-8 bg-[#D9BEF4]/5">
                   <h4 className="text-base font-semibold uppercase mb-3">Health & flow</h4>
                   <p className="text-sm text-gray-500 leading-relaxed">Premium health, dental, and vision globally. Unlimited PTO, 3-week minimum.</p>
                 </div>
@@ -180,7 +180,7 @@ export default async function CareerRolePage({
                   { number: "04", title: "The offer", description: "We move fast — expect a decision within 48 hours of your final round." },
                 ].map((step) => (
                   <div key={step.number} className="flex gap-6 items-start border-b border-black/10 pb-4">
-                    <span className="text-lg font-semibold text-[#FE7F2D] shrink-0 w-8">{step.number}</span>
+                    <span className="text-lg font-semibold text-[#D9BEF4] shrink-0 w-8">{step.number}</span>
                     <div>
                       <h4 className="text-base font-semibold uppercase mb-1">{step.title}</h4>
                       <p className="text-sm text-gray-500 leading-relaxed">{step.description}</p>
@@ -190,7 +190,7 @@ export default async function CareerRolePage({
               </div>
             </section>
 
-            <section className="border-4 border-black p-10 bg-black text-white shadow-[12px_12px_0px_0px_rgba(254,127,45,1)]">
+            <section className="border-4 border-black p-10 bg-black text-white shadow-[12px_12px_0px_0px_rgba(217,190,244,1)]">
               <p className="text-xl font-medium leading-relaxed mb-4">
                 "We hire builders, not order-takers. You own your features from architectural design to production monitoring."
               </p>
@@ -215,9 +215,9 @@ export default async function CareerRolePage({
               <Link
                 key={other.slug}
                 href={`/careers/${other.slug}`}
-                className="border-2 border-black p-8 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[10px_10px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+                className="border-2 border-black p-8 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[10px_10px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
               >
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-3 block">{other.category}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-3 block">{other.category}</span>
                 <h4 className="text-lg font-semibold uppercase mb-2">{other.title}</h4>
                 <p className="text-sm text-gray-500 leading-relaxed">{other.tagline}</p>
               </Link>

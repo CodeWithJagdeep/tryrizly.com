@@ -29,23 +29,23 @@ export default function FAQSection() {
       <div className="max-w-4xl mx-auto">
         <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-tight mb-20 text-center">
           Common <br />
-          <span className="text-[#FE7F2D]">questions</span>
+          <span className="text-[#D9BEF4]">questions</span>
         </h2>
         <div className="space-y-4">
           {faqs.map((faq, index) => (
             <div
               key={index}
-              className="border border-gray-200 bg-white rounded overflow-hidden hover:border-[#FE7F2D] transition-colors"
+              className="border border-gray-200 bg-white rounded overflow-hidden hover:border-[#D9BEF4] transition-colors"
             >
               <button
                 onClick={() =>
                   setExpandedIndex(expandedIndex === index ? null : index)
                 }
-                className="w-full p-6 flex items-center justify-between text-left hover:bg-[#FE7F2D]/5 transition-colors"
+                className="w-full p-6 flex items-center justify-between text-left hover:bg-[#D9BEF4]/5 transition-colors"
               >
                 <h4 className="text-lg font-semibold">{faq.question}</h4>
                 <span
-                  className={`text-[#FE7F2D] text-xl transition-transform ${
+                  className={`text-[#D9BEF4] text-xl transition-transform ${
                     expandedIndex === index ? "rotate-90" : ""
                   }`}
                 >
@@ -53,7 +53,7 @@ export default function FAQSection() {
                 </span>
               </button>
               {expandedIndex === index && (
-                <div className="px-6 pb-6 border-t border-gray-200 bg-[#FE7F2D]/5">
+                <div className="px-6 pb-6 border-t border-gray-200 bg-[#D9BEF4]/5">
                   <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
                 </div>
               )}

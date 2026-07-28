@@ -144,14 +144,14 @@ export default function CareersPage() {
           <span className="inline-block px-4 py-1.5 border-2 border-black bg-black text-white text-[11px] font-semibold uppercase tracking-[0.3em] mb-12">Recruitment v1.0 / Project Rizly</span>
           <h1 className="text-5xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-12">
             Help us build <br />
-            <span className="text-[#FE7F2D]">the future of work</span>
+            <span className="text-[#D9BEF4]">the future of work</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-400 max-w-4xl mx-auto mb-16 leading-relaxed">
             We're at the very beginning of a decade-long mission at Rizly. We're looking for obsessive builders who want to help Rizly evolve into the founder's most trusted AI operator.
           </p>
           <div className="flex justify-center gap-6">
             <a
-              className="border-2 border-black bg-black text-white px-10 py-5 text-[14px] font-semibold uppercase tracking-widest shadow-[6px_6px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+              className="border-2 border-black bg-black text-white px-10 py-5 text-[14px] font-semibold uppercase tracking-widest shadow-[6px_6px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
               href="#roles"
             >
               View open roles
@@ -164,7 +164,7 @@ export default function CareersPage() {
       <section className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-7xl mx-auto">
           <div className="mb-24">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 01 / The hook</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 01 / The hook</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-6">Why join us?</h2>
             <p className="text-lg text-gray-400 leading-relaxed max-w-2xl">
               We're building more than a product at Rizly; we're building a new way of working — one that prioritizes approvals over meetings.
@@ -172,8 +172,8 @@ export default function CareersPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {whyJoin.map((item) => (
-              <div key={item.title} className="p-10 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(254,127,45,1)] transition-all group">
-                <div className="w-16 h-16 border-2 border-black flex items-center justify-center mb-8 group-hover:bg-[#FE7F2D] group-hover:text-white transition-all">
+              <div key={item.title} className="p-10 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(217,190,244,1)] transition-all group">
+                <div className="w-16 h-16 border-2 border-black flex items-center justify-center mb-8 group-hover:bg-[#D9BEF4] group-hover:text-white transition-all">
                   <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" height="32" width="32" xmlns="http://www.w3.org/2000/svg">
                     <path d={item.icon}></path>
                   </svg>
@@ -181,7 +181,7 @@ export default function CareersPage() {
                 <h3 className="text-xl font-semibold uppercase mb-4">{item.title}</h3>
                 <p className="text-gray-500 leading-relaxed mb-8">{item.description}</p>
                 <div className="pt-6 border-t border-black/5">
-                  <span className="text-[11px] font-semibold uppercase text-[#FE7F2D] tracking-widest">{item.tag}</span>
+                  <span className="text-[11px] font-semibold uppercase text-[#D9BEF4] tracking-widest">{item.tag}</span>
                 </div>
               </div>
             ))}
@@ -193,8 +193,8 @@ export default function CareersPage() {
       <section className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-32 items-center">
           <div className="order-2 lg:order-1">
-            <div className="border-4 border-black p-12 bg-[#FE7F2D]/5 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
-              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] mb-8" height="60" width="60" xmlns="http://www.w3.org/2000/svg">
+            <div className="border-4 border-black p-12 bg-[#D9BEF4]/5 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
+              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] mb-8" height="60" width="60" xmlns="http://www.w3.org/2000/svg">
                 <path d="M24 12L18.3431 17.6569L16.9289 16.2426L21.1716 12L16.9289 7.75736L18.3431 6.34315L24 12ZM2.82843 12L7.07107 16.2426L5.65685 17.6569L0 12L5.65685 6.34315L7.07107 7.75736L2.82843 12ZM9.78845 21H7.66009L14.2116 3H16.3399L9.78845 21Z"></path>
               </svg>
               <h3 className="text-2xl font-semibold uppercase mb-6">Building the operator</h3>
@@ -208,10 +208,10 @@ export default function CareersPage() {
             </div>
           </div>
           <div className="order-1 lg:order-2">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 02 / The mission</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 02 / The mission</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal mb-12 leading-tight">
               We're just <br />
-              <span className="text-[#FE7F2D]">getting started</span>
+              <span className="text-[#D9BEF4]">getting started</span>
             </h2>
             <p className="text-lg text-gray-500 leading-relaxed mb-12">
               Join at the ground floor at Rizly. You won't just be maintaining systems; you'll be defining the rules of AI-human collaboration for the next decade.
@@ -225,10 +225,10 @@ export default function CareersPage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-32 items-center">
             <div>
-              <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 03 / Culture</span>
+              <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 03 / Culture</span>
               <h2 className="text-4xl md:text-5xl font-semibold uppercase tracking-normal leading-tight mb-12">
                 Small team <br />
-                <span className="text-[#FE7F2D]">big impact</span>
+                <span className="text-[#D9BEF4]">big impact</span>
               </h2>
               <p className="text-lg text-gray-500 leading-relaxed mb-12">
                 We are a lean, focused group of builders. We don't believe in massive hierarchies or bloated teams. We believe in a handful of obsessive engineers doing the work of thirty.
@@ -240,7 +240,7 @@ export default function CareersPage() {
                   { title: "Direct collaboration", body: "No middle managers. You work directly with the founders to define the future of approval-first automation." },
                 ].map((item) => (
                   <div key={item.title} className="flex gap-4">
-                    <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] shrink-0 mt-1" height="20" width="20" xmlns="http://www.w3.org/2000/svg">
+                    <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] shrink-0 mt-1" height="20" width="20" xmlns="http://www.w3.org/2000/svg">
                       <path d="M4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12ZM12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM17.4571 9.45711L16.0429 8.04289L11 13.0858L8.20711 10.2929L6.79289 11.7071L11 15.9142L17.4571 9.45711Z"></path>
                     </svg>
                     <div>
@@ -252,13 +252,13 @@ export default function CareersPage() {
               </div>
             </div>
             <div className="relative">
-              <div className="border-4 border-black p-10 bg-white shadow-[16px_16px_0px_0px_rgba(254,127,45,1)]">
+              <div className="border-4 border-black p-10 bg-white shadow-[16px_16px_0px_0px_rgba(217,190,244,1)]">
                 <h3 className="text-2xl font-semibold uppercase mb-8">Current team</h3>
                 <div className="space-y-4">
                   {["AI & automation", "Product & UX", "Infrastructure"].map((role) => (
                     <div key={role} className="flex justify-between items-center border-b border-black/5 pb-2">
                       <span className="text-[12px] font-semibold uppercase tracking-widest">{role}</span>
-                      <span className="text-[10px] font-semibold text-[#FE7F2D] uppercase">1 builder</span>
+                      <span className="text-[10px] font-semibold text-[#D9BEF4] uppercase">1 builder</span>
                     </div>
                   ))}
                 </div>
@@ -275,10 +275,10 @@ export default function CareersPage() {
       <section className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="mb-24">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 04 / Infrastructure</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 04 / Infrastructure</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-6">
               Built for <br />
-              <span className="text-[#FE7F2D]">reliability</span>
+              <span className="text-[#D9BEF4]">reliability</span>
             </h2>
             <p className="text-lg text-gray-400 leading-relaxed max-w-2xl">
               We don't just use AI; we build the infrastructure that makes it reliable at scale.
@@ -287,7 +287,7 @@ export default function CareersPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             {infrastructure.map((item) => (
               <div key={item.title} className="p-10 border-2 border-black bg-[#fcfcfc] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] mb-6" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
+                <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] mb-6" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
                   <path d={item.icon}></path>
                 </svg>
                 <h4 className="text-xl font-semibold uppercase mb-4 tracking-normal leading-tight">{item.title}</h4>
@@ -304,13 +304,13 @@ export default function CareersPage() {
           <div className="mb-24 text-center">
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-6">
               The engineering <br />
-              <span className="text-[#FE7F2D]">manifesto</span>
+              <span className="text-[#D9BEF4]">manifesto</span>
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
             {manifesto.map((item) => (
               <div key={item.title} className="flex gap-10 items-start group">
-                <div className="w-20 h-20 border-2 border-white/20 flex items-center justify-center shrink-0 group-hover:bg-[#FE7F2D] group-hover:border-[#FE7F2D] transition-all">
+                <div className="w-20 h-20 border-2 border-white/20 flex items-center justify-center shrink-0 group-hover:bg-[#D9BEF4] group-hover:border-[#D9BEF4] transition-all">
                   <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-white" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
                     <path d={item.icon}></path>
                   </svg>
@@ -329,14 +329,14 @@ export default function CareersPage() {
       <section className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="mb-24">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 05 / Process</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 05 / Process</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-6">How we hire</h2>
             <p className="text-lg text-gray-400 leading-relaxed">Our process is designed to be fast, fair, and focused on your craft.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {hiringSteps.map((step) => (
               <div key={step.number} className="relative p-10 border-2 border-black bg-white group hover:bg-black hover:text-white transition-all">
-                <span className="absolute -top-6 left-6 px-4 py-2 bg-[#FE7F2D] text-white text-[12px] font-semibold uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <span className="absolute -top-6 left-6 px-4 py-2 bg-[#D9BEF4] text-white text-[12px] font-semibold uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                   {step.number}
                 </span>
                 <h4 className="text-xl font-semibold uppercase mb-4 mt-4 tracking-normal leading-tight">{step.title}</h4>
@@ -351,7 +351,7 @@ export default function CareersPage() {
       <section className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-7xl mx-auto">
           <div className="mb-24">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 06 / Support</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-6 block">Section 06 / Support</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-6">
               Built to <br /> support you
             </h2>
@@ -359,21 +359,21 @@ export default function CareersPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-4 border-black divide-y-4 md:divide-y-0 md:divide-x-4 divide-black shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] bg-white">
             <div className="p-12">
-              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
+              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 13V5H6V13C6 14.1046 6.89543 15 8 15H14C15.1046 15 16 14.1046 16 13ZM5 3H20C21.1046 3 22 3.89543 22 5V8C22 9.10457 21.1046 10 20 10H18V13C18 15.2091 16.2091 17 14 17H8C5.79086 17 4 15.2091 4 13V4C4 3.44772 4.44772 3 5 3ZM18 5V8H20V5H18ZM2 19H20V21H2V19Z"></path>
               </svg>
               <h4 className="text-xl font-semibold uppercase mb-4 tracking-normal leading-tight">Remote setup</h4>
               <p className="text-sm text-gray-500 leading-relaxed">Work from anywhere. We provide a $4,000 initial home-office stipend and $1,000 annually for refreshes.</p>
             </div>
-            <div className="p-12 bg-[#FE7F2D]/5">
-              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
+            <div className="p-12 bg-[#D9BEF4]/5">
+              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path>
               </svg>
               <h4 className="text-xl font-semibold uppercase mb-4 tracking-normal leading-tight">Health & flow</h4>
               <p className="text-sm text-gray-500 leading-relaxed">Premium health, dental, and vision insurance globally. Unlimited PTO with a 3-week mandatory minimum.</p>
             </div>
             <div className="p-12">
-              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#FE7F2D] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
+              <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="text-[#D9BEF4] mb-8" height="40" width="40" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9.97308 18H11V13H13V18H14.0269C14.1589 16.7984 14.7721 15.8065 15.7676 14.7226C15.8797 14.6006 16.5988 13.8564 16.6841 13.7501C17.5318 12.6931 18 11.385 18 10C18 6.68629 15.3137 4 12 4C8.68629 4 6 6.68629 6 10C6 11.3843 6.46774 12.6917 7.31462 13.7484C7.40004 13.855 8.12081 14.6012 8.23154 14.7218C9.22766 15.8064 9.84103 16.7984 9.97308 18ZM10 20V21H14V20H10ZM5.75395 14.9992C4.65645 13.6297 4 11.8915 4 10C4 5.58172 7.58172 2 12 2C16.4183 2 20 5.58172 20 10C20 11.8925 19.3428 13.6315 18.2443 15.0014C17.624 15.7748 16 17 16 18.5V21C16 22.1046 15.1046 23 14 23H10C8.89543 23 8 22.1046 8 21V18.5C8 17 6.37458 15.7736 5.75395 14.9992Z"></path>
               </svg>
               <h4 className="text-xl font-semibold uppercase mb-4 tracking-normal leading-tight">Growth budget</h4>
@@ -387,7 +387,7 @@ export default function CareersPage() {
       <section id="roles" className="px-10 md:px-14 py-40 border-b-2 border-black/10 bg-white">
         <div className="max-w-5xl mx-auto">
           <div className="mb-20 text-center">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 07 / Opportunity</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 07 / Opportunity</span>
             <h2 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight">
               Join the <br /> foundation
             </h2>
@@ -398,7 +398,7 @@ export default function CareersPage() {
               <a
                 key={role.title}
                 href={role.href}
-                className="group border-2 border-black p-10 bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer"
+                className="group border-2 border-black p-10 bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -410,13 +410,13 @@ export default function CareersPage() {
                       <RemoteIcon />
                       Remote
                     </span>
-                    <span className="flex items-center gap-2 text-[#FE7F2D]">
+                    <span className="flex items-center gap-2 text-[#D9BEF4]">
                       <CategoryIcon />
                       {role.category}
                     </span>
                   </div>
                 </div>
-                <div className="w-16 h-16 border-2 border-black flex items-center justify-center group-hover:bg-[#FE7F2D] group-hover:text-white transition-all shrink-0">
+                <div className="w-16 h-16 border-2 border-black flex items-center justify-center group-hover:bg-[#D9BEF4] group-hover:text-white transition-all shrink-0">
                   <ArrowIcon />
                 </div>
               </a>
@@ -429,12 +429,12 @@ export default function CareersPage() {
       <section className="py-40 px-10 text-center bg-[#fcfcfc]">
         <h2 className="text-4xl md:text-7xl font-semibold uppercase tracking-normal leading-tight mb-12">
           Don't just <br />
-          <span className="text-[#FE7F2D]">automate tasks</span> <br />
+          <span className="text-[#D9BEF4]">automate tasks</span> <br />
           Build a partner
         </h2>
         <a
           href="#roles"
-          className="inline-flex items-center gap-3 border-2 border-black bg-black px-16 py-8 text-[18px] font-semibold text-white transition-all shadow-[10px_10px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[16px_16px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none"
+          className="inline-flex items-center gap-3 border-2 border-black bg-black px-16 py-8 text-[18px] font-semibold text-white transition-all shadow-[10px_10px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[16px_16px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none"
         >
           Join the mission
           <ArrowIcon />

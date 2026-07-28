@@ -68,13 +68,13 @@ export function AtAGlance() {
         <div className="grid grid-cols-1 divide-y-2 divide-black sm:grid-cols-2 sm:divide-y-0 sm:divide-x-2 lg:grid-cols-4">
           {points.map((point, index) => (
             <Reveal key={point.title} delay={index * 0.06} className="group">
-              <div className="relative flex h-full flex-col gap-4 px-6 py-10 transition-colors hover:bg-[#FE7F2D]/[0.04]">
-                <span className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 bg-[#FE7F2D] transition-transform duration-300 group-hover:scale-x-100" aria-hidden="true" />
+              <div className="relative flex h-full flex-col gap-4 px-6 py-10 transition-colors hover:bg-[#D9BEF4]/[0.04]">
+                <span className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 bg-[#D9BEF4] transition-transform duration-300 group-hover:scale-x-100" aria-hidden="true" />
                 <div className="flex items-start justify-between">
-                  <span className="flex h-10 w-10 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D] transition-transform duration-300 group-hover:-translate-y-0.5">
+                  <span className="flex h-10 w-10 items-center justify-center border-2 border-black bg-[#D9BEF4]/10 text-[#D9BEF4] transition-transform duration-300 group-hover:-translate-y-0.5">
                     <point.Icon />
                   </span>
-                  <span className="font-mono text-xs font-bold tracking-widest text-black/15 transition-colors duration-300 group-hover:text-[#FE7F2D]/40">
+                  <span className="font-mono text-xs font-bold tracking-widest text-black/15 transition-colors duration-300 group-hover:text-[#D9BEF4]/40">
                     {String(index + 1).padStart(2, '0')}
                   </span>
                 </div>

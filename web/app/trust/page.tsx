@@ -24,8 +24,8 @@ export default function TrustPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Rizly / Trust</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Control stays <span className="text-[#ff4f00]">with you, end to end</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Control stays <span className="text-[#D9BEF4]">with you, end to end</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Approval-first means approval-first, not a setting buried three menus deep. Here&apos;s exactly how
@@ -40,7 +40,7 @@ export default function TrustPage() {
         <p className="mb-4 text-sm text-gray-600">
           Want the full technical breakdown of encryption, retention, and compliance?
         </p>
-        <a href="/security-guide" className="text-sm text-[#20151c] underline underline-offset-4 transition hover:text-[#ff4f00]">
+        <a href="/security-guide" className="text-sm text-[#233D4D] underline underline-offset-4 transition hover:text-[#D9BEF4]">
           Read the security guide &rarr;
         </a>
       </section>

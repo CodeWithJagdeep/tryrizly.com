@@ -65,8 +65,8 @@ export default function ApprovalsPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Rizly / Approvals</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Nothing sends <span className="text-[#ff4f00]">without you</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Nothing sends <span className="text-[#D9BEF4]">without you</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Every draft, reply, and scheduling change waits for your approval in Telegram. Approve, edit, or reject
@@ -80,7 +80,7 @@ export default function ApprovalsPage() {
         <div className="mx-auto max-w-3xl">
           <div className="mb-10 text-center">
             <Eyebrow>Full audit trail</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               Every decision, logged
             </h2>
           </div>
@@ -88,7 +88,7 @@ export default function ApprovalsPage() {
             {history.map((item) => (
               <div key={item.action + item.time} className="flex items-center justify-between gap-4 px-6 py-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-normal text-[#20151c]">{item.action}</p>
+                  <p className="truncate text-sm font-normal text-[#233D4D]">{item.action}</p>
                   <p className="text-xs text-gray-400">{item.time}</p>
                 </div>
                 <span
@@ -104,7 +104,7 @@ export default function ApprovalsPage() {
       </section>
 
       {/* What goes through approval */}
-      <section className="relative overflow-hidden bg-[#20151c] px-6 py-16 text-center md:px-10 lg:px-14">
+      <section className="relative overflow-hidden bg-[#233D4D] px-6 py-16 text-center md:px-10 lg:px-14">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
@@ -127,7 +127,7 @@ export default function ApprovalsPage() {
         <div className="mx-auto max-w-3xl">
           <div className="mb-12 text-center">
             <Eyebrow>One of those decisions</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               What it looks like to decide
             </h2>
           </div>
@@ -142,18 +142,18 @@ export default function ApprovalsPage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>The flow</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               From drafted to decided
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8">
             {stages.map((stage) => (
               <div key={stage.step} className="flex flex-col gap-4">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#20151c] font-mono text-sm text-white">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#233D4D] font-mono text-sm text-white">
                   {stage.step}
                 </span>
                 <div>
-                  <h3 className="text-lg font-normal text-[#20151c]">{stage.title}</h3>
+                  <h3 className="text-lg font-normal text-[#233D4D]">{stage.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-gray-600">{stage.detail}</p>
                 </div>
               </div>
@@ -167,7 +167,7 @@ export default function ApprovalsPage() {
         <div className="mx-auto max-w-4xl">
           <div className="mb-10 text-center">
             <Eyebrow>Every meeting change</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               Reschedules land here before they land on you
             </h2>
           </div>
@@ -186,14 +186,14 @@ export default function ApprovalsPage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>Who it&apos;s for</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               Built for people who don&apos;t want surprises
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {audiences.map((audience) => (
               <div key={audience.title} className="rounded-2xl bg-[#f7f7f6] p-8">
-                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{audience.title}</h3>
+                <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{audience.title}</h3>
                 <p className="text-sm leading-6 text-gray-600">{audience.description}</p>
               </div>
             ))}
@@ -205,14 +205,14 @@ export default function ApprovalsPage() {
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 text-center md:px-10 lg:px-14">
         <div className="mx-auto max-w-2xl">
           <Eyebrow>Why it&apos;s safe by design</Eyebrow>
-          <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+          <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
             Approval isn&apos;t a setting, it&apos;s the default
           </h2>
           <p className="mt-6 text-sm leading-6 text-gray-600 md:text-base">
             Rizly was built approval-first from day one, not bolted on after the fact. Every integration respects the
             same rule: draft, wait, confirm.
           </p>
-          <a href="/trust" className="mt-6 inline-block text-sm text-gray-600 underline underline-offset-4 transition hover:text-[#20151c]">
+          <a href="/trust" className="mt-6 inline-block text-sm text-gray-600 underline underline-offset-4 transition hover:text-[#233D4D]">
             See how trust works &rarr;
           </a>
         </div>
@@ -226,7 +226,7 @@ export default function ApprovalsPage() {
       {/* FAQ */}
       <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
             Common questions
           </h2>
           <FaqAccordion items={questions} />

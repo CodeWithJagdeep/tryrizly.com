@@ -57,7 +57,7 @@ export function DayInLife() {
     <section className="bg-[#fcfcfc] py-20 md:py-28 font-neue-haas">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">A day in the life</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">A day in the life</p>
           <h2 className="mt-4 max-w-lg text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             A day with Riz running in the background.
           </h2>
@@ -69,7 +69,7 @@ export function DayInLife() {
             <span className="absolute left-0 right-0 top-[5px] border-t-2 border-dashed border-black/15" />
             {moments.map((moment) => (
               <div key={moment.time} className="relative flex items-center gap-3">
-                <span className="relative z-10 h-3 w-3 border-2 border-black bg-[#FE7F2D]" />
+                <span className="relative z-10 h-3 w-3 border-2 border-black bg-[#D9BEF4]" />
                 <span className="font-mono text-xs font-bold uppercase tracking-widest text-gray-400">
                   {moment.time}
                 </span>
@@ -81,9 +81,9 @@ export function DayInLife() {
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
           {moments.map((moment, index) => (
             <Reveal key={moment.time} delay={index * 0.07}>
-              <div className="group relative flex h-full flex-col border-2 border-black bg-white p-7 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)]">
+              <div className="group relative flex h-full flex-col border-2 border-black bg-white p-7 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(217,190,244,1)]">
                 <div className="flex items-center justify-between">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D] transition-transform duration-300 group-hover:-translate-y-0.5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#D9BEF4]/10 text-[#D9BEF4] transition-transform duration-300 group-hover:-translate-y-0.5">
                     <moment.Icon />
                   </span>
                   <span className="font-mono text-xs font-bold tracking-widest uppercase text-gray-400 md:hidden">

@@ -40,7 +40,7 @@ const columns: FooterColumn[] = [
 
 function FooterLink({ label, href }: { label: string; href: string }) {
   return (
-    <a className="text-sm text-gray-500 transition-colors hover:text-[#20151c]" href={href}>
+    <a className="text-sm text-gray-500 transition-colors hover:text-[#233D4D]" href={href}>
       {label}
     </a>
   );
@@ -78,12 +78,12 @@ function NewsletterForm() {
           name="email"
           required
           placeholder="you@company.com"
-          className="min-w-0 flex-1 bg-transparent py-3 text-sm text-[#20151c] outline-none placeholder:text-gray-400"
+          className="min-w-0 flex-1 bg-transparent py-3 text-sm text-[#233D4D] outline-none placeholder:text-gray-400"
         />
         <button
           type="submit"
           disabled={status === "submitting"}
-          className="shrink-0 rounded-full bg-[#20151c] px-6 text-sm text-white transition hover:bg-black disabled:opacity-60"
+          className="shrink-0 rounded-full bg-[#233D4D] px-6 text-sm text-white transition hover:bg-black disabled:opacity-60"
         >
           {status === "submitting" ? "..." : "Join"}
         </button>
@@ -98,7 +98,7 @@ function SocialButton({ label, children }: { label: string; children: React.Reac
     <a
       href="#"
       aria-label={label}
-      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f7f7f6] text-[#20151c] transition hover:bg-[#20151c] hover:text-white"
+      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f7f7f6] text-[#233D4D] transition hover:bg-[#233D4D] hover:text-white"
     >
       {children}
     </a>
@@ -170,7 +170,7 @@ export function Footer() {
         {/* Giant background wordmark */}
         <div aria-hidden="true" className="relative mt-24 select-none overflow-hidden pointer-events-none text-center leading-none opacity-[0.04]">
           <span
-            className="block font-normal text-[#20151c]"
+            className="block font-normal text-[#233D4D]"
             style={{
               fontSize: "clamp(100px, 24vw, 320px)",
               lineHeight: 0.75,
@@ -185,13 +185,13 @@ export function Footer() {
         {/* Bottom row */}
         <div className="relative z-10 mt-8 flex flex-col items-center justify-between gap-6 border-t border-black/10 py-8 md:flex-row">
           <div className="flex gap-8 text-sm text-gray-500">
-            <a className="transition-colors hover:text-[#20151c]" href="/terms">
+            <a className="transition-colors hover:text-[#233D4D]" href="/terms">
               Terms
             </a>
-            <a className="transition-colors hover:text-[#20151c]" href="/privacy">
+            <a className="transition-colors hover:text-[#233D4D]" href="/privacy">
               Privacy
             </a>
-            <a className="transition-colors hover:text-[#20151c]" href="/security-policy">
+            <a className="transition-colors hover:text-[#233D4D]" href="/security-policy">
               Security
             </a>
           </div>

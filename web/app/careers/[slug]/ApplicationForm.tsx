@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 const UploadIcon = () => (
-  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="group-hover:text-[#FE7F2D] transition-colors" height="28" width="28" xmlns="http://www.w3.org/2000/svg">
+  <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="group-hover:text-[#D9BEF4] transition-colors" height="28" width="28" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 12.5858L16.2426 16.8284L14.8284 18.2426L13 16.415V22H11V16.413L9.17157 18.2426L7.75736 16.8284L12 12.5858ZM12 2C15.5934 2 18.5544 4.70761 18.9541 8.19395C21.2858 8.83154 23 10.9656 23 13.5C23 16.3688 20.8036 18.7246 18.0006 18.9776L18.0009 16.9644C19.6966 16.7214 21 15.2629 21 13.5C21 11.567 19.433 10 17.5 10C17.2912 10 17.0867 10.0183 16.8887 10.054C16.9616 9.7142 17 9.36158 17 9C17 6.23858 14.7614 4 12 4C9.23858 4 7 6.23858 7 9C7 9.36158 7.03838 9.7142 7.11205 10.0533C6.91331 10.0183 6.70879 10 6.5 10C4.567 10 3 11.567 3 13.5C3 15.2003 4.21241 16.6174 5.81986 16.934L6.00005 16.9646L6.00039 18.9776C3.19696 18.7252 1 16.3692 1 13.5C1 10.9656 2.71424 8.83154 5.04648 8.19411C5.44561 4.70761 8.40661 2 12 2Z"></path>
   </svg>
 );
@@ -36,7 +36,7 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
 
   if (status === "success") {
     return (
-      <div className="border-4 border-black p-10 bg-white shadow-[12px_12px_0px_0px_rgba(254,127,45,1)] text-center">
+      <div className="border-4 border-black p-10 bg-white shadow-[12px_12px_0px_0px_rgba(217,190,244,1)] text-center">
         <h3 className="text-xl font-semibold uppercase mb-4">Application received</h3>
         <p className="text-sm text-gray-500 leading-relaxed">
           Thanks for applying to {roleTitle}. We'll be in touch if there's a fit.
@@ -46,14 +46,14 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
   }
 
   return (
-    <div className="border-4 border-black p-10 bg-white shadow-[12px_12px_0px_0px_rgba(254,127,45,1)]">
+    <div className="border-4 border-black p-10 bg-white shadow-[12px_12px_0px_0px_rgba(217,190,244,1)]">
       <h3 className="text-xl font-semibold uppercase mb-8">Apply for this role</h3>
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <label className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Full name *</label>
           <input
             required
-            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#FE7F2D] transition-colors"
+            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#D9BEF4] transition-colors"
             placeholder="Jane Doe"
             type="text"
             name="name"
@@ -63,7 +63,7 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
           <label className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Email address *</label>
           <input
             required
-            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#FE7F2D] transition-colors"
+            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#D9BEF4] transition-colors"
             placeholder="jane@gmail.com"
             type="email"
             name="email"
@@ -72,7 +72,7 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
         <div className="space-y-2">
           <label className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Phone number</label>
           <input
-            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#FE7F2D] transition-colors"
+            className="w-full border-2 border-black px-4 py-3 text-[14px] font-medium outline-none focus:border-[#D9BEF4] transition-colors"
             placeholder="+1 234 567 890"
             type="tel"
             name="phone"
@@ -99,7 +99,7 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
           <textarea
             name="coverNote"
             rows={3}
-            className="w-full border-2 border-black px-4 py-3 text-[13px] font-medium outline-none focus:border-[#FE7F2D] transition-colors resize-none"
+            className="w-full border-2 border-black px-4 py-3 text-[13px] font-medium outline-none focus:border-[#D9BEF4] transition-colors resize-none"
             placeholder="Anything you want us to know..."
           />
         </div>
@@ -109,7 +109,7 @@ export function ApplicationForm({ roleTitle }: { roleTitle: string }) {
         <button
           type="submit"
           disabled={status === "submitting"}
-          className="w-full flex items-center justify-center gap-3 border-2 border-black bg-black text-white py-5 text-[15px] font-semibold uppercase tracking-widest shadow-[6px_6px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all disabled:opacity-60 disabled:pointer-events-none"
+          className="w-full flex items-center justify-center gap-3 border-2 border-black bg-black text-white py-5 text-[15px] font-semibold uppercase tracking-widest shadow-[6px_6px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all disabled:opacity-60 disabled:pointer-events-none"
         >
           {status === "submitting" ? "Submitting..." : "Submit application"}
           <SendIcon />

@@ -99,28 +99,38 @@ function Chevron({ className = '' }: { className?: string }) {
   );
 }
 
-function DropdownNav({ group }: { group: DropdownGroup }) {
-  const buttonClassName = 'inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-300';
+function PixelMark() {
+  return (
+    <span aria-hidden="true" className="rizly-pixel-mark hidden grid-cols-3 gap-[2px] sm:grid">
+      {Array.from({ length: 9 }, (_, index) => (
+        <span key={index} />
+      ))}
+    </span>
+  );
+}
+
+function DropdownNav({ group, featured = false }: { group: DropdownGroup; featured?: boolean }) {
+  const buttonClassName = 'rizly-nav-item inline-flex h-11 items-center gap-1.5 px-3 text-base font-normal text-white/90 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/35';
 
   return (
-    <div className="group relative">
+    <div className="group relative" data-featured={featured || undefined}>
       <button type="button" className={buttonClassName} aria-haspopup="menu">
         {group.label}
         <Chevron className="transition-transform duration-200 group-hover:rotate-180" />
       </button>
       <div
-        className="invisible absolute left-0 top-full z-50 mt-3 w-[330px] translate-y-1 rounded-[18px] border border-slate-200 bg-white p-2 opacity-0 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)] transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+        className="invisible absolute left-0 top-full z-50 mt-3 w-[330px] translate-y-1 rounded-[18px] border border-white/10 bg-[var(--rizly-surface)] p-2 opacity-0 shadow-[0_28px_90px_-30px_rgba(0,0,0,0.9)] transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
         role="menu"
       >
         {group.items.map((item) => (
           <Link
             key={item.label}
             href={item.href}
-            className="block rounded-xl px-4 py-3 text-left transition hover:bg-slate-50"
+            className="block rounded-xl px-4 py-3 text-left transition hover:bg-white/[0.06]"
             role="menuitem"
           >
-            <span className="block text-[15px] font-normal text-black">{item.label}</span>
-            <span className="mt-1 block text-[13px] leading-5 text-slate-500">{item.description}</span>
+            <span className="block text-base font-normal text-white/90">{item.label}</span>
+            <span className="mt-1 block text-[13px] leading-5 text-[var(--rizly-text-muted)]">{item.description}</span>
           </Link>
         ))}
       </div>
@@ -131,57 +141,68 @@ function DropdownNav({ group }: { group: DropdownGroup }) {
 export function Header({ session }: { session: Session | null }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const headerClassName = 'w-full bg-white font-neue-haas';
-  const pricingClassName = 'hidden h-11 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
-  const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black xl:inline-flex';
-  const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-[15px] font-normal text-black/90 transition hover:bg-slate-100 hover:text-black lg:inline-flex';
-  const mobileLineClassName = 'bg-slate-950';
+  const headerClassName = 'w-full bg-black font-display';
+  const pricingClassName = 'hidden h-11 items-center rounded-full px-3 text-base font-normal text-white/90 transition hover:bg-white/[0.07] hover:text-white lg:inline-flex';
+  const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-base font-normal text-white/90 transition hover:bg-white/[0.07] hover:text-white xl:inline-flex';
+  const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-base font-normal text-white/90 transition hover:bg-white/[0.07] hover:text-white lg:inline-flex';
+  const mobileLineClassName = 'bg-[var(--rizly-text)]';
 
   return (
-    <div className="sticky top-0 z-50 w-full bg-white">
-      <div className="w-full bg-white">
-        <div className="flex flex-1 items-center justify-start overflow-hidden px-8 py-3">
+    <div className="sticky top-0 z-50 w-full bg-black text-[var(--rizly-text)]">
+      <div className="w-full border-b border-white/10 bg-black">
+        <div className="mx-auto flex min-h-11 w-full max-w-[88rem] items-center justify-center overflow-hidden px-4 py-2 sm:px-8">
           <a
-            className="flex items-center gap-3 whitespace-nowrap text-[13px] font-normal text-gray-600 transition-colors hover:text-black"
+            className="rizly-announcement group grid min-w-0 flex-1 grid-cols-[auto_minmax(0,auto)_minmax(24px,1fr)_auto] items-center gap-3 text-[13px] font-normal text-white/90 sm:gap-5 sm:text-sm"
             href="/agent"
           >
-            <span className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-2 py-0.5 text-[10px] font-normal uppercase tracking-tighter text-white">
-              New
+            <span className="rizly-announcement-badge relative inline-flex shrink-0 items-center gap-2 overflow-hidden bg-[var(--rizly-ai)] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#EAECF0] shadow-[0_8px_24px_-14px_rgba(35,61,77,0.7)]">
+              <span className="relative h-1.5 w-1.5">
+                <span className="absolute inset-0 rounded-full bg-[var(--rizly-accent)]/40 motion-safe:animate-ping" />
+                <span className="absolute inset-0 rounded-full bg-[var(--rizly-accent)]" />
+              </span>
+              Field note 01
             </span>
-            Meet Riz, your AI agent&nbsp;→
+            <span className="truncate transition-colors duration-200 group-hover:text-white">
+              Meet Riz — the operator that asks before it acts
+            </span>
+            <span aria-hidden="true" className="rizly-pixel-rail h-[3px] min-w-0" />
+            <span
+              aria-hidden="true"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--rizly-ai)]/20 text-[var(--rizly-ai)] transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:translate-x-1 group-hover:border-[var(--rizly-ai)]/55 group-hover:bg-[var(--rizly-ai)]/10 group-active:scale-[0.96]"
+            >
+              ↗
+            </span>
           </a>
         </div>
       </div>
 
       <header className={headerClassName}>
       <nav
-        className="flex h-[68px] items-center gap-6 px-14"
+        className="mx-auto grid h-[72px] w-full max-w-[88rem] grid-cols-[1fr_auto] items-center border-b border-white/10 px-5 sm:px-8 lg:grid-cols-[1fr_auto_1fr] lg:px-14"
         aria-label="Main navigation"
       >
-        <Link className="flex shrink-0 items-center transition-opacity hover:opacity-80" href="/">
+        <Link className="group/logo flex w-fit shrink-0 items-center gap-3 justify-self-start transition-opacity hover:opacity-90" href="/">
           <Image
             alt="rizly Logo"
             width={112}
             height={26}
-            className="h-8 w-auto object-contain"
+            className="h-8 w-auto object-contain opacity-85 brightness-0 invert"
             src="/rizly_white.png"
             priority
           />
+          <PixelMark />
         </Link>
 
-        <div className="hidden items-center gap-1 lg:flex" role="tablist" aria-label="Navigation groups">
-          {navGroups.map((group) => (
-            <DropdownNav key={group.label} group={group} />
+        <div className="hidden items-center gap-2 justify-self-center lg:flex" role="tablist" aria-label="Navigation groups">
+          {navGroups.map((group, index) => (
+            <DropdownNav key={group.label} group={group} featured={index === 0} />
           ))}
+          <Link className={`${pricingClassName} rizly-nav-item`} href="/pricing">
+            Pricing
+          </Link>
         </div>
 
-        <Link className={pricingClassName} href="/pricing">
-          Pricing
-        </Link>
-
-        <div className="flex-1" />
-
-        <div className="hidden items-center gap-1 lg:flex">
+        <div className="hidden items-center gap-1 justify-self-end lg:flex">
           <Link className={utilityLinkClassName} href="/contact">
             Contact sales
           </Link>
@@ -193,7 +214,7 @@ export function Header({ session }: { session: Session | null }) {
                 Log in
               </Link>
               <Link
-                className="inline-flex h-11 items-center justify-center rounded-md bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] px-5 text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
+                className="rizly-stepped-button inline-flex h-11 items-center justify-center border border-[var(--rizly-ai)]/55 bg-transparent px-5 text-base font-normal text-white/90 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--rizly-ai)] hover:bg-[var(--rizly-ai)]/10 hover:text-white active:scale-[0.98]"
                 href="/signup"
               >
                 Get started
@@ -204,7 +225,7 @@ export function Header({ session }: { session: Session | null }) {
 
         <button
           onClick={() => setIsMobileMenuOpen((open) => !open)}
-          className="relative z-50 ml-auto flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-slate-100 lg:hidden"
+          className="relative z-50 flex h-10 w-10 items-center justify-center justify-self-end rounded-full transition hover:bg-white/10 lg:hidden"
           aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={isMobileMenuOpen}
         >
@@ -230,11 +251,11 @@ export function Header({ session }: { session: Session | null }) {
       </nav>
 
       {isMobileMenuOpen && (
-        <div className="fixed inset-x-0 top-[104px] z-40 max-h-[calc(100vh-104px)] overflow-y-auto border-t border-slate-200 bg-white px-5 py-5 shadow-[0_24px_80px_-35px_rgba(15,23,42,0.35)] lg:hidden">
+        <div className="fixed inset-x-0 top-[116px] z-40 max-h-[calc(100vh-116px)] overflow-y-auto border-t border-white/10 bg-black px-5 py-5 shadow-[0_28px_90px_-35px_rgba(0,0,0,0.95)] lg:hidden">
           <nav className="flex flex-col gap-2" aria-label="Mobile navigation">
             {navGroups.map((group) => (
-              <div key={group.label} className="border-b border-slate-100 pb-3">
-                <div className="mb-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+              <div key={group.label} className="border-b border-white/10 pb-3">
+                <div className="mb-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/35">
                   {group.label}
                 </div>
                 {group.items.map((item) => (
@@ -242,10 +263,10 @@ export function Header({ session }: { session: Session | null }) {
                     key={item.label}
                     onClick={() => setIsMobileMenuOpen(false)}
                     href={item.href}
-                    className="block rounded-xl px-2 py-2.5"
+                    className="block rounded-xl px-2 py-2.5 transition hover:bg-white/[0.06]"
                   >
-                    <span className="block text-[15px] font-normal text-black">{item.label}</span>
-                    <span className="mt-0.5 block text-[13px] leading-5 text-slate-500">
+                    <span className="block text-base font-normal text-white/90">{item.label}</span>
+                    <span className="mt-0.5 block text-[13px] leading-5 text-[var(--rizly-text-muted)]">
                       {item.description}
                     </span>
                   </Link>
@@ -255,7 +276,7 @@ export function Header({ session }: { session: Session | null }) {
             <Link
               onClick={() => setIsMobileMenuOpen(false)}
               href="/pricing"
-              className="rounded-xl px-2 py-3 text-[15px] font-semibold text-black"
+              className="rounded-xl px-2 py-3 text-base font-semibold text-white/90"
             >
               Pricing
             </Link>
@@ -263,7 +284,7 @@ export function Header({ session }: { session: Session | null }) {
               <Link
                 onClick={() => setIsMobileMenuOpen(false)}
                 href="/dashboard"
-                className="mt-2 flex h-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
+                className="mt-2 flex h-12 items-center justify-center rounded-full border border-white/20 bg-transparent text-base font-normal text-white/90 transition hover:border-white/40 hover:bg-white/[0.07] hover:text-white active:scale-[0.98]"
               >
                 Go to dashboard
               </Link>
@@ -272,13 +293,13 @@ export function Header({ session }: { session: Session | null }) {
                 <Link
                   onClick={() => setIsMobileMenuOpen(false)}
                   href="/login"
-                  className="rounded-xl px-2 py-3 text-[15px] font-semibold text-black"
+                  className="rounded-xl px-2 py-3 text-base font-semibold text-white/90"
                 >
                   Log in
                 </Link>
                 <Link
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="mt-2 flex h-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#050505_55%,#374151_100%)] text-base font-normal text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.85)] transition hover:translate-y-[-1px] hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,0.9)] active:scale-[0.98]"
+                  className="mt-2 flex h-12 items-center justify-center rounded-full border border-white/20 bg-transparent text-base font-normal text-white/90 transition hover:border-white/40 hover:bg-white/[0.07] hover:text-white active:scale-[0.98]"
                   href="/signup"
                 >
                   Get started

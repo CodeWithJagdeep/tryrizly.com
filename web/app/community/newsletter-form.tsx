@@ -32,7 +32,7 @@ export function NewsletterSignup() {
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md">
-      <div className="flex overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all focus-within:border-[#FE7F2D] focus-within:shadow-[6px_6px_0px_0px_rgba(254,127,45,1)]">
+      <div className="flex overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all focus-within:border-[#D9BEF4] focus-within:shadow-[6px_6px_0px_0px_rgba(217,190,244,1)]">
         <input
           type="email"
           name="email"
@@ -43,7 +43,7 @@ export function NewsletterSignup() {
         <button
           type="submit"
           disabled={status === "submitting"}
-          className="shrink-0 border-l-2 border-black bg-black px-5 text-[12px] font-black uppercase tracking-wide text-white transition-colors hover:bg-[#FE7F2D] disabled:opacity-60"
+          className="shrink-0 border-l-2 border-black bg-black px-5 text-[12px] font-black uppercase tracking-wide text-white transition-colors hover:bg-[#D9BEF4] disabled:opacity-60"
         >
           {status === "submitting" ? "…" : "Subscribe"}
         </button>

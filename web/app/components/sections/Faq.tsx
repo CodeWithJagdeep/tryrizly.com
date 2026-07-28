@@ -34,7 +34,7 @@ export function Faq() {
     <section className="border-t-2 border-black/10 bg-white py-20 md:py-28 font-neue-haas">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">FAQ</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">FAQ</p>
           <h2 className="mt-4 text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             Questions worth answering up front.
           </h2>
@@ -54,14 +54,14 @@ export function Faq() {
                     onClick={() => setOpenIndex(isOpen ? null : index)}
                     className="group flex w-full items-center justify-between px-6 py-5 text-left focus:outline-none"
                   >
-                    <span className="text-base font-bold text-black transition-colors duration-200 group-hover:text-[#FE7F2D] md:text-lg">
+                    <span className="text-base font-bold text-black transition-colors duration-200 group-hover:text-[#D9BEF4] md:text-lg">
                       {item.q}
                     </span>
                     <motion.span
                       animate={{ rotate: isOpen ? 45 : 0 }}
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                       className={`ml-4 flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black text-base font-black transition-colors duration-200 ${
-                        isOpen ? "bg-[#FE7F2D] text-white" : "bg-white text-black group-hover:bg-black group-hover:text-white"
+                        isOpen ? "bg-[#D9BEF4] text-white" : "bg-white text-black group-hover:bg-black group-hover:text-white"
                       }`}
                     >
                       +
@@ -94,14 +94,14 @@ export function Faq() {
             <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
               <a
                 href="/faq"
-                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#D9BEF4]"
               >
                 Read all FAQs
                 <span className="transition-transform group-hover:translate-x-0.5">→</span>
               </a>
               <a
                 href="/contact"
-                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+                className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#D9BEF4]"
               >
                 Ask us directly
                 <span className="transition-transform group-hover:translate-x-0.5">→</span>

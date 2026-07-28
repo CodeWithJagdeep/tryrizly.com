@@ -85,12 +85,12 @@ export default function IntegrationsPage() {
           style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "32px 32px" }}
         ></div>
         <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-3 py-1 border-2 border-[#FE7F2D] text-[#FE7F2D] text-[12px] font-semibold uppercase tracking-[0.2em] mb-8">
+          <span className="inline-block px-3 py-1 border-2 border-[#D9BEF4] text-[#D9BEF4] text-[12px] font-semibold uppercase tracking-[0.2em] mb-8">
             Frictionless workflow
           </span>
           <h1 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-10">
             Amplify your <br />
-            <span className="text-[#FE7F2D]">existing stack</span>
+            <span className="text-[#D9BEF4]">existing stack</span>
           </h1>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-6 leading-relaxed">
             Don't change how you work. Just watch your current tools become exponentially more powerful overnight.
@@ -104,7 +104,7 @@ export default function IntegrationsPage() {
           {integrations.map((integration) => (
             <div
               key={integration.name}
-              className="flex flex-col md:flex-row items-start md:items-center gap-8 p-10 border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(254,127,45,1)] hover:border-[#FE7F2D] transition-all group bg-[#fcfcfc]"
+              className="flex flex-col md:flex-row items-start md:items-center gap-8 p-10 border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(217,190,244,1)] hover:border-[#D9BEF4] transition-all group bg-[#fcfcfc]"
             >
               <div className="w-20 h-20 shrink-0 border-2 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform">
                 <span className="font-semibold text-3xl" style={{ color: integration.color }}>
@@ -133,10 +133,10 @@ export default function IntegrationsPage() {
       </section>
 
       {/* Why connect */}
-      <section className="py-32 px-10 border-b-2 border-black/10 bg-[#FE7F2D]/5">
+      <section className="py-32 px-10 border-b-2 border-black/10 bg-[#D9BEF4]/5">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">The compounding effect</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">The compounding effect</span>
             <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-normal">Why connect your tools?</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
@@ -166,13 +166,13 @@ export default function IntegrationsPage() {
             You dictate exactly what Rizly can see and touch. Every integration uses precise, scoped OAuth permissions, ensuring your data remains safe and your secrets remain yours.
           </p>
           <div className="inline-flex items-center gap-6 justify-center flex-wrap">
-            <div className="w-16 h-16 border-2 border-[#FE7F2D] flex items-center justify-center text-[#FE7F2D] bg-[#FE7F2D]/10 shadow-[4px_4px_0px_0px_rgba(254,127,45,1)]">
+            <div className="w-16 h-16 border-2 border-[#D9BEF4] flex items-center justify-center text-[#D9BEF4] bg-[#D9BEF4]/10 shadow-[4px_4px_0px_0px_rgba(217,190,244,1)]">
               <span className="font-semibold text-xs">OAuth</span>
             </div>
-            <div className="w-16 h-16 border-2 border-[#FE7F2D] flex items-center justify-center text-[#FE7F2D] bg-[#FE7F2D]/10 shadow-[4px_4px_0px_0px_rgba(254,127,45,1)]">
+            <div className="w-16 h-16 border-2 border-[#D9BEF4] flex items-center justify-center text-[#D9BEF4] bg-[#D9BEF4]/10 shadow-[4px_4px_0px_0px_rgba(217,190,244,1)]">
               <span className="font-semibold text-xs">SAML</span>
             </div>
-            <div className="w-16 h-16 border-2 border-[#FE7F2D] flex items-center justify-center text-[#FE7F2D] bg-[#FE7F2D]/10 shadow-[4px_4px_0px_0px_rgba(254,127,45,1)]">
+            <div className="w-16 h-16 border-2 border-[#D9BEF4] flex items-center justify-center text-[#D9BEF4] bg-[#D9BEF4]/10 shadow-[4px_4px_0px_0px_rgba(217,190,244,1)]">
               <span className="font-semibold text-xs">2FA</span>
             </div>
           </div>
@@ -182,7 +182,7 @@ export default function IntegrationsPage() {
       {/* Final CTA */}
       <section className="py-32 px-10 text-center bg-[#fcfcfc]">
         <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-normal leading-tight mb-10">
-          Need help or want to <span className="text-[#FE7F2D]">expand?</span>
+          Need help or want to <span className="text-[#D9BEF4]">expand?</span>
         </h2>
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
           <a
@@ -193,7 +193,7 @@ export default function IntegrationsPage() {
           </a>
           <a
             href="/contact"
-            className="inline-flex items-center gap-3 border-2 border-black bg-[#FE7F2D] text-white px-12 py-6 text-[16px] font-semibold uppercase transition-all shadow-[8px_8px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none"
+            className="inline-flex items-center gap-3 border-2 border-black bg-[#D9BEF4] text-white px-12 py-6 text-[16px] font-semibold uppercase transition-all shadow-[8px_8px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-4px] hover:translate-y-[-4px] hover:shadow-[12px_12px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none"
           >
             Request integration
             <span className="text-2xl">→</span>

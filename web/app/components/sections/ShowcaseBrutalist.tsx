@@ -56,7 +56,7 @@ function TriageMockup() {
     },
     {
       tag: 'Stripe',
-      tagColor: '#FE7F2D',
+      tagColor: '#D9BEF4',
       sender: 'Acme Corp, Payment Failed',
       body: 'Enterprise plan payment past due. Drafted a renewal nudge to Priya with relationship context.',
       time: '14 min ago',
@@ -76,7 +76,7 @@ function TriageMockup() {
     <div className="relative border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3.5 border-b-2 border-black bg-black/[0.02]">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white">
+          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#D9BEF4] text-white">
             <svg viewBox="0 0 16 16" fill="none" className="size-3.5" xmlns="http://www.w3.org/2000/svg">
               <path d="M2.5 4.5l5.5 3.5 5.5-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
               <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
@@ -172,7 +172,7 @@ function OperationsMockup() {
       </div>
 
       <div className="flex gap-3 px-5 py-4 border-t-2 border-black bg-black/[0.02]">
-        <button className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border-2 border-black bg-[#FE7F2D] hover:bg-black text-[13px] font-black uppercase tracking-tight text-white transition-colors">
+        <button className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border-2 border-black bg-[#D9BEF4] hover:bg-black text-[13px] font-black uppercase tracking-tight text-white transition-colors">
           Approve
         </button>
         <button className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 border-2 border-black bg-white hover:bg-black hover:text-white text-[13px] font-black uppercase tracking-tight text-black transition-colors">
@@ -188,7 +188,7 @@ export function ShowcaseBrutalist() {
     <section className="relative bg-[#fcfcfc] font-neue-haas">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 md:py-28">
         <div className="mx-auto max-w-2xl text-center mb-20 lg:mb-24">
-          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D] mb-4">
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4] mb-4">
             See it in action
           </p>
           <h2 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black uppercase text-black leading-[1.15] tracking-tight">
@@ -204,10 +204,10 @@ export function ShowcaseBrutalist() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center mb-24 lg:mb-28">
           <div className="lg:col-span-5 flex flex-col">
             <div className="flex items-center gap-2.5 mb-6">
-              <span className="flex h-9 w-9 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D]">
+              <span className="flex h-9 w-9 items-center justify-center border-2 border-black bg-[#D9BEF4]/10 text-[#D9BEF4]">
                 <MailIcon />
               </span>
-              <span className="text-[12px] font-black uppercase tracking-[0.14em] text-[#FE7F2D]">
+              <span className="text-[12px] font-black uppercase tracking-[0.14em] text-[#D9BEF4]">
                 Inbox Triage
               </span>
             </div>
@@ -221,15 +221,15 @@ export function ShowcaseBrutalist() {
             </p>
 
             <ul className="space-y-3.5 mb-8">
-              <FeatureItem accent="#FE7F2D">Drafts land in Telegram, not another dashboard</FeatureItem>
-              <FeatureItem accent="#FE7F2D">Noise auto-archived based on your learned rules</FeatureItem>
-              <FeatureItem accent="#FE7F2D">Context-aware drafts in your voice and tone</FeatureItem>
-              <FeatureItem accent="#FE7F2D">Remembers every preference and decision</FeatureItem>
+              <FeatureItem accent="#D9BEF4">Drafts land in Telegram, not another dashboard</FeatureItem>
+              <FeatureItem accent="#D9BEF4">Noise auto-archived based on your learned rules</FeatureItem>
+              <FeatureItem accent="#D9BEF4">Context-aware drafts in your voice and tone</FeatureItem>
+              <FeatureItem accent="#D9BEF4">Remembers every preference and decision</FeatureItem>
             </ul>
 
             <Link
               href="/pricing"
-              className="group inline-flex w-fit items-center gap-2 text-[14px] font-black uppercase tracking-tight text-[#FE7F2D] hover:text-black transition-colors"
+              className="group inline-flex w-fit items-center gap-2 text-[14px] font-black uppercase tracking-tight text-[#D9BEF4] hover:text-black transition-colors"
             >
               See pricing
               <span className="transition-transform group-hover:translate-x-0.5">

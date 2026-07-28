@@ -5,7 +5,7 @@ export function Eyebrow({ children, light = false }: { children: React.ReactNode
         light ? "bg-white/10 text-white/60" : "bg-[#f7f7f6] text-gray-500"
       }`}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[#ff4f00]" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[#D9BEF4]" />
       {children}
     </span>
   );

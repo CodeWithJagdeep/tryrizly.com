@@ -52,11 +52,11 @@ export default function CommunityPage() {
           aria-hidden="true"
         />
         <div className="relative mx-auto max-w-7xl">
-          <span className="inline-block border-2 border-[#FE7F2D] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#FE7F2D]">
+          <span className="inline-block border-2 border-[#D9BEF4] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#D9BEF4]">
             Community
           </span>
           <h1 className="mt-7 max-w-3xl text-balance text-4xl font-medium leading-[1.08] tracking-tight text-black md:text-6xl">
-            Built in public, <span className="text-[#FE7F2D]">shaped by the people using it</span>.
+            Built in public, <span className="text-[#D9BEF4]">shaped by the people using it</span>.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-gray-500">
             Rizly gets better because operators tell us what's broken and what's missing. Follow
@@ -73,16 +73,16 @@ export default function CommunityPage() {
               <Link
                 key={channel.title}
                 href={channel.href}
-                className="group flex h-full flex-col border-2 border-black bg-white p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)]"
+                className="group flex h-full flex-col border-2 border-black bg-white p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(217,190,244,1)]"
               >
-                <p className="font-mono text-xs font-bold tracking-widest text-black/15 transition-colors duration-300 group-hover:text-[#FE7F2D]/40">
+                <p className="font-mono text-xs font-bold tracking-widest text-black/15 transition-colors duration-300 group-hover:text-[#D9BEF4]/40">
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <h2 className="mt-4 text-xl font-black uppercase tracking-tight text-black">
                   {channel.title}
                 </h2>
                 <p className="mt-3 flex-1 text-sm leading-relaxed text-gray-500">{channel.description}</p>
-                <span className="mt-6 inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-[#FE7F2D] transition-colors group-hover:text-black">
+                <span className="mt-6 inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-[#D9BEF4] transition-colors group-hover:text-black">
                   {channel.cta}
                   <span className="transition-transform group-hover:translate-x-0.5">→</span>
                 </span>
@@ -96,7 +96,7 @@ export default function CommunityPage() {
       <section className="border-t-2 border-black bg-[#fcfcfc] px-4 py-16 sm:px-6 md:py-20 lg:px-8">
         <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 lg:grid-cols-2">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">Newsletter</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">Newsletter</p>
             <h2 className="mt-4 text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
               One email when it matters.
             </h2>
@@ -115,7 +115,7 @@ export default function CommunityPage() {
       <section className="border-t-2 border-black bg-black px-4 py-16 sm:px-6 md:py-20 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-2xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">
+            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">
               You shape the roadmap
             </p>
             <h2 className="mt-4 text-balance text-3xl font-medium tracking-tight text-white md:text-4xl">
@@ -129,7 +129,7 @@ export default function CommunityPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href="/contact"
-              className="inline-flex h-12 items-center justify-center border-2 border-[#FE7F2D] bg-[#FE7F2D] px-8 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white hover:text-black"
+              className="inline-flex h-12 items-center justify-center border-2 border-[#D9BEF4] bg-[#D9BEF4] px-8 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white hover:text-black"
             >
               Send feedback
             </Link>

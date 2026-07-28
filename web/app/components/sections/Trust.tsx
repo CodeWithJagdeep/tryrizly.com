@@ -36,8 +36,8 @@ const items = [
     detail:
       'Drafts, replies, and scheduling changes wait for your approval in Telegram. Auto-send only turns on for a category once you explicitly tell Riz to handle it that way.',
     Icon: ShieldIcon,
-    accent: 'text-[#FE7F2D]',
-    iconBg: 'bg-[#FE7F2D]/10',
+    accent: 'text-[#D9BEF4]',
+    iconBg: 'bg-[#D9BEF4]/10',
   },
   {
     stat: 'AES-256',
@@ -68,7 +68,7 @@ export function Trust() {
         <Reveal>
           <div className="flex flex-wrap items-end justify-between gap-6 border-b-2 border-black/10 pb-8">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">Trust</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">Trust</p>
               <h2 className="mt-4 max-w-lg text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
                 Control stays with you, end to end.
               </h2>
@@ -105,21 +105,21 @@ export function Trust() {
           <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t-2 border-black/10 pt-8">
             <Link
               href="/trust"
-              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#D9BEF4]"
             >
               Visit the trust center
               <span className="transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
             <Link
               href="/security-policy"
-              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#D9BEF4]"
             >
               Read the security policy
               <span className="transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
             <Link
               href="/privacy"
-              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#FE7F2D]"
+              className="group inline-flex items-center gap-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:text-[#D9BEF4]"
             >
               Privacy policy
               <span className="transition-transform group-hover:translate-x-0.5">→</span>

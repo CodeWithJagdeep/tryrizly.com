@@ -24,11 +24,11 @@ export const metadata: Metadata = {
 };
 
 const inbox = [
-  { from: "Priya Shah — Lightspeed", subject: "Re: Intro call next week", tag: "Needs a decision", color: "#ff4f00" },
+  { from: "Priya Shah — Lightspeed", subject: "Re: Intro call next week", tag: "Needs a decision", color: "#D9BEF4" },
   { from: "Calendly", subject: "New meeting request: Thu 2pm", tag: "Meeting request", color: "#3B82F6" },
   { from: "Stripe", subject: "Payment failed for invoice #4471", tag: "Payment", color: "#22c55e" },
   { from: "Product Hunt Weekly", subject: "This week's top launches", tag: "Noise", color: "#9CA3AF" },
-  { from: "Markus — Gradient Ventures", subject: "Term sheet — let's close by Friday", tag: "Needs a decision", color: "#ff4f00" },
+  { from: "Markus — Gradient Ventures", subject: "Term sheet — let's close by Friday", tag: "Needs a decision", color: "#D9BEF4" },
   { from: "LinkedIn", subject: "5 people viewed your profile", tag: "Noise", color: "#9CA3AF" },
 ];
 
@@ -64,8 +64,8 @@ export default function EmailTriagePage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Rizly / Email triage</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Your inbox, <span className="text-[#ff4f00]">already sorted</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Your inbox, <span className="text-[#D9BEF4]">already sorted</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Stop opening your inbox to guess what matters. Riz reads every message first and tells you only what needs a decision.
@@ -78,7 +78,7 @@ export default function EmailTriagePage() {
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 text-center md:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="mb-2 block text-3xl font-normal text-[#20151c]">{stat.value}</span>
+              <span className="mb-2 block text-3xl font-normal text-[#233D4D]">{stat.value}</span>
               <span className="block text-xs uppercase tracking-[0.1em] text-gray-500">{stat.label}</span>
             </div>
           ))}
@@ -90,14 +90,14 @@ export default function EmailTriagePage() {
         <div className="mx-auto max-w-3xl">
           <div className="overflow-hidden rounded-2xl bg-[#f7f7f6] shadow-[0_30px_80px_-60px_rgba(32,21,28,0.4)]">
             <div className="flex items-center justify-between border-b border-black/5 bg-white px-6 py-4">
-              <span className="text-sm font-normal text-[#20151c]">Inbox — 6 new</span>
-              <span className="text-xs uppercase tracking-[0.1em] text-[#ff4f00]">Triaged by Riz</span>
+              <span className="text-sm font-normal text-[#233D4D]">Inbox — 6 new</span>
+              <span className="text-xs uppercase tracking-[0.1em] text-[#D9BEF4]">Triaged by Riz</span>
             </div>
             <div className="divide-y divide-black/[0.06]">
               {inbox.map((mail) => (
                 <div key={mail.subject} className="flex items-center justify-between gap-4 px-6 py-4">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-normal text-[#20151c]">{mail.from}</p>
+                    <p className="truncate text-sm font-normal text-[#233D4D]">{mail.from}</p>
                     <p className="truncate text-sm text-gray-500">{mail.subject}</p>
                   </div>
                   <span
@@ -118,7 +118,7 @@ export default function EmailTriagePage() {
         <div className="mx-auto grid max-w-[88rem] grid-cols-1 gap-5 md:grid-cols-3">
           {capabilities.map((item) => (
             <div key={item.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
-              <h3 className="mb-3 text-lg font-normal text-[#20151c]">{item.title}</h3>
+              <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{item.title}</h3>
               <p className="text-sm leading-6 text-gray-600">{item.description}</p>
             </div>
           ))}
@@ -130,7 +130,7 @@ export default function EmailTriagePage() {
         <div className="mx-auto max-w-4xl">
           <div className="mb-10 text-center">
             <Eyebrow>In your dashboard</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               Every triaged thread, one clean view
             </h2>
           </div>
@@ -149,7 +149,7 @@ export default function EmailTriagePage() {
         <div className="mx-auto max-w-3xl">
           <div className="mb-12 text-center">
             <Eyebrow>Then it drafts</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               A reply, ready to approve
             </h2>
           </div>
@@ -164,14 +164,14 @@ export default function EmailTriagePage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>Who it&apos;s for</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               Built for inboxes that never stop
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {audiences.map((audience) => (
               <div key={audience.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
-                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{audience.title}</h3>
+                <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{audience.title}</h3>
                 <p className="text-sm leading-6 text-gray-600">{audience.description}</p>
               </div>
             ))}
@@ -180,7 +180,7 @@ export default function EmailTriagePage() {
       </section>
 
       {/* Trust */}
-      <section className="relative overflow-hidden bg-[#20151c] px-6 py-20 text-center md:px-10 lg:px-14">
+      <section className="relative overflow-hidden bg-[#233D4D] px-6 py-20 text-center md:px-10 lg:px-14">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
@@ -209,7 +209,7 @@ export default function EmailTriagePage() {
       {/* FAQ */}
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
             Common questions
           </h2>
           <FaqAccordion items={questions} />

@@ -4,18 +4,42 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ConnectorLogo } from "../components/ConnectorLogo";
 import {
+  AirtableIcon,
+  BambooHrIcon,
+  BetterStackIcon,
+  BoxIcon,
   CalComIcon,
   CalendarIcon,
+  CalendlyIcon,
+  DeelIcon,
+  DiscordIcon,
+  DropboxIcon,
+  FigmaIcon,
   GitHubIcon,
   GmailIcon,
+  GoogleDriveIcon,
+  GumroadIcon,
+  JiraIcon,
+  LemonSqueezyIcon,
   MongoDbIcon,
   MpesaIcon,
+  NotionIcon,
+  PagerDutyIcon,
   PostgresIcon,
+  QuickBooksIcon,
   RazorpayIcon,
   SlackIcon,
+  StatuspageIcon,
   StripeIcon,
   TelegramIcon,
+  TrelloIcon,
+  TwilioIcon,
+  TypeformIcon,
+  UptimeRobotIcon,
+  WiseIcon,
+  XeroIcon,
 } from "../components/ConnectorIcons";
 
 type OnboardingState = {
@@ -83,6 +107,23 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
       "Create a calendar event for Tuesday at 10am with Naman.",
     ],
     website: "https://calendar.google.com",
+    privacy: "https://policies.google.com/privacy",
+  },
+  {
+    provider: "google_workspace",
+    title: "Google Drive, Sheets & Docs",
+    description:
+      "Upload files, append sheet rows, and create documents from an automation. A separate grant from Gmail/Calendar.",
+    category: "Google",
+    authType: "oauth",
+    icon: GoogleDriveIcon,
+    prompts: [
+      "Create a new Google Doc summarizing this week's investor updates.",
+      "Append today's signups to my tracking spreadsheet.",
+      "Upload this report to my Drive folder.",
+      "Find the sales spreadsheet and tell me the latest totals.",
+    ],
+    website: "https://drive.google.com",
     privacy: "https://policies.google.com/privacy",
   },
   {
@@ -187,6 +228,105 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     privacy: "https://docs.github.com/en/site-policy/privacy-policies",
   },
   {
+    provider: "jira",
+    title: "Jira",
+    description: "Search issues and create issues in a project from an automation.",
+    category: "Team",
+    authType: "oauth",
+    icon: JiraIcon,
+    // Manual fallback: an API token still works for users who'd rather not
+    // grant OAuth access, or whose site isn't reachable via Atlassian OAuth.
+    fields: [
+      { name: "siteUrl", label: "Site URL (if OAuth doesn't work for your account)", placeholder: "https://yourteam.atlassian.net" },
+      { name: "email", label: "Account Email", placeholder: "you@company.com" },
+      { name: "apiToken", label: "API Token", type: "password", placeholder: "Create one at id.atlassian.com/manage-profile/security/api-tokens" },
+    ],
+    prompts: [
+      "What Jira issues are still open and assigned to me?",
+      "Create a Jira ticket for this bug report.",
+      "Open an issue in the Engineering project for the deploy failure.",
+      "Log a new task in Jira for the onboarding fix.",
+    ],
+    website: "https://www.atlassian.com/software/jira",
+    privacy: "https://www.atlassian.com/legal/privacy-policy",
+  },
+  {
+    provider: "trello",
+    title: "Trello",
+    description: "Create cards on a board from an automation.",
+    category: "Team",
+    authType: "manual",
+    icon: TrelloIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", placeholder: "From trello.com/app-key" },
+      { name: "token", label: "Token", type: "password" },
+    ],
+    prompts: [
+      "Add a card to my Trello board for this follow-up.",
+      "Create a Trello card summarizing this request.",
+      "Log this feedback as a card on the Bugs list.",
+    ],
+    website: "https://trello.com",
+    privacy: "https://www.atlassian.com/legal/privacy-policy",
+  },
+  {
+    provider: "pagerduty",
+    title: "PagerDuty",
+    description: "Open incidents on a service from an automation.",
+    category: "APIs",
+    authType: "manual",
+    icon: PagerDutyIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From PagerDuty's API Access Keys settings" },
+      { name: "fromEmail", label: "From Email", placeholder: "A valid PagerDuty user's email — required by their API" },
+    ],
+    prompts: [
+      "Open a PagerDuty incident for the API outage.",
+      "Page the on-call engineer about this error spike.",
+      "Create an incident for the failed deploy.",
+    ],
+    website: "https://www.pagerduty.com",
+    privacy: "https://www.pagerduty.com/privacy-policy/",
+  },
+  {
+    provider: "twilio",
+    title: "Twilio",
+    description: "Send SMS notifications from an automation.",
+    category: "APIs",
+    authType: "manual",
+    icon: TwilioIcon,
+    fields: [
+      { name: "accountSid", label: "Account SID", placeholder: "AC..." },
+      { name: "authToken", label: "Auth Token", type: "password" },
+      { name: "fromNumber", label: "From Number", placeholder: "+15551234567" },
+    ],
+    prompts: [
+      "Text me when a high-value payment fails.",
+      "Send an SMS alert when a new lead comes in.",
+      "Notify the team by text when the site goes down.",
+    ],
+    website: "https://www.twilio.com",
+    privacy: "https://www.twilio.com/legal/privacy",
+  },
+  {
+    provider: "airtable",
+    title: "Airtable",
+    description: "Create and poll records in a base from an automation.",
+    category: "Databases",
+    authType: "manual",
+    icon: AirtableIcon,
+    fields: [
+      { name: "apiKey", label: "Personal Access Token", type: "password", placeholder: "pat..." },
+    ],
+    prompts: [
+      "Add this lead to my Airtable CRM base.",
+      "Check for new records added to my tracker today.",
+      "Log this expense in my Airtable budget base.",
+    ],
+    website: "https://airtable.com",
+    privacy: "https://www.airtable.com/privacy",
+  },
+  {
     provider: "postgres",
     title: "Postgres",
     description:
@@ -236,10 +376,308 @@ const CONNECTOR_CATALOG: ConnectorItem[] = [
     website: "https://mongodb.com",
     privacy: "https://www.mongodb.com/legal/privacy-policy",
   },
+  {
+    provider: "notion",
+    title: "Notion",
+    description: "Search pages, retrieve knowledge base content, and get context from your docs.",
+    category: "Team",
+    authType: "oauth",
+    icon: NotionIcon,
+    prompts: [
+      "Find our onboarding doc in Notion and summarize it.",
+      "Create a Notion page for today's meeting notes.",
+      "What does our Notion say about the refund policy?",
+    ],
+    website: "https://www.notion.so",
+    privacy: "https://www.notion.so/privacy",
+  },
+  {
+    provider: "discord",
+    title: "Discord",
+    description: "Read a bot-accessible channel for updates and post approved messages through an optional webhook.",
+    category: "Team",
+    authType: "manual",
+    icon: DiscordIcon,
+    fields: [
+      { name: "botToken", label: "Bot token", type: "password", placeholder: "Discord bot token" },
+      { name: "channelId", label: "Channel ID", placeholder: "123456789012345678" },
+      { name: "guildId", label: "Server ID (optional, enables message links)", placeholder: "123456789012345678", required: false },
+      { name: "webhookUrl", label: "Channel webhook URL (optional, enables posting)", type: "password", placeholder: "https://discord.com/api/webhooks/...", required: false },
+    ],
+    prompts: [
+      "Post a summary of today's standup to our Discord channel.",
+      "What's been discussed in #general today?",
+      "Notify the team on Discord when a new order comes in.",
+    ],
+    website: "https://discord.com",
+    privacy: "https://discord.com/privacy",
+  },
+  {
+    provider: "dropbox",
+    title: "Dropbox",
+    description: "Automations that fire when a file changes in your Dropbox.",
+    category: "APIs",
+    authType: "oauth",
+    icon: DropboxIcon,
+    prompts: [
+      "Let me know when a new file lands in my shared folder.",
+      "Notify me when the contract in Dropbox is updated.",
+    ],
+    website: "https://www.dropbox.com",
+    privacy: "https://www.dropbox.com/privacy",
+  },
+  {
+    provider: "figma",
+    title: "Figma",
+    description: "Automations that fire on a new file comment. Webhooks require a Figma Organization/Enterprise plan.",
+    category: "Team",
+    authType: "oauth",
+    icon: FigmaIcon,
+    prompts: [
+      "Tell me when someone comments on the homepage design file.",
+      "Notify the team when feedback lands on a Figma file.",
+    ],
+    website: "https://www.figma.com",
+    privacy: "https://www.figma.com/privacy/",
+  },
+  {
+    provider: "calendly",
+    title: "Calendly",
+    description: "Automations that fire when a booking is created or cancelled.",
+    category: "Scheduling",
+    authType: "oauth",
+    icon: CalendlyIcon,
+    fields: [
+      { name: "apiToken", label: "Personal Access Token (if OAuth doesn't work for your account)", type: "password", placeholder: "From calendly.com/integrations/api_webhooks" },
+    ],
+    prompts: [
+      "Let me know whenever someone books a call on my Calendly.",
+      "Notify me if a Calendly meeting gets cancelled.",
+    ],
+    website: "https://calendly.com",
+    privacy: "https://calendly.com/privacy",
+  },
+  {
+    provider: "typeform",
+    title: "Typeform",
+    description: "Automations that fire on a new form submission.",
+    category: "APIs",
+    authType: "manual",
+    icon: TypeformIcon,
+    fields: [
+      { name: "apiToken", label: "Personal Access Token", type: "password", placeholder: "From your Typeform account settings" },
+      { name: "formId", label: "Form ID", placeholder: "The form to watch — required to register the webhook" },
+    ],
+    prompts: [
+      "Notify me when someone submits my Typeform survey.",
+      "Log new form responses to a spreadsheet.",
+    ],
+    website: "https://www.typeform.com",
+    privacy: "https://www.typeform.com/legal/privacy/",
+  },
+  {
+    provider: "gumroad",
+    title: "Gumroad",
+    description: "Automations that fire on a new sale. Add the ping URL manually — see setup note after connecting.",
+    category: "Payments",
+    authType: "manual",
+    icon: GumroadIcon,
+    fields: [
+      { name: "accessToken", label: "Access Token", type: "password", placeholder: "From Gumroad Settings -> Advanced" },
+    ],
+    prompts: [
+      "Let me know whenever I make a new sale on Gumroad.",
+      "Notify the team when a product sells on Gumroad.",
+    ],
+    website: "https://gumroad.com",
+    privacy: "https://gumroad.com/privacy",
+  },
+  {
+    provider: "lemonsqueezy",
+    title: "Lemon Squeezy",
+    description: "Automations that fire on a new order.",
+    category: "Payments",
+    authType: "manual",
+    icon: LemonSqueezyIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From Settings -> API" },
+      { name: "storeId", label: "Store ID", placeholder: "The store to watch — required to register the webhook" },
+    ],
+    prompts: [
+      "Tell me when a new order comes in on Lemon Squeezy.",
+      "Notify the team when someone subscribes.",
+    ],
+    website: "https://www.lemonsqueezy.com",
+    privacy: "https://www.lemonsqueezy.com/privacy",
+  },
+  {
+    provider: "uptimerobot",
+    title: "UptimeRobot",
+    description: "Automations that fire when a monitor goes up or down. Add a Web-Hook Alert Contact manually — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: UptimeRobotIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From My Settings -> API Settings" },
+    ],
+    prompts: [
+      "Alert me the moment a monitor goes down.",
+      "Let me know when my site comes back online.",
+    ],
+    website: "https://uptimerobot.com",
+    privacy: "https://uptimerobot.com/privacy-policy/",
+  },
+  {
+    provider: "quickbooks",
+    title: "QuickBooks",
+    description: "Automations that fire on a new invoice or a paid invoice. Requires a one-time app-level webhook subscription in the Intuit Developer dashboard.",
+    category: "Payments",
+    authType: "oauth",
+    icon: QuickBooksIcon,
+    prompts: [
+      "Notify me when an invoice gets paid.",
+      "Let me know when a new invoice is created in QuickBooks.",
+    ],
+    website: "https://quickbooks.intuit.com",
+    privacy: "https://www.intuit.com/privacy/statement/",
+  },
+  {
+    provider: "xero",
+    title: "Xero",
+    description: "Automations that fire when a new invoice is created.",
+    category: "Payments",
+    authType: "oauth",
+    icon: XeroIcon,
+    prompts: [
+      "Tell me when a new invoice is created in Xero.",
+      "Notify the team when a Xero invoice is overdue.",
+    ],
+    website: "https://www.xero.com",
+    privacy: "https://www.xero.com/legal/privacy/",
+  },
+  {
+    provider: "wise",
+    title: "Wise",
+    description: "Automations that fire when a new transaction credits your balance.",
+    category: "Payments",
+    authType: "manual",
+    icon: WiseIcon,
+    fields: [
+      { name: "apiToken", label: "API Token", type: "password", placeholder: "From Wise Settings -> API tokens" },
+      { name: "profileId", label: "Profile ID", placeholder: "The profile to watch — required to register the webhook" },
+    ],
+    prompts: [
+      "Let me know when a payment lands in my Wise balance.",
+      "Notify me of new Wise transactions over $500.",
+    ],
+    website: "https://wise.com",
+    privacy: "https://wise.com/gb/privacy-policy/",
+  },
+  {
+    provider: "bamboohr",
+    title: "BambooHR",
+    description: "Automations that fire on a new time-off request or a new hire. Polled — BambooHR has no webhook on standard API tiers.",
+    category: "Team",
+    authType: "manual",
+    icon: BambooHrIcon,
+    fields: [
+      { name: "subdomain", label: "Subdomain", placeholder: "From https://<subdomain>.bamboohr.com" },
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From your BambooHR account API keys" },
+    ],
+    prompts: [
+      "Notify me when someone requests time off.",
+      "Let me know when a new hire is added in BambooHR.",
+    ],
+    website: "https://www.bamboohr.com",
+    privacy: "https://www.bamboohr.com/privacy-policy/",
+  },
+  {
+    provider: "deel",
+    title: "Deel",
+    description: "Automations that fire on a new contract or a completed payment.",
+    category: "Team",
+    authType: "oauth",
+    icon: DeelIcon,
+    prompts: [
+      "Tell me when a new contract is signed in Deel.",
+      "Notify me when a contractor payment completes.",
+    ],
+    website: "https://www.deel.com",
+    privacy: "https://www.deel.com/privacy-policy",
+  },
+  {
+    provider: "box",
+    title: "Box",
+    description: "Automations that fire when a file is uploaded to a chosen Box folder.",
+    category: "APIs",
+    authType: "oauth",
+    icon: BoxIcon,
+    prompts: [
+      "Let me know when a new file lands in our Box folder.",
+      "Notify the team when a contract is uploaded to Box.",
+    ],
+    website: "https://www.box.com",
+    privacy: "https://www.box.com/legal/privacypolicy",
+  },
+  {
+    provider: "statuspage",
+    title: "Statuspage",
+    description: "Automations that fire on a new incident or an incident status update. Add the generated webhook URL as a subscriber on your page — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: StatuspageIcon,
+    fields: [
+      { name: "pageId", label: "Page ID", placeholder: "From your Statuspage page settings" },
+      { name: "apiKey", label: "API Key (optional, auto-subscribes the webhook)", type: "password", placeholder: "From Statuspage Account Settings -> API Info", required: false },
+    ],
+    prompts: [
+      "Notify me when a new incident is posted on our status page.",
+      "Alert the team when an incident is resolved.",
+    ],
+    website: "https://www.atlassian.com/software/statuspage",
+    privacy: "https://www.atlassian.com/legal/privacy-policy",
+  },
+  {
+    provider: "betterstack",
+    title: "Better Stack",
+    description: "Automations that fire when an incident starts or resolves. Add a webhook integration manually — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: BetterStackIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From Better Stack Settings -> API tokens" },
+    ],
+    prompts: [
+      "Alert me the moment an incident starts.",
+      "Let me know when a Better Stack incident resolves.",
+    ],
+    website: "https://betterstack.com",
+    privacy: "https://betterstack.com/privacy",
+  },
 ];
 
-const CATEGORIES = ["Google", "Scheduling", "Payments", "Databases", "Team"] as const;
-const RECOMMENDED_CONNECTOR_PROVIDERS = new Set(["gmail", "calendar", "stripe"]);
+const CATEGORIES = ["Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
+const RECOMMENDED_CONNECTOR_PROVIDERS = new Set(["gmail", "calendar", "notion"]);
+// Allow-list, mirroring ENABLED_CONNECTOR_PROVIDERS in
+// dashboard/connectors/connectors-client.tsx — keep the two in sync, or a
+// connector offered during onboarding won't exist on the connectors page.
+// Slack/Telegram are deliberately absent here: they're linked as chat
+// surfaces elsewhere in onboarding, not as connector cards.
+const ENABLED_CONNECTOR_PROVIDERS = new Set([
+  "gmail",
+  "calendar",
+  "google_workspace",
+  "calcom",
+  "razorpay",
+  "github",
+  "trello",
+  "postgres",
+  "mongodb",
+  "notion",
+  "discord",
+  "figma",
+  "calendly",
+]);
 
 const SOURCE_OPTIONS = ["Twitter / X", "LinkedIn", "Friend or colleague", "Search", "Other"];
 
@@ -312,6 +750,18 @@ function ConnectorDialog({
   // for users who'd rather not grant OAuth access to their full account.
   const showManualFallback = Boolean(connector.fields?.length);
   const oauthHref = `/api/connectors/${connector.provider}/start?returnTo=/onboarding`;
+  // Figma has no "list my teams" API and Box webhooks watch a single folder,
+  // not the whole account — both need an id from the user before OAuth,
+  // appended to the start URL (mirrors the dashboard connectors dialog).
+  const isFigma = connector.provider === "figma";
+  const [figmaTeamId, setFigmaTeamId] = useState("");
+  const figmaOauthHref = `${oauthHref}&teamId=${encodeURIComponent(figmaTeamId.trim())}`;
+  const isBox = connector.provider === "box";
+  const [boxFolderId, setBoxFolderId] = useState("");
+  const boxOauthHref = `${oauthHref}&folderId=${encodeURIComponent(boxFolderId.trim())}`;
+  const requiresExtraField = isFigma || isBox;
+  const extraFieldMissing = (isFigma && !figmaTeamId.trim()) || (isBox && !boxFolderId.trim());
+  const resolvedOauthHref = isFigma ? figmaOauthHref : isBox ? boxOauthHref : oauthHref;
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = `connector-dialog-${connector.provider}-title`;
   const descriptionId = `connector-dialog-${connector.provider}-description`;
@@ -377,15 +827,62 @@ function ConnectorDialog({
               Coming soon
             </span>
           ) : (
-            <a
-              href={oauthHref}
-              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
-            >
-              Continue to {connector.title}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
-              </svg>
-            </a>
+            <>
+              {isFigma && (
+                <div className="mt-4">
+                  <label htmlFor="figma-team-id" className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Figma team ID
+                  </label>
+                  <input
+                    id="figma-team-id"
+                    type="text"
+                    inputMode="numeric"
+                    value={figmaTeamId}
+                    onChange={(event) => setFigmaTeamId(event.target.value)}
+                    placeholder="e.g. 123456789012345678"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-slate-400"
+                  />
+                  <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                    Find this in your team&apos;s URL: figma.com/files/team/&lt;team id&gt;/... Webhooks (needed for
+                    comment-triggered automations) only work on Organization/Enterprise Figma plans.
+                  </p>
+                </div>
+              )}
+              {isBox && (
+                <div className="mt-4">
+                  <label htmlFor="box-folder-id" className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Box folder ID
+                  </label>
+                  <input
+                    id="box-folder-id"
+                    type="text"
+                    inputMode="numeric"
+                    value={boxFolderId}
+                    onChange={(event) => setBoxFolderId(event.target.value)}
+                    placeholder="e.g. 123456789012"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-slate-400"
+                  />
+                  <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                    Find this in the folder&apos;s URL: app.box.com/folder/&lt;folder id&gt;. Box webhooks watch one folder at a time, not your whole account.
+                  </p>
+                </div>
+              )}
+              <a
+                href={resolvedOauthHref}
+                aria-disabled={requiresExtraField && extraFieldMissing}
+                onClick={(event) => {
+                  if (requiresExtraField && extraFieldMissing) event.preventDefault();
+                }}
+                className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50 ${
+                  requiresExtraField && extraFieldMissing ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
+                Continue to {connector.title}
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
+                </svg>
+              </a>
+            </>
           )
         )}
       </div>
@@ -423,7 +920,7 @@ function ConnectorDialog({
                   placeholder={field.placeholder}
                   required={field.required !== false}
                   autoComplete="off"
-                  className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#FE7F2D] focus:ring-4 focus:ring-[#FE7F2D]/10"
+                  className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#D9BEF4] focus:ring-4 focus:ring-[#D9BEF4]/10"
                 />
               </label>
             ))}
@@ -436,7 +933,7 @@ function ConnectorDialog({
         <ul className="mt-3 space-y-2.5">
           {connector.prompts.slice(0, 3).map((prompt) => (
             <li key={prompt} className="flex items-start gap-2.5 text-[13px] leading-5 text-slate-600">
-              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D]/10 text-[#D96420]">
+              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-[#D9BEF4]/10 text-[#D96420]">
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m2.5 6 2.2 2.2 4.8-4.8" />
                 </svg>
@@ -465,11 +962,11 @@ function ConnectorDialog({
           )}
         </div>
         <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:w-auto">
-          <button type="button" onClick={onClose} className="h-11 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40">
+          <button type="button" onClick={onClose} className="h-11 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40">
             Cancel
           </button>
           {(!isOAuth || showManualFallback) && (
-            <button type="submit" disabled={submitting} className="inline-flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50 sm:px-5">
+            <button type="submit" disabled={submitting} className="inline-flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50 sm:px-5">
               {submitting ? (
                 <>
                   <span className="sm:hidden">Checking…</span>
@@ -508,7 +1005,7 @@ function ConnectorDialog({
           type="button"
           onClick={onClose}
           aria-label={`Close ${connector.title} connection dialog`}
-          className="absolute right-4 top-4 flex size-9 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+          className="absolute right-4 top-4 flex size-9 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -518,7 +1015,12 @@ function ConnectorDialog({
         <p className="pr-12 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#D96420]">Connect an integration</p>
         <div className="mt-4 flex items-start gap-4 pr-10">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <Icon className="size-7" />
+            <ConnectorLogo
+              provider={connector.provider}
+              alt={connector.title}
+              className="size-7 object-contain"
+              fallback={<Icon className="size-7" />}
+            />
           </span>
           <div>
             <h2 id={titleId} className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-slate-950">
@@ -665,7 +1167,7 @@ function ProgressHeader({ step, onBack }: { step: number; onBack: () => void }) 
           <button
             type="button"
             onClick={onBack}
-            className="group -ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm font-medium text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+            className="group -ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm font-medium text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
           >
             <BackIcon />
             Back
@@ -763,7 +1265,7 @@ function TimezoneCombobox({
 
   return (
     <div ref={wrapRef} className="relative mt-6">
-      <div className="flex h-[52px] items-center gap-2 rounded-full border border-black/70 bg-white px-5 transition focus-within:border-[#FE7F2D]">
+      <div className="flex h-[52px] items-center gap-2 rounded-full border border-black/70 bg-white px-5 transition focus-within:border-[#D9BEF4]">
         <SearchIcon />
         <input
           value={open ? query : value}
@@ -795,7 +1297,7 @@ function TimezoneCombobox({
                     type="button"
                     onClick={() => pick(tz)}
                     className={`flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                      selected ? "bg-slate-950 text-white" : "text-black hover:bg-[#FE7F2D]/10"
+                      selected ? "bg-slate-950 text-white" : "text-black hover:bg-[#D9BEF4]/10"
                     }`}
                   >
                     <span>{tz.replace(/_/g, " ")}</span>
@@ -900,6 +1402,7 @@ export function OnboardingClient() {
 
   const connectorQ = connectorQuery.trim().toLowerCase();
   const visibleConnectors = CONNECTOR_CATALOG.filter((c) => {
+    if (!ENABLED_CONNECTOR_PROVIDERS.has(c.provider)) return false;
     const categoryOk = connectorCategory === "All" || c.category === connectorCategory;
     const queryOk =
       !connectorQ ||
@@ -947,13 +1450,18 @@ export function OnboardingClient() {
       >
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-            <Icon className="size-6" />
+            <ConnectorLogo
+              provider={item.provider}
+              alt={item.title}
+              className="size-6 object-contain"
+              fallback={<Icon className="size-6" />}
+            />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <h3 className="truncate text-base font-semibold leading-5 text-black">{item.title}</h3>
               {recommended && (
-                <span className="rounded-md bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#C95618]">
+                <span className="rounded-md bg-[#D9BEF4]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#C95618]">
                   Recommended
                 </span>
               )}
@@ -982,7 +1490,7 @@ export function OnboardingClient() {
               <button
                 type="button"
                 onClick={() => void unlinkConnector(item.provider)}
-                className="cursor-pointer rounded-full px-3 py-1 text-[13px] font-normal text-black/70 transition hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+                className="cursor-pointer rounded-full px-3 py-1 text-[13px] font-normal text-black/70 transition hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
               >
                 Disconnect
               </button>
@@ -1001,7 +1509,7 @@ export function OnboardingClient() {
                   setActiveConnector(item);
                   setSetupError(null);
                 }}
-                className="inline-flex h-10 min-w-24 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+                className="inline-flex h-10 min-w-24 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50"
               >
                 {item.authType === "oauth" ? "Connect" : "Set up"}
               </button>
@@ -1263,7 +1771,7 @@ export function OnboardingClient() {
                 autoComplete="name"
                 autoFocus
                 required
-                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
+                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4]"
               />
             </div>
 
@@ -1276,7 +1784,7 @@ export function OnboardingClient() {
                   value={phoneCountry}
                   onChange={(e) => setPhoneCountry(e.target.value)}
                   aria-label="Country code"
-                  className="h-[52px] shrink-0 rounded-full border border-black/70 bg-white px-3 text-base font-normal text-slate-950 outline-none transition focus:border-[#FE7F2D]"
+                  className="h-[52px] shrink-0 rounded-full border border-black/70 bg-white px-3 text-base font-normal text-slate-950 outline-none transition focus:border-[#D9BEF4]"
                 >
                   {PHONE_COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -1291,7 +1799,7 @@ export function OnboardingClient() {
                   type="tel"
                   autoComplete="tel-national"
                   inputMode="tel"
-                  className="h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
+                  className="h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4]"
                 />
               </div>
             </div>
@@ -1329,7 +1837,7 @@ export function OnboardingClient() {
                     key={option}
                     type="button"
                     onClick={() => setSource(option)}
-                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 px-5 py-3.5 text-left text-base font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 px-5 py-3.5 text-left text-base font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                       selected
                         ? "bg-slate-950 text-white"
                         : "bg-white text-slate-950 hover:border-black hover:bg-slate-50"
@@ -1429,7 +1937,7 @@ export function OnboardingClient() {
                           key={cat}
                           type="button"
                           onClick={() => setConnectorCategory(cat)}
-                          className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                          className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                             active
                               ? "bg-slate-950 text-white"
                               : "text-black/70 hover:bg-slate-100 hover:text-black"
@@ -1451,7 +1959,7 @@ export function OnboardingClient() {
                   }}
                   aria-label={searchOpen ? "Close integration search" : "Search integrations"}
                   aria-expanded={searchOpen}
-                  className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
+                  className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                     searchOpen
                       ? "border-slate-950 bg-slate-950 text-white"
                       : "border-slate-200 bg-white text-black/70 hover:border-slate-300 hover:text-black"
@@ -1468,7 +1976,7 @@ export function OnboardingClient() {
               </div>
 
               {searchOpen && (
-                <div className="mt-2 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#FE7F2D] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#FE7F2D]/10">
+                <div className="mt-2 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#D9BEF4] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#D9BEF4]/10">
                   <SearchIcon />
                   <input
                     value={connectorQuery}
@@ -1484,7 +1992,7 @@ export function OnboardingClient() {
                       type="button"
                       onClick={() => setConnectorQuery("")}
                       aria-label="Clear integration search"
-                      className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-black/70 transition hover:bg-slate-200/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+                      className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-black/70 transition hover:bg-slate-200/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
                         <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -1706,8 +2214,8 @@ export function OnboardingClient() {
             {surface !== null && (
               <p className="mt-6 inline-flex items-center gap-2 text-sm text-slate-500">
                 <span className="relative flex size-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FE7F2D] opacity-60" />
-                  <span className="relative inline-flex size-2 rounded-full bg-[#FE7F2D]" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#D9BEF4] opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-[#D9BEF4]" />
                 </span>
                 Waiting for the link to complete — this page moves on automatically.
               </p>
@@ -1722,7 +2230,7 @@ export function OnboardingClient() {
               <button
                 type="button"
                 onClick={() => setStep(5)}
-                className="shrink-0 cursor-pointer rounded-full px-3 py-2 text-sm font-normal text-black/70 transition hover:bg-slate-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+                className="shrink-0 cursor-pointer rounded-full px-3 py-2 text-sm font-normal text-black/70 transition hover:bg-slate-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
               >
                 Skip for now
               </button>

@@ -13,7 +13,7 @@ export async function POST(_request: Request, context: RouteContext<"/api/automa
     { userId: session.userId },
   ).catch(() => null);
   if (!data?.ok) {
-    return Response.json({ ok: false, message: data?.error ?? "Could not pause" }, { status: 400 });
+    return Response.json({ ok: false, error: data?.error ?? "pause_failed" }, { status: 400 });
   }
   return Response.json({ ok: true });
 }

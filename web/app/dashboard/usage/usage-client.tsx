@@ -165,7 +165,7 @@ export function UsageClient() {
         currency: data.currency,
         name: "Rizly",
         description: `${CREDIT_PACK.credits.toLocaleString()} AI credits`,
-        theme: { color: "#FE7F2D" },
+        theme: { color: "#D9BEF4" },
         handler: () => {
           setBuySuccess(true);
           // The Razorpay webhook confirms the payment asynchronously — poll
@@ -217,7 +217,7 @@ export function UsageClient() {
               type="button"
               onClick={() => void buyCredits()}
               disabled={buying}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
             >
               {buying ? "Opening checkout…" : `+${CREDIT_PACK.credits.toLocaleString()} credits — $${CREDIT_PACK.priceUsd}`}
             </button>

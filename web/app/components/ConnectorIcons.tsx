@@ -4,7 +4,7 @@ const base = "size-full";
 
 /** Official brand mark, served from /public/logos (sourced from Wikimedia Commons). */
 function BrandLogoImg({ src, alt, className }: { src: string; alt: string; className: string }) {
-  return <img src={src} alt={alt} className={`${className} object-contain`} />;
+  return <img src={src} alt="" aria-hidden="true" title={alt} className={`${className} object-contain`} />;
 }
 
 export function GoogleIcon({ className = base }: IconProps) {
@@ -146,4 +146,80 @@ export function AirtableIcon({ className = base }: IconProps) {
 
 export function TwilioIcon({ className = base }: IconProps) {
   return <BrandLogoImg src="/logos/twilio.svg" alt="Twilio" className={className} />;
+}
+
+/** Simple letter-badge placeholders (no vendored brand asset yet) for the newest push-webhook connectors — swap for a real /logos/*.svg when one is added, same as the providers above. */
+function MonogramIcon({ letter, bg, fg = "#fff", className = base }: { letter: string; bg: string; fg?: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+      <rect width="24" height="24" rx="5" fill={bg} />
+      <text x="12" y="16.5" textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="system-ui, sans-serif" fill={fg}>
+        {letter}
+      </text>
+    </svg>
+  );
+}
+
+export function ShopifyIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="S" bg="#95BF47" className={className} />;
+}
+
+export function CalendlyIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="C" bg="#006BFF" className={className} />;
+}
+
+export function TypeformIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="T" bg="#262627" className={className} />;
+}
+
+export function GumroadIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="G" bg="#FF90E8" fg="#000" className={className} />;
+}
+
+export function LemonSqueezyIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="L" bg="#FFC233" fg="#000" className={className} />;
+}
+
+export function DropboxIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="D" bg="#0061FF" className={className} />;
+}
+
+export function FigmaIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="F" bg="#1E1E1E" className={className} />;
+}
+
+export function UptimeRobotIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="U" bg="#7BDCB5" fg="#000" className={className} />;
+}
+
+export function QuickBooksIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="Q" bg="#2CA01C" className={className} />;
+}
+
+export function XeroIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="X" bg="#13B5EA" className={className} />;
+}
+
+export function WiseIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="W" bg="#9FE870" fg="#000" className={className} />;
+}
+
+export function BambooHrIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="B" bg="#98C93C" fg="#000" className={className} />;
+}
+
+export function DeelIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="D" bg="#0B0B0B" className={className} />;
+}
+
+export function BoxIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="B" bg="#0061D5" className={className} />;
+}
+
+export function StatuspageIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="S" bg="#7C3AED" className={className} />;
+}
+
+export function BetterStackIcon({ className = base }: IconProps) {
+  return <MonogramIcon letter="B" bg="#000000" className={className} />;
 }

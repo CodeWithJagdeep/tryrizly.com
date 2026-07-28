@@ -224,7 +224,7 @@ export function EmailsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search emails…"
-            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#FE7F2D] focus:outline-none"
+            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#D9BEF4] focus:outline-none"
           />
         </div>
 
@@ -305,7 +305,7 @@ export function EmailsClient() {
                 {!gmailConnected && (
                   <a
                     href="/api/connectors/gmail/start?returnTo=%2Fdashboard%2Femails"
-                    className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+                    className="mt-2 inline-flex items-center justify-center rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
                   >
                     Connect Gmail
                   </a>
@@ -871,7 +871,7 @@ function EmailDetailSheet({
                     type="button"
                     disabled={!replyBody.trim() || submitting !== null}
                     onClick={() => void submitReply("send")}
-                    className="w-full rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40 sm:w-auto"
+                    className="w-full rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40 sm:w-auto"
                   >
                     {submitting === "send" ? "Sending…" : "Send now"}
                   </button>

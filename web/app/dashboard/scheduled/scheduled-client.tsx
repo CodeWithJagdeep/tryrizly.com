@@ -226,7 +226,7 @@ export function ScheduledClient() {
             <button
               type="button"
               onClick={openCreate}
-              className="flex items-center gap-2 rounded-md bg-[#FE7F2D] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
+              className="flex items-center gap-2 rounded-md bg-[#D9BEF4] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
             >
               <PlusIcon />
               New Reminder
@@ -259,7 +259,7 @@ export function ScheduledClient() {
               {tab.label}
               {!loading && countForTab(tab.key, counts) > 0 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === tab.key ? "bg-[#FE7F2D]/10 text-white" : "bg-slate-100 text-slate-500"
+                  activeTab === tab.key ? "bg-[#D9BEF4]/10 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   {countForTab(tab.key, counts)}
                 </span>
@@ -401,7 +401,7 @@ export function ScheduledClient() {
                   type="button"
                   onClick={() => void submitCreate()}
                   disabled={creating}
-                  className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Scheduling…" : "Schedule"}
                 </button>

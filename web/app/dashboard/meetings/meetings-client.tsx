@@ -286,7 +286,7 @@ export function MeetingsClient() {
             </button>
             <Link
               href="/dashboard/calendar?new=meeting"
-              className="rounded-full bg-[#FE7F2D] px-3.5 py-1.5 text-sm font-normal text-white transition hover:brightness-105"
+              className="rounded-full bg-[#D9BEF4] px-3.5 py-1.5 text-sm font-normal text-white transition hover:brightness-105"
             >
               + Schedule
             </Link>
@@ -300,7 +300,7 @@ export function MeetingsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by title, attendee, or location…"
-            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#FE7F2D] focus:outline-none"
+            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#D9BEF4] focus:outline-none"
           />
         </div>
 
@@ -357,7 +357,7 @@ export function MeetingsClient() {
             </p>
             <Link
               href="/dashboard/connectors"
-              className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+              className="mt-2 inline-flex items-center justify-center rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
             >
               Connect a calendar
             </Link>
@@ -384,7 +384,7 @@ export function MeetingsClient() {
             {!googleConnected && (
               <a
                 href="/api/connectors/gmail/start?returnTo=%2Fdashboard%2Fmeetings"
-                className="mt-2 inline-flex items-center justify-center rounded-md border border-[#FE7F2D] bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+                className="mt-2 inline-flex items-center justify-center rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
               >
                 Connect Google Calendar
               </a>
@@ -458,9 +458,9 @@ function NextMeetingHero({ meeting, now }: { meeting: Meeting; now: number }) {
   const extra = meeting.attendees.length - attendeesShown.length;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-[#FE7F2D]/10 via-white to-white p-5 sm:p-6">
+    <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-[#D9BEF4]/10 via-white to-white p-5 sm:p-6">
       <p className="flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.1em] text-[#D96420]">
-        <span className={`h-1.5 w-1.5 rounded-full ${inProgress ? "bg-emerald-500 animate-pulse" : "bg-[#FE7F2D]"}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${inProgress ? "bg-emerald-500 animate-pulse" : "bg-[#D9BEF4]"}`} />
         {inProgress ? "Happening now" : "Next up"}
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -491,7 +491,7 @@ function NextMeetingHero({ meeting, now }: { meeting: Meeting; now: number }) {
             href={meeting.meetingUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D] px-6 text-sm font-normal text-white transition hover:brightness-105"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#D9BEF4] px-6 text-sm font-normal text-white transition hover:brightness-105"
           >
             Join meeting
           </a>
@@ -528,7 +528,7 @@ function MeetingsAgenda({
               {group.meetings.length} meeting{group.meetings.length !== 1 ? "s" : ""}
             </span>
             {i === 0 && (
-              <span className="rounded bg-[#FE7F2D]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#FE7F2D]">
+              <span className="rounded bg-[#D9BEF4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#D9BEF4]">
                 Next up
               </span>
             )}
@@ -638,7 +638,7 @@ function MeetingRow({ meeting, now, conflict }: { meeting: Meeting; now: number;
             href={meeting.meetingUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105"
+            className="inline-flex rounded-lg bg-[#D9BEF4] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105"
           >
             Join
           </a>

@@ -7,8 +7,6 @@ export async function GET() {
     return Response.json({ message: "Unauthenticated" }, { status: 401 });
   }
 
-  const data = await callGateway<{ connected?: boolean; eventTypes?: unknown[] }>(
-    `/api/automations/calcom/event-types?userId=${encodeURIComponent(session.userId)}`,
-  ).catch(() => null);
-  return Response.json({ connected: data?.connected ?? false, eventTypes: data?.eventTypes ?? [] });
+  const result = await callGateway(`/api/discord/channels?userId=${encodeURIComponent(session.userId)}`);
+  return Response.json(result);
 }

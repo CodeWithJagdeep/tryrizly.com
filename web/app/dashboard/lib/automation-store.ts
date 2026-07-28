@@ -121,12 +121,21 @@ export async function saveFlow(flow: {
   id: string;
   name: string;
   steps: AutomationStep[];
-}): Promise<AutomationFlow | null> {
-  const data = await api<{ flow?: AutomationFlow }>("/api/automations", {
+}): Promise<{ flow: AutomationFlow | null; error?: string }> {
+  const data = await api<{ flow?: AutomationFlow; message?: string }>("/api/automations", {
     method: "POST",
     body: JSON.stringify(flow),
   });
-  return data.flow ?? null;
+  if (!data.flow) {
+    return {
+      flow: null,
+      error:
+        data.message === "automation_limit_reached"
+          ? "You've reached your plan's automation limit. Upgrade to add more."
+          : (data.message ?? "Couldn't save this automation."),
+    };
+  }
+  return { flow: data.flow };
 }
 
 export async function deleteFlow(id: string): Promise<boolean> {

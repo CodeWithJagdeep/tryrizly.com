@@ -29,7 +29,7 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center gap-0.5 rounded-full py-2.5 text-[10px] font-medium ${
-                isActive ? "text-[#FE7F2D]" : "text-slate-500"
+                isActive ? "text-[#D9BEF4]" : "text-slate-500"
               }`}
             >
               <Icon className="h-5 w-5" />

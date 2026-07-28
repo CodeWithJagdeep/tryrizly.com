@@ -81,7 +81,7 @@ export function CreditsBadge() {
             <p className="text-base font-semibold text-slate-900">{PLAN_NAMES[usage.planId] ?? "Free"}</p>
             <Link
               href="/dashboard/upgrade"
-              className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#FE7F2D]"
+              className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#D9BEF4]"
             >
               Upgrade
             </Link>
@@ -130,7 +130,7 @@ export function CreditsBadge() {
 
 function SparkleIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 text-[#FE7F2D]" aria-hidden="true">
+    <svg viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 text-[#D9BEF4]" aria-hidden="true">
       <path d="M8 1.5l1.1 3.4L12.5 6l-3.4 1.1L8 10.5l-1.1-3.4L3.5 6l3.4-1.1L8 1.5Z" />
       <path d="M13 9.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5Z" />
     </svg>

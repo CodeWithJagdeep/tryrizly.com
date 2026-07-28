@@ -18,7 +18,24 @@ export async function GET(
   context: RouteContext<"/api/connectors/[provider]/start">,
 ) {
   const { provider } = await context.params;
-  if (provider !== "gmail" && provider !== "calendar" && provider !== "calcom" && provider !== "notion" && provider !== "github" && provider !== "stripe") {
+  if (
+    provider !== "gmail" &&
+    provider !== "calendar" &&
+    provider !== "calcom" &&
+    provider !== "notion" &&
+    provider !== "github" &&
+    provider !== "stripe" &&
+    provider !== "dropbox" &&
+    provider !== "figma" &&
+    provider !== "quickbooks" &&
+    provider !== "xero" &&
+    provider !== "deel" &&
+    provider !== "box" &&
+    provider !== "jira" &&
+    provider !== "calendly" &&
+    provider !== "airtable" &&
+    provider !== "pagerduty"
+  ) {
     return Response.json({ message: `Unsupported OAuth provider: ${provider}` }, { status: 400 });
   }
 
@@ -33,8 +50,16 @@ export async function GET(
   const regionQuery = region ? `&region=${region}` : "";
   // "automation" asks the backend for the reduced scope set (e.g. Gmail read-only).
   const scopeProfileQuery = requestUrl.searchParams.get("scopeProfile") === "automation" ? "&scopeProfile=automation" : "";
+  // Figma has no "list my teams" API — the team to register a webhook for
+  // is supplied by the user at connect time, same idea as Shopify's shopDomain.
+  const teamId = provider === "figma" ? requestUrl.searchParams.get("teamId") : null;
+  const teamIdQuery = teamId ? `&teamId=${encodeURIComponent(teamId)}` : "";
+  // Box has no "watch my whole account" webhook — the folder to register a
+  // webhook against is supplied by the user at connect time, same idea as Figma's teamId.
+  const folderId = provider === "box" ? requestUrl.searchParams.get("folderId") : null;
+  const folderIdQuery = folderId ? `&folderId=${encodeURIComponent(folderId)}` : "";
   const result = await callGateway<ConnectorStartResult>(
-    `/api/connectors/${provider}/start?userId=${encodeURIComponent(session.userId)}&returnTo=${encodeURIComponent(returnTo)}${regionQuery}${scopeProfileQuery}`,
+    `/api/connectors/${provider}/start?userId=${encodeURIComponent(session.userId)}&returnTo=${encodeURIComponent(returnTo)}${regionQuery}${scopeProfileQuery}${teamIdQuery}${folderIdQuery}`,
   );
 
   if (!result.authUrl) {

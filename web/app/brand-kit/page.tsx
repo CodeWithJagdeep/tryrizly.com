@@ -22,7 +22,7 @@ const logos = [
 ];
 
 const colors = [
-  { name: "Rizly Orange", hex: "#FE7F2D", description: "Our primary energy. Used for actions, highlights, and status." },
+  { name: "Rizly Orange", hex: "#D9BEF4", description: "Our primary energy. Used for actions, highlights, and status." },
   { name: "Off White", hex: "#fcfcfc", description: "The canvas. Provides a clean, professional space for content." },
   { name: "Absolute Black", hex: "#000000", description: "Structure and weight. Used for borders, text, and shadows." },
   { name: "Dark Blue", hex: "#233D4D", description: "Secondary accent for headers and supporting sections." },
@@ -50,12 +50,12 @@ export default function BrandKitPage() {
           style={{ backgroundImage: "radial-gradient(rgb(0, 0, 0) 1px, transparent 1px)", backgroundSize: "32px 32px" }}
         ></div>
         <div className="max-w-4xl mx-auto">
-          <span className="inline-block px-3 py-1 border-2 border-[#FE7F2D] text-[#FE7F2D] text-[12px] font-semibold uppercase tracking-[0.2em] mb-8">
+          <span className="inline-block px-3 py-1 border-2 border-[#D9BEF4] text-[#D9BEF4] text-[12px] font-semibold uppercase tracking-[0.2em] mb-8">
             Brand identity
           </span>
           <h1 className="text-4xl md:text-6xl font-semibold uppercase tracking-normal leading-tight mb-10">
             Visual <br />
-            <span className="text-[#FE7F2D]">guidelines</span>
+            <span className="text-[#D9BEF4]">guidelines</span>
           </h1>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-6 leading-relaxed">
             Download assets and explore the design language that defines Rizly, the AI operator built for founders.
@@ -68,13 +68,13 @@ export default function BrandKitPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
             <div>
-              <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 01</span>
+              <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 01</span>
               <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-normal">Official logos</h2>
             </div>
             <a
               href="/api/brand-kit"
               download="rizly-brand-kit.zip"
-              className="flex items-center gap-3 border-2 border-black bg-black text-white px-10 py-5 text-[14px] font-semibold uppercase tracking-widest shadow-[8px_8px_0px_0px_rgba(254,127,45,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+              className="flex items-center gap-3 border-2 border-black bg-black text-white px-10 py-5 text-[14px] font-semibold uppercase tracking-widest shadow-[8px_8px_0px_0px_rgba(217,190,244,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
             >
               <DownloadIcon />
               Download all assets
@@ -103,7 +103,7 @@ export default function BrandKitPage() {
                   <a
                     href={logo.src}
                     download
-                    className="w-12 h-12 border-2 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[6px_6px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+                    className="w-12 h-12 border-2 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[6px_6px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
                   >
                     <DownloadIcon />
                   </a>
@@ -118,14 +118,14 @@ export default function BrandKitPage() {
       <section className="px-10 md:px-14 py-32 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 02</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 02</span>
             <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-normal">Color palette</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {colors.map((color) => (
               <div
                 key={color.hex}
-                className="border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-8 group transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0px_0px_rgba(254,127,45,1)]"
+                className="border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-8 group transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0px_0px_rgba(217,190,244,1)]"
               >
                 <div
                   className="w-full h-32 border-2 border-black mb-6 shadow-inner transition-transform group-hover:scale-[1.02]"
@@ -133,11 +133,11 @@ export default function BrandKitPage() {
                 ></div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="text-xl font-semibold uppercase">{color.name}</h4>
-                  <button className="w-10 h-10 border-2 border-black bg-white flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_0px_rgba(254,127,45,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all">
+                  <button className="w-10 h-10 border-2 border-black bg-white flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_0px_rgba(217,190,244,1)] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all">
                     <CopyIcon />
                   </button>
                 </div>
-                <p className="text-sm font-semibold text-[#FE7F2D] mb-4 uppercase tracking-widest">{color.hex}</p>
+                <p className="text-sm font-semibold text-[#D9BEF4] mb-4 uppercase tracking-widest">{color.hex}</p>
                 <p className="text-sm text-gray-500 leading-relaxed">{color.description}</p>
               </div>
             ))}
@@ -149,7 +149,7 @@ export default function BrandKitPage() {
       <section className="px-10 md:px-14 py-32 border-b-2 border-black/10">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
           <div>
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 03</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Section 03</span>
             <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-normal mb-8">Typography</h2>
             <p className="text-lg text-gray-500 leading-relaxed mb-12">
               We use the system font stack for clarity and speed. No special typefaces — just clean, readable text built for founders scanning fast.
@@ -169,7 +169,7 @@ export default function BrandKitPage() {
               </div>
             </div>
           </div>
-          <div className="border-2 border-black p-12 bg-white shadow-[12px_12px_0px_0px_rgba(254,127,45,1)]">
+          <div className="border-2 border-black p-12 bg-white shadow-[12px_12px_0px_0px_rgba(217,190,244,1)]">
             <p className="text-[100px] font-semibold leading-none">Aa</p>
             <p className="text-xl font-semibold mt-4">ABCDEFGHIJKLM <br /> NOPQRSTUVWXYZ</p>
             <p className="text-xl font-normal mt-2">abcdefghijklm <br /> nopqrstuvwxyz</p>
@@ -186,7 +186,7 @@ export default function BrandKitPage() {
             Rizly's design is built on three pillars: <br />
             <span className="text-black font-medium">Clarity over decoration</span>, <br />
             <span className="text-black font-medium">Confidence without noise</span>, and <br />
-            <span className="text-[#FE7F2D] font-medium">Approval-first trust</span>.
+            <span className="text-[#D9BEF4] font-medium">Approval-first trust</span>.
           </p>
           <div className="w-32 h-2 bg-black mx-auto"></div>
         </div>

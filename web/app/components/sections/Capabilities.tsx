@@ -49,7 +49,7 @@ export function Capabilities() {
     <section className="border-t-2 border-black/10 bg-white py-20 md:py-28 font-neue-haas" id="capabilities">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">Capabilities</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">Capabilities</p>
           <h2 className="mt-4 max-w-xl text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             Everything Riz does, by connection.
           </h2>
@@ -61,7 +61,7 @@ export function Capabilities() {
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
           {groups.map((group, index) => (
             <Reveal key={group.title} delay={index * 0.06}>
-              <div className="h-full border-2 border-black bg-white p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(254,127,45,1)]">
+              <div className="h-full border-2 border-black bg-white p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(217,190,244,1)]">
                 <div className="flex items-center gap-3">
                   <span className={`flex h-9 w-9 shrink-0 items-center justify-center border-2 ${group.accent}`}>
                     <group.Icon className="h-5 w-5" />
@@ -71,7 +71,7 @@ export function Capabilities() {
                 <ul className="mt-5 flex flex-col gap-3.5 text-sm leading-relaxed text-gray-600">
                   {group.items.map((item) => (
                     <li key={item} className="flex gap-3">
-                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#FE7F2D]" />
+                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#D9BEF4]" />
                       {item}
                     </li>
                   ))}

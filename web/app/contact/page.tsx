@@ -64,8 +64,8 @@ export default function ContactPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Get in touch</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Talk to a <span className="text-[#ff4f00]">human</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Talk to a <span className="text-[#D9BEF4]">human</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Whether you&apos;re looking for an enterprise demo or technical support, the team behind Rizly is here to
@@ -81,23 +81,23 @@ export default function ContactPage() {
 
           <div className="space-y-10">
             <div>
-              <h3 className="mb-8 text-2xl font-normal text-[#20151c]">Connect directly</h3>
+              <h3 className="mb-8 text-2xl font-normal text-[#233D4D]">Connect directly</h3>
               <div className="space-y-6">
                 {contactChannels.map((channel) => (
                   <div key={channel.label} className="flex items-start gap-5">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#20151c] shadow-[0_10px_30px_-20px_rgba(32,21,28,0.4)]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#233D4D] shadow-[0_10px_30px_-20px_rgba(32,21,28,0.4)]">
                       {channel.icon}
                     </div>
                     <div>
                       <span className="mb-1 block text-xs uppercase tracking-[0.1em] text-gray-500">{channel.label}</span>
                       {channel.href ? (
-                        <a href={channel.href} className="mb-1 block text-lg font-normal text-[#20151c] transition hover:text-[#ff4f00]">
+                        <a href={channel.href} className="mb-1 block text-lg font-normal text-[#233D4D] transition hover:text-[#D9BEF4]">
                           {channel.value}
                         </a>
                       ) : (
-                        <span className="mb-1 block text-lg font-normal text-[#20151c]">{channel.value}</span>
+                        <span className="mb-1 block text-lg font-normal text-[#233D4D]">{channel.value}</span>
                       )}
-                      <span className="block text-xs text-[#ff4f00]">{channel.note}</span>
+                      <span className="block text-xs text-[#D9BEF4]">{channel.note}</span>
                     </div>
                   </div>
                 ))}
@@ -105,11 +105,11 @@ export default function ContactPage() {
             </div>
 
             <div className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
-              <h4 className="mb-3 text-lg font-normal text-[#20151c]">Enterprise inquiries</h4>
+              <h4 className="mb-3 text-lg font-normal text-[#233D4D]">Enterprise inquiries</h4>
               <p className="mb-5 text-sm leading-6 text-gray-600">
                 Need a custom demo or help with a security questionnaire? Our team is ready to assist.
               </p>
-              <a href="mailto:sales@getrizly.com" className="text-sm text-[#20151c] underline underline-offset-4 transition hover:text-[#ff4f00]">
+              <a href="mailto:sales@getrizly.com" className="text-sm text-[#233D4D] underline underline-offset-4 transition hover:text-[#D9BEF4]">
                 Book a meeting
               </a>
             </div>

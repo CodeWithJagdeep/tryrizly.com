@@ -26,7 +26,7 @@ export function HowItWorks() {
     <section className="border-t-2 border-black/10 bg-[#fcfcfc] py-20 md:py-28 font-neue-haas" id="how-it-works">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">How it works</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">How it works</p>
           <h2 className="mt-4 max-w-lg text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
             From connected to handled, in three moves.
           </h2>
@@ -67,7 +67,7 @@ export function HowItWorks() {
                 your ARR, churn rate, and the last investor thread.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="border-2 border-black bg-[#FE7F2D] px-4 py-2 text-[13px] font-black uppercase tracking-tight text-white transition-colors hover:bg-black">
+                <button className="border-2 border-black bg-[#D9BEF4] px-4 py-2 text-[13px] font-black uppercase tracking-tight text-white transition-colors hover:bg-black">
                   Approve reply
                 </button>
                 <button className="border-2 border-black bg-white px-4 py-2 text-[13px] font-black uppercase tracking-tight text-black transition-colors hover:bg-black hover:text-white">

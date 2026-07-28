@@ -43,8 +43,8 @@ export function Integrations() {
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl text-center">
           {/* Eyebrow */}
-          <div className="mb-4 inline-flex items-center rounded-full border border-[#FE7F2D] px-3 py-1">
-            <span className="text-xs font-semibold text-[#FE7F2D] uppercase tracking-wide">
+          <div className="mb-4 inline-flex items-center rounded-full border border-[#D9BEF4] px-3 py-1">
+            <span className="text-xs font-semibold text-[#D9BEF4] uppercase tracking-wide">
               10+ integrations
             </span>
           </div>
@@ -53,7 +53,7 @@ export function Integrations() {
           <h2 className="mt-4 text-3xl font-normal text-black sm:text-4xl lg:text-5xl">
             Connects to the tools
             <br />
-            <span className="text-[#FE7F2D]">you already use</span>
+            <span className="text-[#D9BEF4]">you already use</span>
           </h2>
 
           <p className="mt-6 text-lg text-slate-600">
@@ -68,7 +68,7 @@ export function Integrations() {
               {[...tools, ...tools].map((tool, index) => (
                 <div
                   key={index}
-                  className="group flex h-16 min-w-max items-center gap-3 rounded-lg border border-slate-200 bg-white px-6 transition-all duration-300 hover:border-[#FE7F2D] hover:-translate-y-0.5 hover:shadow-md"
+                  className="group flex h-16 min-w-max items-center gap-3 rounded-lg border border-slate-200 bg-white px-6 transition-all duration-300 hover:border-[#D9BEF4] hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <img
                     src={tool.logo}

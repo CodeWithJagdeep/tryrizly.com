@@ -145,8 +145,8 @@ export default function FaqPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>FAQ</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Answers on setup, <span className="text-[#ff4f00]">billing, and control</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Answers on setup, <span className="text-[#D9BEF4]">billing, and control</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Everything you&apos;d ask before connecting your inbox, calendar, and revenue to an AI operator,{" "}

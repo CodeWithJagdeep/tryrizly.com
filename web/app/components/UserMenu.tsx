@@ -63,7 +63,7 @@ export function UserMenu({ session }: { session: Session }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white transition hover:bg-[#FE7F2D]"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white transition hover:bg-[#D9BEF4]"
       >
         {initials(session)}
       </button>

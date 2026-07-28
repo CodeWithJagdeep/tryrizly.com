@@ -12,13 +12,13 @@ export function Hero() {
         <div className="grid grid-cols-1 items-center gap-12 py-16 md:py-24 lg:grid-cols-12 lg:gap-8">
           {/* Copy */}
           <div className="lg:col-span-6">
-            <span className="inline-block border-2 border-[#FE7F2D] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#FE7F2D]">
+            <span className="inline-block border-2 border-[#D9BEF4] px-3 py-1 text-[12px] font-black uppercase tracking-[0.2em] text-[#D9BEF4]">
               Approval-first automation
             </span>
             <h1 className="mt-7 text-balance text-5xl font-medium leading-[1.05] tracking-tight text-black sm:text-6xl lg:text-[64px]">
               Your day, handled.
               <br />
-              Nothing sent without your <span className="text-[#FE7F2D]">yes</span>.
+              Nothing sent without your <span className="text-[#D9BEF4]">yes</span>.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
               Riz watches your inbox, calendar, and revenue, then puts drafted decisions in
@@ -28,7 +28,7 @@ export function Hero() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a
                 href="/api/auth/google?return_to=%2Fdashboard"
-                className="inline-flex h-13 items-center justify-center gap-3 border-2 border-black bg-black px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#FE7F2D] hover:border-[#FE7F2D]"
+                className="inline-flex h-13 items-center justify-center gap-3 border-2 border-black bg-black px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#D9BEF4] hover:border-[#D9BEF4]"
               >
                 <svg className="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -52,7 +52,7 @@ export function Hero() {
             <div className="mx-auto w-full max-w-md border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
               {/* chat header */}
               <div className="flex items-center gap-3 border-b-2 border-black bg-black px-5 py-3.5">
-                <span className="flex h-8 w-8 items-center justify-center bg-[#FE7F2D] text-[13px] font-black text-white">R</span>
+                <span className="flex h-8 w-8 items-center justify-center bg-[#D9BEF4] text-[13px] font-black text-white">R</span>
                 <div className="min-w-0">
                   <p className="text-sm font-bold leading-tight text-white">Riz</p>
                   <p className="flex items-center gap-1.5 text-[11px] text-white/50">
@@ -66,14 +66,14 @@ export function Hero() {
               {/* messages */}
               <div className="flex flex-col gap-3 bg-[#fcfcfc] p-5">
                 <div className="max-w-[92%] border-2 border-black bg-white p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#FE7F2D]">Morning brief</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#D9BEF4]">Morning brief</p>
                   <p className="mt-2 text-[13.5px] leading-relaxed text-slate-700">
                     3 emails need you today. Invoice <span className="font-semibold text-black">#1042 ($2,350)</span> from
                     Meridian Design is 6 days overdue — I&apos;ve drafted a polite nudge. Your 10:00
                     standup moved to 9:30.
                   </p>
                   <div className="mt-3.5 flex flex-wrap gap-2">
-                    <span className="border-2 border-black bg-[#FE7F2D] px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white">
+                    <span className="border-2 border-black bg-[#D9BEF4] px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white">
                       Approve draft
                     </span>
                     <span className="border-2 border-black bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black">

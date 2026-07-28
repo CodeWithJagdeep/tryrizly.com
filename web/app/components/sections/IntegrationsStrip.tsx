@@ -49,7 +49,7 @@ export function IntegrationsStrip() {
             {track.map(({ Icon, label }, i) => (
               <div
                 key={`${label}-${i}`}
-                className="flex items-center gap-2.5 border-2 border-black bg-white px-5 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-x-px hover:-translate-y-px hover:border-[#FE7F2D] hover:shadow-[4px_4px_0px_0px_rgba(254,127,45,1)]"
+                className="flex items-center gap-2.5 border-2 border-black bg-white px-5 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-x-px hover:-translate-y-px hover:border-[#D9BEF4] hover:shadow-[4px_4px_0px_0px_rgba(217,190,244,1)]"
               >
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center text-black">
                   <Icon className="size-full" />

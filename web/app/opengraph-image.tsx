@@ -19,7 +19,7 @@ export default async function OgImage() {
         style={{
           background: "#0d0d0d",
           backgroundImage:
-            "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(254,127,45,0.16), transparent)",
+            "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(217,190,244,0.16), transparent)",
           width: "100%",
           height: "100%",
           display: "flex",
@@ -74,7 +74,7 @@ export default async function OgImage() {
           </div>
           <div
             style={{
-              background: "#FE7F2D",
+              background: "#D9BEF4",
               color: "#ffffff",
               fontSize: 16,
               fontWeight: 600,

@@ -27,7 +27,7 @@ export function LegalPage({
     <div className="flex flex-1 flex-col bg-white text-slate-900">
       <section className="border-b border-slate-200 py-20 md:py-28">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[#FE7F2D]">{eyebrow}</p>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[#D9BEF4]">{eyebrow}</p>
           <h1 className="mt-4 font-neue-haas text-4xl font-normal tracking-tight text-slate-950 md:text-5xl">
             {title}
           </h1>
@@ -49,7 +49,7 @@ export function LegalPage({
                     <li key={section.id}>
                       <a
                         href={`#${section.id}`}
-                        className="-ml-px block border-l border-transparent pl-4 text-[13px] leading-5 text-slate-500 transition hover:border-[#FE7F2D] hover:text-slate-900"
+                        className="-ml-px block border-l border-transparent pl-4 text-[13px] leading-5 text-slate-500 transition hover:border-[#D9BEF4] hover:text-slate-900"
                       >
                         <span className="mr-1.5 tabular-nums text-slate-300">
                           {String(index + 1).padStart(2, "0")}
@@ -70,12 +70,12 @@ export function LegalPage({
                   className="scroll-mt-24 border-t border-slate-200 py-10 first:border-t-0 first:pt-0"
                 >
                   <h2 className="font-neue-haas text-xl font-normal tracking-tight text-slate-950 md:text-2xl">
-                    <span className="mr-3 tabular-nums text-[#FE7F2D]">
+                    <span className="mr-3 tabular-nums text-[#D9BEF4]">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     {section.title}
                   </h2>
-                  <div className="legal-body mt-5 space-y-4 text-[15px] leading-7 text-slate-600 [&_a]:font-medium [&_a]:text-slate-900 [&_a]:underline [&_a]:decoration-slate-300 [&_a]:underline-offset-2 [&_a:hover]:text-[#FE7F2D] [&_a:hover]:decoration-[#FE7F2D] [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5">
+                  <div className="legal-body mt-5 space-y-4 text-[15px] leading-7 text-slate-600 [&_a]:font-medium [&_a]:text-slate-900 [&_a]:underline [&_a]:decoration-slate-300 [&_a]:underline-offset-2 [&_a:hover]:text-[#D9BEF4] [&_a:hover]:decoration-[#D9BEF4] [&_li]:pl-1 [&_strong]:font-semibold [&_strong]:text-slate-900 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5">
                     {section.body}
                   </div>
                 </article>
@@ -86,7 +86,7 @@ export function LegalPage({
                   Questions about this document? Reach us at{" "}
                   <a
                     href="mailto:hello@getrizly.com"
-                    className="font-medium text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-[#FE7F2D] hover:decoration-[#FE7F2D]"
+                    className="font-medium text-slate-900 underline decoration-slate-300 underline-offset-2 hover:text-[#D9BEF4] hover:decoration-[#D9BEF4]"
                   >
                     hello@getrizly.com
                   </a>{" "}

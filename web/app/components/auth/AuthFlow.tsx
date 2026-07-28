@@ -39,10 +39,10 @@ function AuthOption({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-[52px] w-full grid-cols-[56px_1fr_56px] items-center rounded-full border border-black/70 bg-white text-slate-950 transition hover:border-black hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`grid h-12 w-full grid-cols-[48px_1fr_48px] items-center rounded-xl border border-white/15 bg-white/[0.04] text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       <span className="flex items-center justify-center">{icon}</span>
-      <span className="text-center text-base font-normal leading-none text-slate-950">
+      <span className="text-center text-sm font-medium leading-none text-white">
         {label}
       </span>
       <span aria-hidden="true" />
@@ -187,218 +187,178 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
     }
   };
 
-  return (
-    <main
-      className="relative flex min-h-screen overflow-hidden bg-white px-4 py-8 text-slate-950 antialiased sm:px-6 lg:px-10"
-      style={{
-        fontFamily:
-          'var(--font-rethink-sans), var(--font-inter-tight), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,rgba(254,127,45,0.10),rgba(255,255,255,0))]"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(15,23,42,0.07),transparent_34rem)]"
-        aria-hidden="true"
-      />
+  const fieldClass =
+    "mt-2 h-12 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 text-sm font-medium text-white outline-none transition placeholder:text-white/30 focus:border-[#D9BEF4] focus:ring-2 focus:ring-[#D9BEF4]/15";
+  const primaryButtonClass =
+    "mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-black transition duration-200 hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50";
 
+  return (
+    <main className="font-display relative flex min-h-screen flex-col overflow-hidden bg-black px-4 py-6 text-white antialiased sm:px-8 sm:py-8">
       <Link
         href="/"
-        className="fixed left-5 top-5 z-20 flex h-9 items-center sm:left-8 sm:top-7"
-        aria-label="rizly home"
+        className="fixed left-5 top-5 z-20 inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-4 focus-visible:ring-offset-black sm:left-8 sm:top-7"
+        aria-label="Rizly home"
       >
-        <Image src="/rizly_white.png" alt="rizly" width={140} height={33} className="h-10 w-auto object-contain" priority />
+        <Image
+          src="/rizly_white.png"
+          alt="Rizly"
+          width={112}
+          height={26}
+          className="h-8 w-auto object-contain opacity-85 brightness-0 invert"
+          priority
+        />
       </Link>
 
-      <button
-        type="button"
-        aria-label="Help"
-        className="fixed right-5 bottom-5 z-10 flex h-8 w-8 items-center justify-center border border-slate-300 bg-white text-sm font-normal text-slate-500 transition hover:border-slate-300 hover:text-slate-950"
-      >
-        ?
-      </button>
-
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[460px] items-center justify-center pt-16">
-        <div className="w-full">
-          <section className="p-6 sm:p-8">
-            <div className="mb-8 text-center">
-              <p className="text-xs font-normal uppercase tracking-[0.14em] text-slate-400">
-                {mode === "login" ? "Welcome back" : "Start with rizly"}
-              </p>
-              <h1 className="mt-2 text-2xl font-normal tracking-[-0.01em] text-slate-950 sm:text-3xl">
-                {mode === "login" ? "Sign in to your workspace" : "Create your workspace"}
+      <div className="flex flex-1 flex-col">
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center py-10 text-center sm:py-14">
+            <div className="mb-8">
+              <h1 className="mx-auto w-full max-w-full pt-8 text-4xl font-normal leading-[1.1] tracking-[-0.02em] text-white">
+                Never miss something important.
               </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                {mode === "login"
-                  ? "Continue to your operator dashboard."
-                  : "Set up your operator and connect your work tools."}
+              <p className="mx-auto mt-3 max-w-full text-base leading-7 text-white/55">
+                {mode === "login" ? "Sign in with your work email" : "Sign up with your work email"}
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-          <AuthOption
-            icon={loading === "google" ? <Spinner dark /> : <GoogleIcon />}
-            label="Continue with Google"
-            onClick={handleGoogleLogin}
-            disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
-          />
-          <AuthOption
-            icon={loading === "linkedin" ? <Spinner dark /> : <LinkedInIcon />}
-            label="Continue with LinkedIn"
-            onClick={handleLinkedInLogin}
-            disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
-          />
+            <div className="grid w-full gap-3">
+              <AuthOption
+                icon={loading === "google" ? <Spinner dark /> : <GoogleIcon />}
+                label="Continue with Google"
+                onClick={handleGoogleLogin}
+                disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
+              />
+              <AuthOption
+                icon={loading === "linkedin" ? <Spinner dark /> : <LinkedInIcon />}
+                label="Continue with LinkedIn"
+                onClick={handleLinkedInLogin}
+                disabled={Boolean(loading) || Boolean(pendingVerifyEmail)}
+              />
             </div>
 
-            <div className="mt-6 flex items-center gap-4">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-normal uppercase tracking-[0.12em] text-slate-400">or</span>
-              <div className="h-px flex-1 bg-slate-200" />
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">or use email</span>
+              <div className="h-px flex-1 bg-white/10" />
             </div>
 
             {error && (
-              <div className="mt-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-normal text-rose-700">
+              <div role="alert" className="mb-4 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                 {error}
               </div>
             )}
 
-        {pendingVerifyEmail ? (
-          <>
-            <form onSubmit={handleVerifyOtp} className="mt-6">
-              <label className="block text-base font-normal text-slate-900">
-                6-digit code sent to {pendingVerifyEmail}
-              </label>
-              <input
-                value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="Enter 6-digit code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                required
-                autoFocus
-                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-center text-base font-normal tracking-[0.3em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
-              />
-
-              <button
-                type="submit"
-                disabled={Boolean(loading) || otp.length !== 6}
-                className="mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading === "email" && <Spinner />}
-                Verify and continue
-              </button>
-            </form>
-
-            <p className="mt-5 text-center text-sm font-normal text-slate-500">
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={resending}
-                className="font-normal text-slate-950 underline-offset-2 hover:underline disabled:opacity-50"
-              >
-                {resent ? "Code resent - check your inbox" : resending ? "Sending..." : "Resend code"}
-              </button>
-            </p>
-          </>
-        ) : (
-          <>
-            <form onSubmit={handleEmailLogin} className="mt-6">
-              <div>
-                <label className="block text-base font-normal text-slate-900">Email address</label>
-                <input
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    if (showPassword) setShowPassword(false);
-                  }}
-                  placeholder="Enter email address"
-                  type="email"
-                  autoComplete="username"
-                  required
-                  className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
-                />
-              </div>
-
-              {showPassword && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-base font-normal text-slate-900">Password</label>
-                    {mode === "login" && (
-                      <Link
-                        href="/forgot-password"
-                        className="text-xs font-normal text-slate-500 underline-offset-2 hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    )}
-                  </div>
+            {pendingVerifyEmail ? (
+              <>
+                <form onSubmit={handleVerifyOtp} className="w-full">
+                  <label className="block text-sm font-medium text-white/90">
+                    6-digit code sent to {pendingVerifyEmail}
+                  </label>
                   <input
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Enter your password"
-                    type="password"
-                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    minLength={8}
+                    value={otp}
+                    onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
                     required
                     autoFocus
-                    className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D]"
+                    className={`${fieldClass} text-center tracking-[0.35em]`}
                   />
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={Boolean(loading)}
-                className="mt-6 flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading === "email" && <Spinner />}
-                {showPassword ? (mode === "signup" ? "Create account" : "Sign in") : "Continue"}
-              </button>
-            </form>
-
-            <p className="mt-5 text-center text-sm font-normal text-slate-500">
-              {mode === "login" ? (
-                <>
-                  Don&apos;t have an account?{" "}
+                  <button type="submit" disabled={Boolean(loading) || otp.length !== 6} className={primaryButtonClass}>
+                    {loading === "email" && <Spinner dark />}
+                    Verify and continue
+                  </button>
+                </form>
+                <p className="mt-4 text-center text-sm text-white/50">
                   <button
                     type="button"
-                    onClick={() => navigateToMode("signup")}
-                    className="font-normal text-slate-950 underline-offset-2 hover:underline"
+                    onClick={handleResendOtp}
+                    disabled={resending}
+                    className="font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50"
                   >
-                    Create one
+                    {resent ? "Code resent — check your inbox" : resending ? "Sending…" : "Resend code"}
                   </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
+                </p>
+              </>
+            ) : (
+              <>
+                <form onSubmit={handleEmailLogin} className="w-full">
+                  <label className="block text-sm font-medium text-white/90">Email address</label>
+                  <input
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (showPassword) setShowPassword(false);
+                    }}
+                    placeholder="you@company.com"
+                    type="email"
+                    autoComplete="username"
+                    required
+                    className={fieldClass}
+                  />
+
+                  {showPassword && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium text-white/90">Password</label>
+                        {mode === "login" && (
+                          <Link
+                            href="/forgot-password"
+                            className="text-xs font-medium text-white/50 underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                          >
+                            Forgot password?
+                          </Link>
+                        )}
+                      </div>
+                      <input
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        type="password"
+                        autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                        minLength={8}
+                        required
+                        autoFocus
+                        className={fieldClass}
+                      />
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={Boolean(loading)} className={primaryButtonClass}>
+                    {loading === "email" && <Spinner dark />}
+                    {showPassword ? (mode === "signup" ? "Create workspace" : "Sign in") : "Continue"}
+                  </button>
+                </form>
+
+                <p className="mt-4 text-center text-base text-white/70">
+                  {mode === "login" ? "New to Rizly? " : "Already have an account? "}
                   <button
                     type="button"
-                    onClick={() => navigateToMode("login")}
-                    className="font-normal text-slate-950 underline-offset-2 hover:underline"
+                    onClick={() => navigateToMode(mode === "login" ? "signup" : "login")}
+                    className="font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   >
-                    Log in
+                    {mode === "login" ? "Create a workspace" : "Log in"}
                   </button>
-                </>
-              )}
-            </p>
+                </p>
 
-            <p className="mx-auto mt-7 max-w-[420px] text-center text-xs font-normal leading-5 text-slate-400">
-              By continuing, you acknowledge that you understand and agree to the{" "}
-              <Link href="/terms" className="text-slate-600 underline underline-offset-2 hover:text-slate-950">
-                Terms & Conditions
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="text-slate-600 underline underline-offset-2 hover:text-slate-950">
-                Privacy Policy
-              </Link>
-            </p>
-          </>
-        )}
-          </section>
-        </div>
+                <p className="mx-auto mt-6 max-w-full text-center text-sm leading-6 text-white/70">
+                  By continuing, you agree to the{" "}
+                  <Link href="/terms" className="font-medium text-white/60 underline underline-offset-2 hover:text-white">
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="font-medium text-white/60 underline underline-offset-2 hover:text-white">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
+              </>
+            )}
+          </div>
+
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.14em] text-white/70">
+            Private by design · approval before action
+          </p>
       </div>
     </main>
   );

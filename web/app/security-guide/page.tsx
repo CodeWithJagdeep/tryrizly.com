@@ -31,38 +31,38 @@ export default function SecurityGuidePage() {
 
       <section className="py-20 px-6 sm:px-10 md:px-14">
         <div className="max-w-4xl mx-auto space-y-12">
-          <div className="border-l-2 border-[#FE7F2D] pl-6">
+          <div className="border-l-2 border-[#D9BEF4] pl-6">
             <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Encryption at Rest & In Transit</h2>
             <p className="text-slate-600 leading-relaxed">
               All your data is encrypted using AES-256. OAuth tokens, business data, everything. Data in transit is protected with TLS 1.3. Your data is never readable to us or anyone else.
             </p>
           </div>
 
-          <div className="border-l-2 border-[#FE7F2D] pl-6">
+          <div className="border-l-2 border-[#D9BEF4] pl-6">
             <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Token Management</h2>
             <p className="text-slate-600 leading-relaxed">
               Your OAuth tokens for Gmail, Calendar, Stripe, and other services are encrypted and stored securely. We only use them to make API calls you authorize. Never for model training. Never shared.
             </p>
           </div>
 
-          <div className="border-l-2 border-[#FE7F2D] pl-6">
+          <div className="border-l-2 border-[#D9BEF4] pl-6">
             <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>We Don't Train on Your Data</h2>
             <p className="text-slate-600 leading-relaxed">
               Your emails, calendar, revenue data — used only for your personal rizly experience. Not to improve our models. Not to train AI. Not at all outside your account.
             </p>
           </div>
 
-          <div className="border-l-2 border-[#FE7F2D] pl-6">
+          <div className="border-l-2 border-[#D9BEF4] pl-6">
             <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Data discipline</h2>
             <p className="text-slate-600 leading-relaxed">
               Connector credentials are encrypted with AES-256-GCM, database and payment connections are read-only, and outbound actions always wait for your explicit approval.
             </p>
           </div>
 
-          <div className="border-l-2 border-[#FE7F2D] pl-6">
+          <div className="border-l-2 border-[#D9BEF4] pl-6">
             <h2 className="text-2xl text-black mb-3" style={{ fontWeight: 500 }}>Found a vulnerability?</h2>
             <p className="text-slate-600 leading-relaxed">
-              Email <a href="mailto:security@getrizly.com" className="text-[#FE7F2D] hover:text-slate-900">security@getrizly.com</a> with details. Please don't disclose publicly until we've had time to fix it. We respond within 24 hours.
+              Email <a href="mailto:security@getrizly.com" className="text-[#D9BEF4] hover:text-slate-900">security@getrizly.com</a> with details. Please don't disclose publicly until we've had time to fix it. We respond within 24 hours.
             </p>
           </div>
         </div>

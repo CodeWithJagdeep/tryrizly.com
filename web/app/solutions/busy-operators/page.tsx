@@ -23,7 +23,7 @@ const queue = [
 
 const priorityColor: Record<string, string> = {
   High: "#EF4444",
-  Medium: "#FE7F2D",
+  Medium: "#D9BEF4",
   Low: "#9CA3AF",
 };
 
@@ -73,7 +73,7 @@ export default function BusyOperatorsPage() {
             Rizly / For Busy Operators
           </span>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-8">
-            Turn scattered tasks into <br /><span className="text-[#FE7F2D]">one approval flow</span>
+            Turn scattered tasks into <br /><span className="text-[#D9BEF4]">one approval flow</span>
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
             You don't need another tab. You need one place to say yes or no. Riz turns everything running across your tools into a single decision stream.
@@ -85,7 +85,7 @@ export default function BusyOperatorsPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">One queue, every source</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">One queue, every source</span>
             <h2 className="text-2xl md:text-3xl font-semibold">What's waiting for you right now</h2>
           </div>
           <div className="border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] divide-y divide-black/10">
@@ -112,7 +112,7 @@ export default function BusyOperatorsPage() {
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="block text-3xl font-semibold text-[#FE7F2D] mb-2">{stat.value}</span>
+              <span className="block text-3xl font-semibold text-[#D9BEF4] mb-2">{stat.value}</span>
               <span className="block text-[12px] font-semibold uppercase tracking-widest text-white/60">{stat.label}</span>
             </div>
           ))}
@@ -123,7 +123,7 @@ export default function BusyOperatorsPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">The flow</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">The flow</span>
             <h2 className="text-2xl md:text-4xl font-semibold">From connected to handled</h2>
           </div>
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-6">
@@ -144,7 +144,7 @@ export default function BusyOperatorsPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Where tasks come from</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Where tasks come from</span>
             <h2 className="text-2xl md:text-4xl font-semibold">Every source, one queue</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -162,7 +162,7 @@ export default function BusyOperatorsPage() {
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-white">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Before and after</span>
+            <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Before and after</span>
             <h2 className="text-2xl md:text-4xl font-semibold">What changes with one queue</h2>
           </div>
           <div className="border-2 border-black bg-[#fcfcfc] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] divide-y-2 divide-black">
@@ -172,8 +172,8 @@ export default function BusyOperatorsPage() {
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-2 block">Without Riz</span>
                   <p className="text-sm text-gray-500 leading-relaxed">{row.without}</p>
                 </div>
-                <div className="p-6 bg-[#FE7F2D]/5">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#FE7F2D] mb-2 block">With Riz</span>
+                <div className="p-6 bg-[#D9BEF4]/5">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#D9BEF4] mb-2 block">With Riz</span>
                   <p className="text-sm text-gray-700 leading-relaxed">{row.with}</p>
                 </div>
               </div>
@@ -185,12 +185,12 @@ export default function BusyOperatorsPage() {
       {/* Trust */}
       <section className="px-10 md:px-14 py-24 border-b-2 border-black/10 bg-[#fcfcfc]">
         <div className="max-w-4xl mx-auto text-center">
-          <span className="text-[#FE7F2D] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Why it's safe to hand off</span>
+          <span className="text-[#D9BEF4] text-[13px] font-semibold uppercase tracking-[0.4em] mb-4 block">Why it's safe to hand off</span>
           <h2 className="text-2xl md:text-4xl font-semibold mb-8">Every decision stays yours</h2>
           <p className="text-lg text-gray-500 leading-relaxed mb-10 max-w-2xl mx-auto">
             Riz surfaces and drafts. Nothing executes until you tap approve. Your queue is a proposal list, not an action log.
           </p>
-          <a href="/trust" className="text-[#FE7F2D] font-semibold hover:text-black transition-colors">
+          <a href="/trust" className="text-[#D9BEF4] font-semibold hover:text-black transition-colors">
             See how trust works →
           </a>
         </div>
@@ -225,7 +225,7 @@ export default function BusyOperatorsPage() {
         <h2 className="text-2xl md:text-3xl font-semibold mb-6">Turn the noise into one flow</h2>
         <a
           href="/signup"
-          className="inline-flex items-center gap-2 border-2 border-black bg-[#FE7F2D] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+          className="inline-flex items-center gap-2 border-2 border-black bg-[#D9BEF4] px-8 py-4 text-white font-semibold shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
         >
           Start free trial
         </a>

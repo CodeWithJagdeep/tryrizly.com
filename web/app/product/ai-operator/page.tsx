@@ -56,8 +56,8 @@ export default function AiOperatorPage() {
         <div className="relative mx-auto grid max-w-[88rem] grid-cols-1 items-center gap-14 px-6 pb-20 pt-28 md:px-10 lg:grid-cols-2 lg:px-14">
           <div>
             <Eyebrow>Rizly / AI operator</Eyebrow>
-            <h1 className="max-w-xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-              One operator across <span className="text-[#ff4f00]">everything you run</span>
+            <h1 className="max-w-xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+              One operator across <span className="text-[#D9BEF4]">everything you run</span>
             </h1>
             <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
               Riz isn&apos;t a chatbot bolted onto a dashboard. It&apos;s a single operator that watches every
@@ -66,7 +66,7 @@ export default function AiOperatorPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               {systems.map((system) => (
                 <div key={system.label} className="rounded-2xl bg-[#f7f7f6] px-4 py-3">
-                  <span className="block text-sm font-normal text-[#20151c]">{system.label}</span>
+                  <span className="block text-sm font-normal text-[#233D4D]">{system.label}</span>
                   <span className="text-xs text-gray-500">{system.detail}</span>
                 </div>
               ))}
@@ -83,18 +83,18 @@ export default function AiOperatorPage() {
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-5xl">
           <Eyebrow>A day with Riz</Eyebrow>
-          <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+          <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
             Running quietly in the background
           </h2>
 
           <div className="mt-14 space-y-10">
             {moments.map((moment) => (
               <div key={moment.time} className="flex flex-col gap-3 border-l-2 border-black/10 pl-8 md:flex-row md:gap-8">
-                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-[#ff4f00] md:w-24">
+                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-[#D9BEF4] md:w-24">
                   {moment.time}
                 </span>
                 <div>
-                  <h3 className="text-lg font-normal text-[#20151c]">{moment.title}</h3>
+                  <h3 className="text-lg font-normal text-[#233D4D]">{moment.title}</h3>
                   <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{moment.detail}</p>
                 </div>
               </div>
@@ -108,7 +108,7 @@ export default function AiOperatorPage() {
         <div className="mx-auto max-w-4xl">
           <div className="mb-10 text-center">
             <Eyebrow>The calendar it defends</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
               Conflicts caught before you see them
             </h2>
           </div>
@@ -127,7 +127,7 @@ export default function AiOperatorPage() {
         <Eyebrow>Works with your stack</Eyebrow>
         <div className="mx-auto mt-6 flex max-w-3xl flex-wrap justify-center gap-3">
           {sources.map((source) => (
-            <span key={source} className="rounded-full bg-[#f7f7f6] px-4 py-2 text-sm text-[#20151c]">
+            <span key={source} className="rounded-full bg-[#f7f7f6] px-4 py-2 text-sm text-[#233D4D]">
               {source}
             </span>
           ))}
@@ -139,7 +139,7 @@ export default function AiOperatorPage() {
         <div className="mx-auto max-w-5xl">
           <div className="mb-14 text-center">
             <Eyebrow>Why one operator</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               Not another tab to check
             </h2>
           </div>
@@ -147,7 +147,7 @@ export default function AiOperatorPage() {
             {comparison.map((item, index) => (
               <div
                 key={item.app}
-                className={`rounded-2xl p-8 ${index === 1 ? "bg-[#20151c] text-white" : "bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]"}`}
+                className={`rounded-2xl p-8 ${index === 1 ? "bg-[#233D4D] text-white" : "bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]"}`}
               >
                 <h3 className="mb-3 text-lg font-normal">{item.app}</h3>
                 <p className={`text-sm leading-6 ${index === 1 ? "text-white/60" : "text-gray-600"}`}>{item.detail}</p>
@@ -165,7 +165,7 @@ export default function AiOperatorPage() {
       {/* FAQ */}
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
             Common questions
           </h2>
           <FaqAccordion items={questions} />

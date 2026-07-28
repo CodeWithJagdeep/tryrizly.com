@@ -25,8 +25,10 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center p-6 min-h-[calc(100vh-3rem)]">
-        <div className="text-sm font-medium text-gray-400">Loading authentication...</div>
+      <div className="flex min-h-screen flex-1 items-center justify-center bg-black p-6">
+        <div className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+          Preparing your workspace…
+        </div>
       </div>
     }>
       <AuthFlow initialMode="login" />

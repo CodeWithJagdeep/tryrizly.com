@@ -15,11 +15,23 @@ export type Plan = {
   introNote?: string;
 };
 
-// Mirrors apps/billing/src/plans.ts — keep the two in sync. No "Free" card:
-// there's no standing free plan, just a 10-day trial on any paid plan below
-// (see apps/billing/src/plans.ts "free" entry for the post-trial floor state,
-// which stays internal/unmarketed).
+// Mirrors apps/billing/src/plans.ts — keep the two in sync.
+// NOTE: the "Free" card below is marketing-only for now. apps/billing's
+// "free" plan still has aiBudgetUsd: 0 and is gated as the post-trial
+// no-access floor (see shared/src/billing/plan-budgets.ts) — it does not yet
+// grant 5 automations or real AI credits. Backend needs to catch up before
+// this card is fully honest.
 export const plans: Plan[] = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: '$0',
+    cadence: '/month',
+    description: 'Try Rizly with a small number of automations, on us.',
+    cta: 'Start for free',
+    href: '/signup',
+    features: ['5 automations', 'Basic AI (limited credits/month)', 'Telegram & Slack delivery', 'Community support'],
+  },
   {
     id: 'starter',
     name: 'Starter',
@@ -57,7 +69,7 @@ export const plans: Plan[] = [
 
 function CheckIcon() {
   return (
-    <svg className='h-4 w-4 shrink-0 text-[#ff4f00]' fill='none' viewBox='0 0 20 20' stroke='currentColor' strokeWidth='2.5' aria-hidden='true'>
+    <svg className='h-4 w-4 shrink-0 text-[#D9BEF4]' fill='none' viewBox='0 0 20 20' stroke='currentColor' strokeWidth='2.5' aria-hidden='true'>
       <path strokeLinecap='round' strokeLinejoin='round' d='M16 6 8.5 13.5 4 9' />
     </svg>
   );
@@ -66,16 +78,16 @@ function CheckIcon() {
 /** The joined pricing-card grid used on /pricing — one source, no drift. */
 export function PricingCards() {
   return (
-    <div className='grid grid-cols-1 gap-5 md:grid-cols-3'>
+    <div className='grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4'>
       {plans.map((plan) => (
         <div
           key={plan.id}
           className={`flex flex-col rounded-2xl p-8 ${
-            plan.highlighted ? 'bg-[#20151c] text-white' : 'bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]'
+            plan.highlighted ? 'bg-[#233D4D] text-white' : 'bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]'
           }`}
         >
           {plan.highlighted && (
-            <span className='mb-4 inline-flex w-fit items-center rounded-full bg-[#ff4f00] px-3 py-1 text-[11px] font-normal uppercase tracking-[0.16em] text-white'>
+            <span className='mb-4 inline-flex w-fit items-center rounded-full bg-[#D9BEF4] px-3 py-1 text-[11px] font-normal uppercase tracking-[0.16em] text-white'>
               Most popular
             </span>
           )}
@@ -92,7 +104,7 @@ export function PricingCards() {
               </span>
             )}
           </div>
-          {plan.introNote && <p className='mt-1 text-xs text-[#ff4f00]'>{plan.introNote}</p>}
+          {plan.introNote && <p className='mt-1 text-xs text-[#D9BEF4]'>{plan.introNote}</p>}
           <p className={`mt-4 min-h-[48px] text-sm leading-6 ${plan.highlighted ? 'text-white/60' : 'text-gray-500'}`}>
             {plan.description}
           </p>
@@ -100,7 +112,7 @@ export function PricingCards() {
           <Link
             href={plan.href}
             className={`mt-6 inline-flex h-12 items-center justify-center rounded-full px-4 text-sm font-normal transition ${
-              plan.highlighted ? 'bg-[#ff4f00] text-white hover:bg-[#e94700]' : 'bg-[#20151c] text-white hover:bg-black'
+              plan.highlighted ? 'bg-[#D9BEF4] text-white hover:bg-[#D9BEF4]' : 'bg-[#233D4D] text-white hover:bg-black'
             }`}
           >
             {plan.cta}

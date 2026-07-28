@@ -23,7 +23,7 @@ const features = [
     title: "Smart email triage",
     description:
       "Never miss an important message again. Rizly learns what matters, classifies emails, and drafts summaries so you only see what needs your attention.",
-    color: "#ff4f00",
+    color: "#D9BEF4",
     icon: (
       <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V6c0-1.1-.9-2-2-2z" />
     ),
@@ -108,8 +108,8 @@ export default function FeaturesPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Your AI operator</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Reclaim your <span className="text-[#ff4f00]">most valuable time</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Reclaim your <span className="text-[#D9BEF4]">most valuable time</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Stop drowning in decisions. Let Rizly handle the noise while you focus on what matters. Every action
@@ -128,7 +128,7 @@ export default function FeaturesPage() {
                   {feature.icon}
                 </svg>
               </span>
-              <h3 className="mb-3 text-lg font-normal text-[#20151c]">{feature.title}</h3>
+              <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{feature.title}</h3>
               <p className="text-sm leading-6 text-gray-600">{feature.description}</p>
             </div>
           ))}
@@ -140,18 +140,18 @@ export default function FeaturesPage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>The Rizly flow</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               How Rizly operates
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8">
             {stages.map((stage) => (
               <div key={stage.step} className="flex flex-col gap-4">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#20151c] font-mono text-sm text-white">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#233D4D] font-mono text-sm text-white">
                   {stage.step}
                 </span>
                 <div>
-                  <h3 className="text-lg font-normal text-[#20151c]">{stage.title}</h3>
+                  <h3 className="text-lg font-normal text-[#233D4D]">{stage.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-gray-600">{stage.detail}</p>
                 </div>
               </div>
@@ -161,7 +161,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* Security */}
-      <section className="relative overflow-hidden bg-[#20151c] px-6 py-20 md:px-10 lg:px-14">
+      <section className="relative overflow-hidden bg-[#233D4D] px-6 py-20 md:px-10 lg:px-14">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
@@ -180,7 +180,7 @@ export default function FeaturesPage() {
             <ul className="mt-8 space-y-4">
               {security.map((item) => (
                 <li key={item} className="flex items-center gap-3 text-sm text-white/80">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ff4f00]/15 text-[#ff4f00]">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#D9BEF4]/15 text-[#D9BEF4]">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
                       <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                     </svg>
@@ -197,7 +197,7 @@ export default function FeaturesPage() {
               <p className="text-white/30">&gt; connecting to approved integrations...</p>
               <p>&gt; processing approved actions only...</p>
               <p>&gt; monitoring for anomalies...</p>
-              <p className="text-[#ff4f00]">&gt; SUCCESS: All approvals honored</p>
+              <p className="text-[#D9BEF4]">&gt; SUCCESS: All approvals honored</p>
               <p className="text-white/30">&gt; cleaning sensitive data...</p>
               <p>&gt; session terminated securely.</p>
             </div>

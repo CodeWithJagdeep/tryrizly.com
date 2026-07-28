@@ -12,10 +12,10 @@ function FaqRow({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; on
         onClick={onToggle}
         className="flex w-full items-center justify-between px-6 py-5 text-left focus:outline-none"
       >
-        <span className="text-base font-normal text-[#20151c]">{item.q}</span>
+        <span className="text-base font-normal text-[#233D4D]">{item.q}</span>
         <span
           className={`ml-4 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base transition-transform duration-300 ${
-            isOpen ? "rotate-45 bg-[#20151c] text-white" : "bg-white text-[#20151c]"
+            isOpen ? "rotate-45 bg-[#233D4D] text-white" : "bg-white text-[#233D4D]"
           }`}
         >
           +
@@ -37,10 +37,10 @@ export function FaqClient({ categories }: { categories: FaqCategory[] }) {
             <div key={category.name} className="grid grid-cols-1 gap-8 lg:grid-cols-12">
               <div className="lg:col-span-4">
                 <div className="lg:sticky lg:top-24">
-                  <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#ff4f00]">
+                  <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#D9BEF4]">
                     {String(categoryIndex + 1).padStart(2, "0")}
                   </p>
-                  <h2 className="mt-2 text-2xl font-normal tracking-tight text-[#20151c]">{category.name}</h2>
+                  <h2 className="mt-2 text-2xl font-normal tracking-tight text-[#233D4D]">{category.name}</h2>
                   <p className="mt-2 text-sm text-gray-500">
                     {category.items.length} question{category.items.length !== 1 ? "s" : ""}
                   </p>
@@ -65,12 +65,12 @@ export function FaqClient({ categories }: { categories: FaqCategory[] }) {
 
         <div className="mt-20 flex flex-col items-start justify-between gap-6 rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)] md:flex-row md:items-center">
           <div>
-            <h2 className="text-xl font-normal text-[#20151c]">Didn&apos;t find your answer?</h2>
+            <h2 className="text-xl font-normal text-[#233D4D]">Didn&apos;t find your answer?</h2>
             <p className="mt-1.5 text-sm text-gray-600">Ask us directly, a human reads every message.</p>
           </div>
           <a
             href="/contact"
-            className="inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-[#20151c] px-8 text-sm font-normal text-white transition hover:bg-black"
+            className="inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-[#233D4D] px-8 text-sm font-normal text-white transition hover:bg-black"
           >
             Contact us
           </a>

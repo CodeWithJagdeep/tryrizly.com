@@ -64,8 +64,8 @@ export default function FoundersPage() {
         <HeroGlow />
         <div className="relative mx-auto flex max-w-4xl flex-col items-center px-6 pb-16 pt-28 text-center md:px-10">
           <Eyebrow>Rizly / For founders</Eyebrow>
-          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
-            Keep investor, customer, <span className="text-[#ff4f00]">and ops work from slipping</span>
+          <h1 className="max-w-2xl text-4xl font-normal leading-[1.08] tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
+            Keep investor, customer, <span className="text-[#D9BEF4]">and ops work from slipping</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
             Founders wear a hundred hats. Riz runs quietly in the background so nothing important gets lost between
@@ -79,7 +79,7 @@ export default function FoundersPage() {
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 text-center md:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <span className="mb-2 block text-3xl font-normal text-[#20151c]">{stat.value}</span>
+              <span className="mb-2 block text-3xl font-normal text-[#233D4D]">{stat.value}</span>
               <span className="block text-xs uppercase tracking-[0.1em] text-gray-500">{stat.label}</span>
             </div>
           ))}
@@ -91,14 +91,14 @@ export default function FoundersPage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>The problem</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               Where founders lose time and trust
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {painPoints.map((point) => (
               <div key={point.title} className="rounded-2xl bg-[#f7f7f6] p-8">
-                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{point.title}</h3>
+                <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{point.title}</h3>
                 <p className="text-sm leading-6 text-gray-600">{point.description}</p>
               </div>
             ))}
@@ -110,18 +110,18 @@ export default function FoundersPage() {
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-5xl">
           <Eyebrow>A day with Riz</Eyebrow>
-          <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+          <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
             Running quietly in the background
           </h2>
 
           <div className="mt-14 space-y-10">
             {moments.map((moment) => (
               <div key={moment.time} className="flex flex-col gap-3 border-l-2 border-black/10 pl-8 md:flex-row md:gap-8">
-                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-[#ff4f00] md:w-24">
+                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-[#D9BEF4] md:w-24">
                   {moment.time}
                 </span>
                 <div>
-                  <h3 className="text-lg font-normal text-[#20151c]">{moment.title}</h3>
+                  <h3 className="text-lg font-normal text-[#233D4D]">{moment.title}</h3>
                   <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{moment.detail}</p>
                 </div>
               </div>
@@ -135,7 +135,7 @@ export default function FoundersPage() {
         <div className="mx-auto max-w-5xl">
           <div className="mb-14 text-center">
             <Eyebrow>Before and after</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               What changes once Riz is running
             </h2>
           </div>
@@ -147,8 +147,8 @@ export default function FoundersPage() {
                   <p className="text-sm leading-6 text-gray-600">{row.without}</p>
                 </div>
                 <div className="bg-[#fff7f3] p-6">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.1em] text-[#ff4f00]">With Riz</span>
-                  <p className="text-sm leading-6 text-[#20151c]">{row.with}</p>
+                  <span className="mb-2 block text-xs uppercase tracking-[0.1em] text-[#D9BEF4]">With Riz</span>
+                  <p className="text-sm leading-6 text-[#233D4D]">{row.with}</p>
                 </div>
               </div>
             ))}
@@ -161,14 +161,14 @@ export default function FoundersPage() {
         <div className="mx-auto max-w-[88rem]">
           <div className="mb-14 text-center">
             <Eyebrow>Coverage</Eyebrow>
-            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-4xl">
+            <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-4xl">
               From fundraising to day-to-day ops
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {stages.map((stage) => (
               <div key={stage.title} className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]">
-                <h3 className="mb-3 text-lg font-normal text-[#20151c]">{stage.title}</h3>
+                <h3 className="mb-3 text-lg font-normal text-[#233D4D]">{stage.title}</h3>
                 <p className="text-sm leading-6 text-gray-600">{stage.detail}</p>
               </div>
             ))}
@@ -177,7 +177,7 @@ export default function FoundersPage() {
       </section>
 
       {/* Trust */}
-      <section className="relative overflow-hidden bg-[#20151c] px-6 py-20 text-center md:px-10 lg:px-14">
+      <section className="relative overflow-hidden bg-[#233D4D] px-6 py-20 text-center md:px-10 lg:px-14">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
@@ -206,7 +206,7 @@ export default function FoundersPage() {
       {/* FAQ */}
       <section className="border-t border-black/10 bg-[#fcfcfc] px-6 py-20 md:px-10 lg:px-14">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+          <h2 className="mb-10 text-center text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
             Common questions
           </h2>
           <FaqAccordion items={questions} />

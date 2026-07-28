@@ -83,7 +83,7 @@ export function ResetPasswordForm() {
                       minLength={8}
                       required
                       autoFocus
-                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
+                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4] focus:shadow-[0_0_0_3px_rgba(217,190,244,0.15)]"
                     />
                   </div>
                   <div>
@@ -96,7 +96,7 @@ export function ResetPasswordForm() {
                       autoComplete="new-password"
                       minLength={8}
                       required
-                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FE7F2D] focus:shadow-[0_0_0_3px_rgba(254,127,45,0.15)]"
+                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4] focus:shadow-[0_0_0_3px_rgba(217,190,244,0.15)]"
                     />
                   </div>
 

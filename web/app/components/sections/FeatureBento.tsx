@@ -44,12 +44,12 @@ function MiniInboxRow({ sender, subject, active, muted }: { sender: string; subj
   return (
     <div
       className={`flex items-center gap-3 border-2 bg-white p-2.5 ${
-        active ? 'border-[#FE7F2D] bg-[#FE7F2D]/8' : 'border-black/10'
+        active ? 'border-[#D9BEF4] bg-[#D9BEF4]/8' : 'border-black/10'
       } ${muted ? 'opacity-45' : ''}`}
     >
       <div
         className={`flex h-7 w-7 shrink-0 items-center justify-center border-2 text-[11px] font-bold ${
-          active ? 'border-black bg-[#FE7F2D] text-white' : 'border-black/10 bg-black/5 text-gray-500'
+          active ? 'border-black bg-[#D9BEF4] text-white' : 'border-black/10 bg-black/5 text-gray-500'
         }`}
       >
         {sender[0]}
@@ -59,7 +59,7 @@ function MiniInboxRow({ sender, subject, active, muted }: { sender: string; subj
         <p className="truncate text-[11px] text-gray-400">{subject}</p>
       </div>
       {active && (
-        <span className="shrink-0 border-2 border-black bg-[#FE7F2D] px-1.5 py-0.5 text-[10px] font-black uppercase text-white">
+        <span className="shrink-0 border-2 border-black bg-[#D9BEF4] px-1.5 py-0.5 text-[10px] font-black uppercase text-white">
           Priority
         </span>
       )}
@@ -80,7 +80,7 @@ function MockupChrome({
     <div className="relative border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
       <div className="flex items-center justify-between border-b-2 border-black bg-black/[0.02] px-5 py-3.5">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white">
+          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#D9BEF4] text-white">
             <Icon className="h-3.5 w-3.5" />
           </span>
           <span className="text-[13px] font-black uppercase tracking-tight text-black">{label}</span>
@@ -98,8 +98,8 @@ function MockupChrome({
 function CheckItem({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2.5 text-sm font-medium text-gray-600">
-      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D]/10">
-        <svg className="h-2.5 w-2.5 text-[#FE7F2D]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border-2 border-black bg-[#D9BEF4]/10">
+        <svg className="h-2.5 w-2.5 text-[#D9BEF4]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 8l3.5 3.5L13 4" />
         </svg>
       </span>
@@ -169,10 +169,10 @@ const items = [
           <p className="text-[11px] font-bold text-gray-400">6 events</p>
         </div>
         <div className="space-y-2 p-4">
-          <div className="border-2 border-[#FE7F2D] bg-[#FE7F2D]/8 p-3">
+          <div className="border-2 border-[#D9BEF4] bg-[#D9BEF4]/8 p-3">
             <div className="flex items-center justify-between">
               <p className="text-[13px] font-bold text-black">Series A call</p>
-              <span className="text-[10px] font-black uppercase text-[#FE7F2D]">Protected</span>
+              <span className="text-[10px] font-black uppercase text-[#D9BEF4]">Protected</span>
             </div>
             <p className="mt-0.5 text-[11px] text-gray-500">10:00, prep packet ready</p>
           </div>
@@ -226,9 +226,9 @@ const items = [
             <p className="text-[12px] font-bold text-gray-600">Revenue</p>
             <p className="text-[13px] font-black text-emerald-600">+8.4% vs last week</p>
           </div>
-          <div className="flex items-center justify-between border-2 border-[#FE7F2D] bg-[#FE7F2D]/8 px-3 py-2.5">
+          <div className="flex items-center justify-between border-2 border-[#D9BEF4] bg-[#D9BEF4]/8 px-3 py-2.5">
             <p className="text-[12px] font-bold text-black">Renewal risk</p>
-            <p className="text-[13px] font-black text-[#FE7F2D]">1 account, past due</p>
+            <p className="text-[13px] font-black text-[#D9BEF4]">1 account, past due</p>
           </div>
           <div className="flex items-center justify-between border-2 border-black/10 bg-black/[0.02] px-3 py-2.5">
             <p className="text-[12px] font-bold text-gray-600">Hiring loops</p>
@@ -236,7 +236,7 @@ const items = [
           </div>
         </div>
         <div className="flex items-center justify-between border-t-2 border-black bg-black/[0.02] px-4 py-3">
-          <p className="text-[11px] font-bold text-[#FE7F2D]">3 approvals waiting in Telegram</p>
+          <p className="text-[11px] font-bold text-[#D9BEF4]">3 approvals waiting in Telegram</p>
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
         </div>
       </MockupChrome>
@@ -317,7 +317,7 @@ const items = [
       <MockupChrome Icon={TelegramIcon} label="Telegram">
         <div className="p-4">
           <div className="flex items-start gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center border-2 border-black bg-[#FE7F2D] text-[11px] font-black text-white">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center border-2 border-black bg-[#D9BEF4] text-[11px] font-black text-white">
               R
             </span>
             <div className="min-w-0 flex-1 border-2 border-black/10 bg-black/[0.02] p-3">
@@ -332,7 +332,7 @@ const items = [
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button className="border-2 border-black bg-[#FE7F2D] px-3 py-1.5 text-[11px] font-black uppercase tracking-tight text-white">
+            <button className="border-2 border-black bg-[#D9BEF4] px-3 py-1.5 text-[11px] font-black uppercase tracking-tight text-white">
               Approve
             </button>
             <button className="border-2 border-black bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-tight text-black">
@@ -360,7 +360,7 @@ export function FeatureBento() {
       <section className="bg-[#fcfcfc] pt-20 md:pt-28 font-neue-haas">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal>
-            <p className="mb-3 text-[11px] font-black uppercase tracking-[0.25em] text-[#FE7F2D]">What you get</p>
+            <p className="mb-3 text-[11px] font-black uppercase tracking-[0.25em] text-[#D9BEF4]">What you get</p>
             <h2 className="max-w-2xl text-3xl font-black uppercase tracking-tight text-black md:text-4xl">
               One operator, watching everything you&apos;d rather not.
             </h2>
@@ -381,11 +381,11 @@ export function FeatureBento() {
               <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-12 md:gap-14">
                 <Reveal className={`md:col-span-5 ${reversed ? 'md:order-2' : 'md:order-1'}`}>
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-white text-[#FE7F2D]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-white text-[#D9BEF4]">
                       <item.Icon className="h-5 w-5" />
                     </span>
-                    <p className="border-2 border-black bg-[#FE7F2D]/10 px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-wide text-black">
-                      <span className="text-[#FE7F2D]">
+                    <p className="border-2 border-black bg-[#D9BEF4]/10 px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-wide text-black">
+                      <span className="text-[#D9BEF4]">
                         {item.stat.value}
                         {item.stat.unit ? ` ${item.stat.unit}` : ''}
                       </span>{' '}

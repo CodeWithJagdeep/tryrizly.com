@@ -3,7 +3,7 @@ import { plans } from "../PricingCards";
 
 function CheckIcon() {
   return (
-    <svg className="h-4 w-4 shrink-0 text-[#ff4f00]" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+    <svg className="h-4 w-4 shrink-0 text-[#D9BEF4]" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 6 8.5 13.5 4 9" />
     </svg>
   );
@@ -16,23 +16,23 @@ export function PricingSection() {
         <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
           Pricing
         </span>
-        <h2 className="max-w-lg text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+        <h2 className="max-w-lg text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
           One price, no surprise overage.
         </h2>
         <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
           Every paid plan starts with a 10-day free trial of the full product, no credit card required.
         </p>
 
-        <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {plans.map((plan) => (
             <div
               key={plan.id}
               className={`flex flex-col rounded-2xl p-8 ${
-                plan.highlighted ? "bg-[#20151c] text-white" : "bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]"
+                plan.highlighted ? "bg-[#233D4D] text-white" : "bg-white shadow-[0_20px_60px_-48px_rgba(32,21,28,0.4)]"
               }`}
             >
               {plan.highlighted && (
-                <span className="mb-4 inline-flex w-fit items-center rounded-full bg-[#ff4f00] px-3 py-1 text-[11px] font-normal uppercase tracking-[0.16em] text-white">
+                <span className="mb-4 inline-flex w-fit items-center rounded-full bg-[#D9BEF4] px-3 py-1 text-[11px] font-normal uppercase tracking-[0.16em] text-white">
                   Most popular
                 </span>
               )}
@@ -49,7 +49,7 @@ export function PricingSection() {
                   </span>
                 )}
               </div>
-              {plan.introNote && <p className="mt-1 text-xs text-[#ff4f00]">{plan.introNote}</p>}
+              {plan.introNote && <p className="mt-1 text-xs text-[#D9BEF4]">{plan.introNote}</p>}
               <p className={`mt-4 min-h-[48px] text-sm leading-6 ${plan.highlighted ? "text-white/60" : "text-gray-500"}`}>
                 {plan.description}
               </p>
@@ -57,7 +57,7 @@ export function PricingSection() {
               <Link
                 href={plan.href}
                 className={`mt-6 inline-flex h-12 items-center justify-center rounded-full px-5 text-sm font-normal transition ${
-                  plan.highlighted ? "bg-[#ff4f00] text-white hover:bg-[#e94700]" : "bg-[#20151c] text-white hover:bg-black"
+                  plan.highlighted ? "bg-[#D9BEF4] text-white hover:bg-[#D9BEF4]" : "bg-[#233D4D] text-white hover:bg-black"
                 }`}
               >
                 {plan.cta}
@@ -81,7 +81,7 @@ export function PricingSection() {
 
         <p className="mt-8 text-center text-sm text-gray-500">
           Prices in USD, billed monthly.{" "}
-          <Link href="/pricing" className="text-[#20151c] underline underline-offset-4">
+          <Link href="/pricing" className="text-[#233D4D] underline underline-offset-4">
             See full pricing details
           </Link>
         </p>

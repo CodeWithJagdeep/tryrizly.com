@@ -79,14 +79,14 @@ export function WorkflowAreaPreview() {
                 <Icon className="h-5 w-5" />
               </span>
               <span className="text-xs font-normal uppercase tracking-[0.16em] text-gray-500">{area.label}</span>
-              <h3 className="mt-4 max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] md:text-4xl">
+              <h3 className="mt-4 max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] md:text-4xl">
                 {area.title}
               </h3>
               <p className="mt-5 max-w-xl text-base leading-7 text-gray-600 md:text-lg">{area.description}</p>
               <p className="mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">{area.detail}</p>
               <Link
                 href="/signup"
-                className="mt-8 inline-flex h-12 w-fit items-center justify-center rounded-full bg-[#20151c] px-6 text-base font-normal text-white transition hover:bg-black"
+                className="mt-8 inline-flex h-12 w-fit items-center justify-center rounded-full bg-[#233D4D] px-6 text-base font-normal text-white transition hover:bg-black"
               >
                 {area.cta}
               </Link>

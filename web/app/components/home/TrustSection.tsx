@@ -63,7 +63,7 @@ export function TrustSection({ hideIntro = false }: { hideIntro?: boolean }) {
             <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
               Trust
             </span>
-            <h2 className="max-w-lg text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+            <h2 className="max-w-lg text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
               Control stays with you, end to end.
             </h2>
             <p className="mt-6 max-w-md text-sm leading-6 text-gray-600 md:text-base">
@@ -76,16 +76,16 @@ export function TrustSection({ hideIntro = false }: { hideIntro?: boolean }) {
           {items.map((item) => (
             <div key={item.title} className="grid grid-cols-1 items-start gap-6 py-8 first:pt-0 md:grid-cols-12 md:gap-8">
               <div className="flex items-center gap-4 md:col-span-3">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f7f7f6] text-[#20151c]">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f7f7f6] text-[#233D4D]">
                   <item.Icon />
                 </span>
                 <div>
-                  <p className="font-mono text-lg font-normal text-[#20151c]">{item.stat}</p>
+                  <p className="font-mono text-lg font-normal text-[#233D4D]">{item.stat}</p>
                   <p className="text-xs text-gray-500">{item.label}</p>
                 </div>
               </div>
               <div className="md:col-span-9">
-                <h3 className="text-lg font-normal text-[#20151c]">{item.title}</h3>
+                <h3 className="text-lg font-normal text-[#233D4D]">{item.title}</h3>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{item.detail}</p>
               </div>
             </div>
@@ -94,14 +94,14 @@ export function TrustSection({ hideIntro = false }: { hideIntro?: boolean }) {
 
         <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-black/[0.06] pt-8">
           {hideIntro ? null : (
-            <Link href="/trust" className="text-sm text-gray-600 transition hover:text-[#20151c]">
+            <Link href="/trust" className="text-sm text-gray-600 transition hover:text-[#233D4D]">
               Visit the trust center &rarr;
             </Link>
           )}
-          <Link href="/security-policy" className="text-sm text-gray-600 transition hover:text-[#20151c]">
+          <Link href="/security-policy" className="text-sm text-gray-600 transition hover:text-[#233D4D]">
             Read the security policy &rarr;
           </Link>
-          <Link href="/privacy" className="text-sm text-gray-600 transition hover:text-[#20151c]">
+          <Link href="/privacy" className="text-sm text-gray-600 transition hover:text-[#233D4D]">
             Privacy policy &rarr;
           </Link>
         </div>

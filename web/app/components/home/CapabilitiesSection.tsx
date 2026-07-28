@@ -46,7 +46,7 @@ export function CapabilitiesSection() {
         <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
           Capabilities
         </span>
-        <h2 className="max-w-2xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+        <h2 className="max-w-2xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
           Everything Riz does, by connection.
         </h2>
         <p className="mt-6 max-w-xl text-sm leading-6 text-gray-600 md:text-base">
@@ -57,15 +57,15 @@ export function CapabilitiesSection() {
           {groups.map((group) => (
             <div key={group.title} className="h-full rounded-2xl bg-[#f7f7f6] p-8">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#20151c]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#233D4D]">
                   <group.Icon className="h-5 w-5" />
                 </span>
-                <h3 className="text-lg font-normal text-[#20151c]">{group.title}</h3>
+                <h3 className="text-lg font-normal text-[#233D4D]">{group.title}</h3>
               </div>
               <ul className="mt-5 flex flex-col gap-3.5 text-sm leading-relaxed text-gray-600">
                 {group.items.map((item) => (
                   <li key={item} className="flex gap-3">
-                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff4f00]" />
+                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#D9BEF4]" />
                     {item}
                   </li>
                 ))}

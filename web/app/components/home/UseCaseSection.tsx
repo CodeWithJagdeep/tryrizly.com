@@ -55,7 +55,7 @@ export function UseCaseSection() {
     <section className="border-t border-black/10 bg-white px-6 py-20 md:px-10 lg:px-14">
       <div className="mx-auto max-w-[88rem]">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.6fr_0.4fr] lg:items-end">
-          <h2 className="max-w-3xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+          <h2 className="max-w-3xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
             Built for how you actually work.
           </h2>
           <p className="max-w-md text-sm leading-6 text-gray-600 md:text-base">
@@ -73,17 +73,17 @@ export function UseCaseSection() {
                 }}
                 data-index={index}
                 className="flex min-h-[62vh] flex-col justify-center border-l-2 pl-8 transition-colors duration-500 lg:min-h-[70vh]"
-                style={{ borderColor: index === active ? "#20151c" : "rgba(0,0,0,0.08)" }}
+                style={{ borderColor: index === active ? "#233D4D" : "rgba(0,0,0,0.08)" }}
               >
                 <span
                   className="mb-4 font-mono text-xs uppercase tracking-[0.2em] transition-colors duration-500"
-                  style={{ color: index === active ? "#ff4f00" : "rgba(0,0,0,0.3)" }}
+                  style={{ color: index === active ? "#D9BEF4" : "rgba(0,0,0,0.3)" }}
                 >
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <h3
                   className="max-w-md text-2xl font-normal leading-snug tracking-tight transition-colors duration-500 md:text-3xl"
-                  style={{ color: index === active ? "#20151c" : "rgba(32,21,28,0.28)" }}
+                  style={{ color: index === active ? "#233D4D" : "rgba(32,21,28,0.28)" }}
                 >
                   {useCase.tagline}
                 </h3>
@@ -113,7 +113,7 @@ export function UseCaseSection() {
                 <Link
                   href={useCase.href}
                   className="mt-6 inline-flex w-fit items-center gap-1.5 text-sm font-normal transition-colors duration-500"
-                  style={{ color: index === active ? "#20151c" : "rgba(32,21,28,0.28)" }}
+                  style={{ color: index === active ? "#233D4D" : "rgba(32,21,28,0.28)" }}
                 >
                   {useCase.label} case study
                   <span aria-hidden="true">&rarr;</span>

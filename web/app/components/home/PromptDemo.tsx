@@ -125,7 +125,7 @@ export function AskRizDemo() {
       <div className="border-2 border-black bg-white shadow-[8px_8px_0_rgba(15,23,42,0.12)]">
         {/* Header, exactly like the dashboard input card */}
         <div className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
-          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#FE7F2D]/10 text-[#FE7F2D]">
+          <span className="flex h-6 w-6 items-center justify-center border-2 border-black bg-[#D9BEF4]/10 text-[#D9BEF4]">
             <SparkIcon className="h-3.5 w-3.5" />
           </span>
           <span className="text-sm font-bold text-slate-900">Ask Riz</span>
@@ -160,7 +160,7 @@ export function AskRizDemo() {
                       {msg.resolved ? (
                         <p
                           className={`mt-2 text-xs font-semibold ${
-                            msg.resolved === "approved" ? "text-[#FE7F2D]" : "text-slate-400"
+                            msg.resolved === "approved" ? "text-[#D9BEF4]" : "text-slate-400"
                           }`}
                         >
                           {msg.resolved === "approved" ? "Approved" : "Rejected"}
@@ -170,7 +170,7 @@ export function AskRizDemo() {
                           <button
                             type="button"
                             onClick={() => decide(msg.id, "approved")}
-                            className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105"
+                            className="rounded-lg bg-[#D9BEF4] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-105"
                           >
                             Approve
                           </button>
@@ -230,7 +230,7 @@ export function AskRizDemo() {
               type="submit"
               disabled={!input.trim() || thinking}
               aria-label="Send"
-              className="flex h-8 w-8 items-center justify-center border-2 border-black bg-[#FE7F2D] text-white transition hover:brightness-105 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-400"
+              className="flex h-8 w-8 items-center justify-center border-2 border-black bg-[#D9BEF4] text-white transition hover:brightness-105 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-400"
             >
               <ArrowUpIcon className="h-4 w-4" />
             </button>

@@ -65,11 +65,11 @@ export function AtAGlanceSection() {
       <div className="mx-auto grid max-w-[88rem] grid-cols-1 gap-8 divide-y divide-black/[0.06] sm:grid-cols-2 sm:gap-0 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
         {points.map((point) => (
           <div key={point.title} className="flex flex-col gap-4 px-0 pt-8 first:pt-0 sm:px-8 sm:pt-0 sm:first:pl-0">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#20151c] shadow-[0_10px_30px_-20px_rgba(32,21,28,0.4)]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#233D4D] shadow-[0_10px_30px_-20px_rgba(32,21,28,0.4)]">
               <point.Icon />
             </span>
             <div>
-              <h3 className="text-base font-normal text-[#20151c]">{point.title}</h3>
+              <h3 className="text-base font-normal text-[#233D4D]">{point.title}</h3>
               <p className="mt-2 text-sm leading-6 text-gray-500">{point.detail}</p>
             </div>
           </div>

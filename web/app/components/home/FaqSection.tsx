@@ -35,7 +35,7 @@ export function FaqSection() {
         <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
           FAQ
         </span>
-        <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+        <h2 className="text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
           Questions worth answering up front.
         </h2>
 
@@ -48,10 +48,10 @@ export function FaqSection() {
                   onClick={() => setOpenIndex(isOpen ? null : index)}
                   className="flex w-full items-center justify-between px-6 py-5 text-left focus:outline-none"
                 >
-                  <span className="text-base font-normal text-[#20151c] md:text-lg">{item.q}</span>
+                  <span className="text-base font-normal text-[#233D4D] md:text-lg">{item.q}</span>
                   <span
                     className={`ml-4 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base transition-transform duration-300 ${
-                      isOpen ? "rotate-45 bg-[#20151c] text-white" : "bg-white text-[#20151c]"
+                      isOpen ? "rotate-45 bg-[#233D4D] text-white" : "bg-white text-[#233D4D]"
                     }`}
                   >
                     +
@@ -68,10 +68,10 @@ export function FaqSection() {
         <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-black/[0.06] pt-8">
           <p className="text-sm text-gray-500">Still curious? There&apos;s a longer list.</p>
           <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-            <Link href="/faq" className="text-sm text-gray-600 transition hover:text-[#20151c]">
+            <Link href="/faq" className="text-sm text-gray-600 transition hover:text-[#233D4D]">
               Read all FAQs &rarr;
             </Link>
-            <Link href="/contact" className="text-sm text-gray-600 transition hover:text-[#20151c]">
+            <Link href="/contact" className="text-sm text-gray-600 transition hover:text-[#233D4D]">
               Ask us directly &rarr;
             </Link>
           </div>

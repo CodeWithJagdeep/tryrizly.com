@@ -26,18 +26,18 @@ export function HowItWorksSection() {
         <span className="mb-5 block text-[11px] font-normal uppercase tracking-[0.18em] text-gray-500">
           How it works
         </span>
-        <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#20151c] [text-wrap:balance] md:text-5xl">
+        <h2 className="max-w-xl text-3xl font-normal leading-tight tracking-tight text-[#233D4D] [text-wrap:balance] md:text-5xl">
           From connected to handled, in three moves.
         </h2>
 
         <div className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8">
           {stages.map((stage) => (
             <div key={stage.step} className="flex flex-col gap-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#20151c] font-mono text-sm text-white">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#233D4D] font-mono text-sm text-white">
                 {stage.step}
               </span>
               <div>
-                <h3 className="text-lg font-normal text-[#20151c]">{stage.title}</h3>
+                <h3 className="text-lg font-normal text-[#233D4D]">{stage.title}</h3>
                 <p className="mt-2 text-sm leading-6 text-gray-600">{stage.detail}</p>
               </div>
             </div>

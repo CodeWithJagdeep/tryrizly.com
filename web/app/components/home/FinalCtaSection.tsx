@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function FinalCtaSection() {
   return (
-    <section className="relative overflow-hidden bg-[#20151c] px-6 py-24 md:px-10 lg:px-14">
+    <section className="relative overflow-hidden bg-[#233D4D] px-6 py-24 md:px-10 lg:px-14">
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.06]"
         style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
@@ -24,13 +24,13 @@ export function FinalCtaSection() {
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           <Link
             href="/signup"
-            className="inline-flex h-12 items-center justify-center rounded-full bg-[#ff4f00] px-8 text-base font-normal text-white transition hover:bg-[#e94700]"
+            className="inline-flex h-12 items-center justify-center rounded-full bg-[#D9BEF4] px-8 text-base font-normal text-white transition hover:bg-[#D9BEF4]"
           >
             Start free trial
           </Link>
           <Link
             href="/pricing"
-            className="inline-flex h-12 items-center justify-center rounded-full border border-white/20 px-8 text-base font-normal text-white transition hover:border-white hover:bg-white hover:text-[#20151c]"
+            className="inline-flex h-12 items-center justify-center rounded-full border border-white/20 px-8 text-base font-normal text-white transition hover:border-white hover:bg-white hover:text-[#233D4D]"
           >
             See pricing
           </Link>

@@ -415,7 +415,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
                   title="Change profile picture"
                   disabled={avatarUploading}
                   onClick={() => avatarInputRef.current?.click()}
-                  className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#FE7F2D] text-[17px] font-semibold text-white disabled:opacity-60"
+                  className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#D9BEF4] text-[17px] font-semibold text-white disabled:opacity-60"
                 >
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />

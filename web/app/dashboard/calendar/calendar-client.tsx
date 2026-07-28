@@ -606,7 +606,7 @@ export function CalendarClient() {
           <p className="text-sm text-slate-400">Google Calendar isn&apos;t connected yet.</p>
           <Link
             href="/dashboard/connectors"
-            className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-medium text-white transition hover:brightness-105"
+            className="rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-medium text-white transition hover:brightness-105"
           >
             Connect Google
           </Link>
@@ -614,9 +614,9 @@ export function CalendarClient() {
       ) : (
         <div className="relative flex flex-1 overflow-hidden">
           {loading && (
-            <div className="absolute left-0 right-0 top-0 z-20 border-b border-[#FE7F2D]/35 bg-[#FE7F2D]/12 px-6 py-3 text-sm font-semibold text-[#9A3D0E] backdrop-blur">
-              <span className="inline-flex items-center gap-2 rounded-md border border-[#FE7F2D]/30 bg-white/80 px-3 py-1.5 shadow-sm">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[#FE7F2D]" />
+            <div className="absolute left-0 right-0 top-0 z-20 border-b border-[#D9BEF4]/35 bg-[#D9BEF4]/12 px-6 py-3 text-sm font-semibold text-[#9A3D0E] backdrop-blur">
+              <span className="inline-flex items-center gap-2 rounded-md border border-[#D9BEF4]/30 bg-white/80 px-3 py-1.5 shadow-sm">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#D9BEF4]" />
                 Syncing Google Calendar, reminders, and follow-ups...
               </span>
             </div>
@@ -685,7 +685,7 @@ export function CalendarClient() {
                       <span
                         className={`mb-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-xs font-semibold ${
                           isToday
-                            ? "bg-[#FE7F2D] text-white"
+                            ? "bg-[#D9BEF4] text-white"
                             : "text-slate-500 group-hover:text-slate-900"
                         }`}
                       >
@@ -1388,7 +1388,7 @@ function DialogFooter({
         type="button"
         onClick={onSubmit}
         disabled={submitting}
-        className="rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+        className="rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
       >
         {submitting ? "Saving…" : label}
       </button>

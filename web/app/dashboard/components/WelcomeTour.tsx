@@ -89,7 +89,7 @@ export function WelcomeTour() {
     >
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D]/10 text-[#FE7F2D]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D9BEF4]/10 text-[#D9BEF4]">
             <SparkleIcon />
           </span>
           <button
@@ -113,7 +113,7 @@ export function WelcomeTour() {
             {STEPS.map((_, i) => (
               <span
                 key={i}
-                className={`h-1.5 w-1.5 rounded-full transition ${i === step ? "bg-[#FE7F2D]" : "bg-slate-200"}`}
+                className={`h-1.5 w-1.5 rounded-full transition ${i === step ? "bg-[#D9BEF4]" : "bg-slate-200"}`}
               />
             ))}
           </div>
@@ -130,7 +130,7 @@ export function WelcomeTour() {
             <button
               type="button"
               onClick={() => (isLast ? void finish() : setStep((s) => s + 1))}
-              className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#FE7F2D]"
+              className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#D9BEF4]"
             >
               {isLast ? "Get started" : "Next"}
             </button>

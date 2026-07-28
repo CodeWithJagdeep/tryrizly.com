@@ -83,7 +83,10 @@ export function UpgradeClient() {
   const trialDaysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - renderedAt) / (24 * 60 * 60 * 1000)))
     : 0;
-  const trialExpired = status?.access?.state === "free" && !trialActive;
+  // Only true if a trial record actually exists and has lapsed — a user who
+  // never trialed and has always been on the Free plan isn't "expired."
+  const trialExpired = status?.access?.state === "free" && !trialActive && Boolean(trialEndsAt);
+  const onFreePlan = status?.access?.state === "free" && !trialActive && !trialEndsAt;
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
@@ -97,7 +100,9 @@ export function UpgradeClient() {
               ? `You have ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left on your free trial. Subscribe now to keep access.`
               : trialExpired
                 ? "Subscribe to continue using rizly and unlock full access."
-                : "All plans include a 10-day free trial. Cancel any time."}
+                : onFreePlan
+                  ? "You're on the Free plan (5 automations, limited AI credits). Upgrade for more of both."
+                  : "All plans include a 10-day free trial. Cancel any time."}
           </p>
         </div>
 
@@ -134,7 +139,7 @@ export function UpgradeClient() {
                   }`}
                 >
                   {isPopular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#FE7F2D] px-3 py-0.5 text-xs font-bold text-white">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#D9BEF4] px-3 py-0.5 text-xs font-bold text-white">
                       Most popular
                     </span>
                   )}
@@ -155,7 +160,7 @@ export function UpgradeClient() {
                           <span className="mb-1 text-sm text-slate-400">/ {plan.interval ?? "month"}</span>
                           <span className="mb-1 text-sm text-slate-400 line-through">{price}</span>
                         </div>
-                        <p className="mt-1 text-xs font-semibold text-[#FE7F2D]">
+                        <p className="mt-1 text-xs font-semibold text-[#D9BEF4]">
                           First {plan.intro.months} month{plan.intro.months === 1 ? "" : "s"}, then {price}/{plan.interval ?? "month"}
                         </p>
                       </>
@@ -190,7 +195,7 @@ export function UpgradeClient() {
                       onClick={() => void subscribe(plan.id)}
                       className={`rounded-xl py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                         isPopular
-                          ? "bg-[#FE7F2D] text-white hover:brightness-105"
+                          ? "bg-[#D9BEF4] text-white hover:brightness-105"
                           : "border border-slate-200 text-slate-900 hover:bg-slate-100"
                       }`}
                     >

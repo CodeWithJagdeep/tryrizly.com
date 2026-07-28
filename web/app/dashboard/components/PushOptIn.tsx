@@ -84,7 +84,7 @@ export function PushOptIn() {
           type="button"
           onClick={() => void enable()}
           disabled={state === "enabling"}
-          className="shrink-0 rounded-lg bg-[#FE7F2D] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
         >
           {state === "enabling" ? "Enabling…" : "Enable notifications"}
         </button>

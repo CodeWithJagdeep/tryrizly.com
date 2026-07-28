@@ -33,7 +33,7 @@ export function MarkdownMessage({ content }: { content: string }) {
           ol: ({ children }) => <ol className="my-1 list-decimal pl-5">{children}</ol>,
           li: ({ children }) => <li className="my-0.5">{children}</li>,
           a: ({ children, href }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="text-[#FE7F2D] underline">
+            <a href={href} target="_blank" rel="noreferrer" className="text-[#D9BEF4] underline">
               {children}
             </a>
           ),

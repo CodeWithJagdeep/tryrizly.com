@@ -91,7 +91,7 @@ export function ApprovalsClient() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {!loading && approvals.length > 0 && (
-              <span className="hidden rounded-full bg-[#FE7F2D]/10 px-3 py-1 text-sm font-medium text-[#FE7F2D] sm:inline-block">
+              <span className="hidden rounded-full bg-[#D9BEF4]/10 px-3 py-1 text-sm font-medium text-[#D9BEF4] sm:inline-block">
                 {approvals.length} pending
               </span>
             )}
@@ -188,7 +188,7 @@ function ApprovalRow({
           Reject
         </button>
         <button
-          className="flex h-9 items-center gap-1.5 rounded-lg bg-[#FE7F2D] px-3.5 text-sm font-medium text-white transition hover:brightness-105 disabled:opacity-50"
+          className="flex h-9 items-center gap-1.5 rounded-lg bg-[#D9BEF4] px-3.5 text-sm font-medium text-white transition hover:brightness-105 disabled:opacity-50"
           disabled={deciding}
           onClick={onApprove}
           type="button"

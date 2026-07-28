@@ -1,30 +1,48 @@
 "use client";
 
-import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { CreditsBadge } from "../components/CreditsBadge";
+import { ConnectorLogo } from "../../components/ConnectorLogo";
 import {
   AirtableIcon,
+  BambooHrIcon,
+  BetterStackIcon,
+  BoxIcon,
   CalComIcon,
   CalendarIcon,
+  CalendlyIcon,
+  DeelIcon,
   DiscordIcon,
+  DropboxIcon,
+  FigmaIcon,
   GitHubIcon,
   GmailIcon,
   GoogleDriveIcon,
+  GumroadIcon,
   JiraIcon,
+  LemonSqueezyIcon,
   MongoDbIcon,
   MpesaIcon,
   NotionIcon,
   PagerDutyIcon,
   PayPalIcon,
   PostgresIcon,
+  QuickBooksIcon,
   RazorpayIcon,
+  ShopifyIcon,
   SlackIcon,
+  StatuspageIcon,
   StripeIcon,
   TrelloIcon,
   TwilioIcon,
+  TypeformIcon,
+  UptimeRobotIcon,
+  WiseIcon,
+  XeroIcon,
 } from "../../components/ConnectorIcons";
 
-type ConnectorSummary = {
+export type ConnectorSummary = {
   id: string;
   provider: string;
   authType: string;
@@ -35,13 +53,13 @@ type ConnectorSummary = {
   updatedAt: string;
 };
 
-const MULTI_ACCOUNT_PROVIDERS = ["postgres", "mongodb", "razorpay", "paypal", "mpesa", "calcom"] as const;
+export const MULTI_ACCOUNT_PROVIDERS = ["postgres", "mongodb", "razorpay", "paypal", "mpesa", "calcom"] as const;
 type MultiAccountProvider = (typeof MULTI_ACCOUNT_PROVIDERS)[number];
-function isMultiAccount(provider: string): provider is MultiAccountProvider {
+export function isMultiAccount(provider: string): provider is MultiAccountProvider {
   return MULTI_ACCOUNT_PROVIDERS.includes(provider as MultiAccountProvider);
 }
 
-type ConnectorField = {
+export type ConnectorField = {
   name: string;
   label: string;
   type?: string;
@@ -49,10 +67,10 @@ type ConnectorField = {
   required?: boolean;
 };
 
-type ConnectorCatalogItem = {
+export type ConnectorCatalogItem = {
   id: string;
   /** Backend connector key used for status lookup + connect/disconnect. */
-  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa" | "discord" | "google_workspace" | "jira" | "pagerduty" | "trello" | "airtable" | "twilio";
+  provider: "gmail" | "calendar" | "calcom" | "razorpay" | "stripe" | "postgres" | "mongodb" | "slack" | "notion" | "paypal" | "github" | "mpesa" | "discord" | "google_workspace" | "jira" | "pagerduty" | "trello" | "airtable" | "twilio" | "shopify" | "calendly" | "typeform" | "gumroad" | "lemonsqueezy" | "dropbox" | "figma" | "uptimerobot" | "quickbooks" | "xero" | "wise" | "bamboohr" | "deel" | "box" | "statuspage" | "betterstack";
   title: string;
   description: string;
   category: "Google" | "Scheduling" | "Payments" | "Databases" | "Team" | "APIs";
@@ -61,7 +79,7 @@ type ConnectorCatalogItem = {
   fields?: ConnectorField[];
 };
 
-const connectorCatalog: ConnectorCatalogItem[] = [
+export const connectorCatalog: ConnectorCatalogItem[] = [
   {
     id: "gmail",
     provider: "gmail",
@@ -177,12 +195,14 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     id: "jira",
     provider: "jira",
     title: "Jira",
-    description: "Create issues in a project from an automation.",
+    description: "Search issues and create issues in a project from an automation.",
     category: "Team",
-    authType: "manual",
+    authType: "oauth",
     icon: JiraIcon,
+    // Manual fallback: an API token still works for users who'd rather not
+    // grant OAuth access, or whose site isn't reachable via Atlassian OAuth.
     fields: [
-      { name: "siteUrl", label: "Site URL", placeholder: "https://yourteam.atlassian.net" },
+      { name: "siteUrl", label: "Site URL (if OAuth doesn't work for your account)", placeholder: "https://yourteam.atlassian.net" },
       { name: "email", label: "Account Email", placeholder: "you@company.com" },
       { name: "apiToken", label: "API Token", type: "password", placeholder: "Create one at id.atlassian.com/manage-profile/security/api-tokens" },
     ],
@@ -206,8 +226,10 @@ const connectorCatalog: ConnectorCatalogItem[] = [
     title: "PagerDuty",
     description: "Open incidents on a service from an automation.",
     category: "APIs",
-    authType: "manual",
+    authType: "oauth",
     icon: PagerDutyIcon,
+    // Manual fallback: a scoped REST API key still works for users who'd
+    // rather not grant OAuth access.
     fields: [
       { name: "apiKey", label: "API Key", type: "password", placeholder: "From PagerDuty's API Access Keys settings" },
       { name: "fromEmail", label: "From Email", placeholder: "A valid PagerDuty user's email — required by their API" },
@@ -297,8 +319,8 @@ const connectorCatalog: ConnectorCatalogItem[] = [
   {
     id: "discord",
     provider: "discord",
-    title: "Discord",
-    description: "Read a bot-accessible channel for updates and post approved messages through an optional webhook.",
+    title: "Discord (basic webhook)",
+    description: "Lightweight, single-channel option: read one bot-accessible channel and post approved messages through an optional webhook, with your own bot token. For the full Discord bot — server install, live channel triggers, DM chat — use Dashboard → Discord instead.",
     category: "Team",
     authType: "manual",
     icon: DiscordIcon,
@@ -329,46 +351,212 @@ const connectorCatalog: ConnectorCatalogItem[] = [
       },
     ],
   },
+  {
+    id: "dropbox",
+    provider: "dropbox",
+    title: "Dropbox",
+    description: "Automations that fire when a file changes in your Dropbox.",
+    category: "APIs",
+    authType: "oauth",
+    icon: DropboxIcon,
+  },
+  {
+    id: "figma",
+    provider: "figma",
+    title: "Figma",
+    description: "Automations that fire on a new file comment. Webhooks require a Figma Organization/Enterprise plan.",
+    category: "Team",
+    authType: "oauth",
+    icon: FigmaIcon,
+  },
+  {
+    id: "calendly",
+    provider: "calendly",
+    title: "Calendly",
+    description: "Automations that fire when a booking is created or cancelled.",
+    category: "Scheduling",
+    // No real Calendly OAuth exchange is built on the backend -- this is a
+    // Personal Access Token connector, full stop, not an OAuth-with-fallback.
+    authType: "manual",
+    icon: CalendlyIcon,
+    fields: [
+      { name: "apiToken", label: "Personal Access Token", type: "password", placeholder: "From calendly.com/integrations/api_webhooks" },
+    ],
+  },
+  {
+    id: "typeform",
+    provider: "typeform",
+    title: "Typeform",
+    description: "Automations that fire on a new form submission.",
+    category: "APIs",
+    authType: "manual",
+    icon: TypeformIcon,
+    fields: [
+      { name: "apiToken", label: "Personal Access Token", type: "password", placeholder: "From your Typeform account settings" },
+      { name: "formId", label: "Form ID", placeholder: "The form to watch — required to register the webhook" },
+    ],
+  },
+  {
+    id: "gumroad",
+    provider: "gumroad",
+    title: "Gumroad",
+    description: "Automations that fire on a new sale. Add the ping URL manually — see setup note after connecting.",
+    category: "Payments",
+    authType: "manual",
+    icon: GumroadIcon,
+    fields: [
+      { name: "accessToken", label: "Access Token", type: "password", placeholder: "From Gumroad Settings -> Advanced" },
+    ],
+  },
+  {
+    id: "lemonsqueezy",
+    provider: "lemonsqueezy",
+    title: "Lemon Squeezy",
+    description: "Automations that fire on a new order.",
+    category: "Payments",
+    authType: "manual",
+    icon: LemonSqueezyIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From Settings -> API" },
+      { name: "storeId", label: "Store ID", placeholder: "The store to watch — required to register the webhook" },
+    ],
+  },
+  {
+    id: "uptimerobot",
+    provider: "uptimerobot",
+    title: "UptimeRobot",
+    description: "Automations that fire when a monitor goes up or down. Add a Web-Hook Alert Contact manually — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: UptimeRobotIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From My Settings -> API Settings" },
+    ],
+  },
+  {
+    id: "quickbooks",
+    provider: "quickbooks",
+    title: "QuickBooks",
+    description: "Automations that fire on a new invoice or a paid invoice. Requires a one-time app-level webhook subscription in the Intuit Developer dashboard.",
+    category: "Payments",
+    authType: "oauth",
+    icon: QuickBooksIcon,
+  },
+  {
+    id: "xero",
+    provider: "xero",
+    title: "Xero",
+    description: "Automations that fire when a new invoice is created.",
+    category: "Payments",
+    authType: "oauth",
+    icon: XeroIcon,
+  },
+  {
+    id: "wise",
+    provider: "wise",
+    title: "Wise",
+    description: "Automations that fire when a new transaction credits your balance.",
+    category: "Payments",
+    authType: "manual",
+    icon: WiseIcon,
+    fields: [
+      { name: "apiToken", label: "API Token", type: "password", placeholder: "From Wise Settings -> API tokens" },
+      { name: "profileId", label: "Profile ID", placeholder: "The profile to watch — required to register the webhook" },
+    ],
+  },
+  {
+    id: "bamboohr",
+    provider: "bamboohr",
+    title: "BambooHR",
+    description: "Automations that fire on a new time-off request or a new hire. Polled — BambooHR has no webhook on standard API tiers.",
+    category: "Team",
+    authType: "manual",
+    icon: BambooHrIcon,
+    fields: [
+      { name: "subdomain", label: "Subdomain", placeholder: "From https://<subdomain>.bamboohr.com" },
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From your BambooHR account API keys" },
+    ],
+  },
+  {
+    id: "deel",
+    provider: "deel",
+    title: "Deel",
+    description: "Automations that fire on a new contract or a completed payment.",
+    category: "Team",
+    authType: "oauth",
+    icon: DeelIcon,
+  },
+  {
+    id: "box",
+    provider: "box",
+    title: "Box",
+    description: "Automations that fire when a file is uploaded to a chosen Box folder.",
+    category: "APIs",
+    authType: "oauth",
+    icon: BoxIcon,
+  },
+  {
+    id: "statuspage",
+    provider: "statuspage",
+    title: "Statuspage",
+    description: "Automations that fire on a new incident or an incident status update. Add the generated webhook URL as a subscriber on your page — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: StatuspageIcon,
+    fields: [
+      { name: "pageId", label: "Page ID", placeholder: "From your Statuspage page settings" },
+      { name: "apiKey", label: "API Key (optional, auto-subscribes the webhook)", type: "password", placeholder: "From Statuspage Account Settings -> API Info", required: false },
+    ],
+  },
+  {
+    id: "betterstack",
+    provider: "betterstack",
+    title: "Better Stack",
+    description: "Automations that fire when an incident starts or resolves. Add a webhook integration manually — see setup note after connecting.",
+    category: "APIs",
+    authType: "manual",
+    icon: BetterStackIcon,
+    fields: [
+      { name: "apiKey", label: "API Key", type: "password", placeholder: "From Better Stack Settings -> API tokens" },
+    ],
+  },
 ];
 
-const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
+export const categories = ["All", "Google", "Scheduling", "Payments", "Databases", "Team", "APIs"] as const;
 
-// Temporarily hidden from the connectors page — remove from this set to bring one back.
-// discord/notion unhidden: both are now live automation actions (Send Message /
-// Create Page) and need to be reachable to connect an account.
-const hiddenConnectorProviders = new Set<string>(["slack", "paypal"]);
-const shownCatalog = connectorCatalog.filter((c) => !hiddenConnectorProviders.has(c.provider));
+// The connectors catalog is a deliberate allow-list, not a hide-list: anything
+// not named here stays off the page. Adding a connector to connectorCatalog
+// above is therefore not enough to ship it — that's the point, so half-built
+// integrations can't leak into the UI by accident.
+//
+// Slack and Telegram are intentionally absent while remaining fully live as
+// automation trigger/action nodes and as DM surfaces — they're chat surfaces
+// reached from their own dashboard pages, not connector cards.
+const ENABLED_CONNECTOR_PROVIDERS = new Set<string>([
+  "gmail",
+  "calendar",
+  "google_workspace",
+  "calcom",
+  "razorpay",
+  "github",
+  "trello",
+  "postgres",
+  "mongodb",
+  "notion",
+  "discord",
+  "figma",
+  "calendly",
+]);
 
-const catalogByProvider = new Map(shownCatalog.map((c) => [c.provider as string, c]));
+export const shownCatalog = connectorCatalog.filter((c) => ENABLED_CONNECTOR_PROVIDERS.has(c.provider));
+
+export const catalogByProvider = new Map(shownCatalog.map((c) => [c.provider as string, c]));
 const visibleConnectorProviders = new Set(shownCatalog.map((c) => c.provider as string));
 
 export function ConnectorsClient() {
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("All");
-  const [connectorQuery, setConnectorQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [setupConnector, setSetupConnector] = useState<ConnectorCatalogItem | null>(null);
-  const [setupEditAccount, setSetupEditAccount] = useState<ConnectorSummary | null>(null);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [setupSubmitting, setSetupSubmitting] = useState(false);
-  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
-  const [slackLinked, setSlackLinked] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    fetch("/api/onboarding/status")
-      .then((r) => r.json())
-      .then((d: { onboarding?: { telegramLinked?: boolean; slackLinked?: boolean } }) => {
-        setTelegramLinked(Boolean(d.onboarding?.telegramLinked));
-        setSlackLinked(Boolean(d.onboarding?.slackLinked));
-      })
-      .catch(() => {
-        setTelegramLinked(false);
-        setSlackLinked(false);
-      });
-  }, []);
 
   // For multi-account providers, store arrays. For others, store single.
   const visibleConnectors = useMemo(
@@ -376,33 +564,7 @@ export function ConnectorsClient() {
     [connectors],
   );
 
-  const connectedByProvider = useMemo(
-    () => new Map(visibleConnectors.map((connector) => [connector.provider, connector])),
-    [visibleConnectors],
-  );
-  const connectedByProviderAll = useMemo(() => {
-    const map = new Map<string, ConnectorSummary[]>();
-    for (const c of visibleConnectors) {
-      const existing = map.get(c.provider) ?? [];
-      map.set(c.provider, [...existing, c]);
-    }
-    return map;
-  }, [visibleConnectors]);
-
   const connectedCount = visibleConnectors.length;
-
-  const filteredConnectors = useMemo(() => {
-    const query = connectorQuery.trim().toLowerCase();
-    return shownCatalog.filter((connector) => {
-      const categoryOk = activeCategory === "All" || connector.category === activeCategory;
-      const queryOk =
-        !query ||
-        connector.title.toLowerCase().includes(query) ||
-        connector.description.toLowerCase().includes(query) ||
-        connector.provider.toLowerCase().includes(query);
-      return categoryOk && queryOk;
-    });
-  }, [activeCategory, connectorQuery]);
 
   async function loadConnectors() {
     try {
@@ -423,83 +585,13 @@ export function ConnectorsClient() {
     void loadConnectors();
   }, []);
 
+  // Deep links to "connect this specific provider" now live on the dedicated
+  // catalog page, which owns the search/category state that used to live here.
   useEffect(() => {
     const provider = new URLSearchParams(window.location.search).get("setup");
-    if (!provider) return;
-    const connector = catalogByProvider.get(provider);
-    if (!connector) return;
-    setActiveCategory("All");
-    setConnectorQuery(connector.title);
-    if (connector.authType === "manual") {
-      setSetupConnector(connector);
-      setSetupEditAccount(null);
-    }
+    if (!provider || !catalogByProvider.has(provider)) return;
+    window.location.replace(`/dashboard/connectors/new?setup=${encodeURIComponent(provider)}`);
   }, []);
-
-  async function saveManualConnector(
-    event: FormEvent<HTMLFormElement>,
-    connector: ConnectorCatalogItem,
-    editAccount: ConnectorSummary | null,
-  ) {
-    event.preventDefault();
-
-    if (!connector.fields) return;
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const secret = Object.fromEntries(
-      connector.fields.map((field) => [
-        field.name,
-        String(formData.get(field.name) ?? ""),
-      ]),
-    );
-    const name = isMultiAccount(connector.provider)
-      ? String(formData.get("_name") ?? "").trim() || connector.title
-      : connector.title;
-
-    setSetupError(null);
-    setSetupSubmitting(true);
-
-    try {
-      const response = await fetch("/api/connectors", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          provider: connector.provider,
-          authType: "manual",
-          label: name,
-          accountId: editAccount?.id ?? undefined,
-          secret,
-          metadata: { source: "connectors_page" },
-        }),
-      });
-
-      if (!response.ok) {
-        const error = (await response.json().catch(() => null)) as { message?: string } | null;
-        setSetupError(error?.message || `Could not save ${connector.title}`);
-        return;
-      }
-
-      form.reset();
-      setSetupConnector(null);
-      setSetupEditAccount(null);
-      await loadConnectors();
-    } catch {
-      setSetupError(`Could not reach the connector service. ${connector.title} was not saved.`);
-    } finally {
-      setSetupSubmitting(false);
-    }
-  }
-
-  async function deleteConnector(connector: ConnectorCatalogItem) {
-    setActionError(null);
-    const response = await fetch(`/api/connectors/${connector.provider}`, { method: "DELETE" });
-    if (!response.ok) {
-      setActionError(`Could not unlink ${connector.title}`);
-      return;
-    }
-    await loadConnectors();
-  }
 
   async function deleteConnectorById(accountId: string, label: string) {
     setActionError(null);
@@ -510,20 +602,6 @@ export function ConnectorsClient() {
     }
     await loadConnectors();
   }
-
-  const saveConnectorSettings = useCallback(async (accountId: string, metadata: Record<string, unknown>) => {
-    setActionError(null);
-    const response = await fetch(`/api/connectors/account/${accountId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ metadata }),
-    });
-    if (!response.ok) {
-      setActionError("Could not save connector settings");
-      return;
-    }
-    await loadConnectors();
-  }, []);
 
   return (
     <main className="min-h-screen bg-[#f8f8f7] text-black">
@@ -571,10 +649,9 @@ export function ConnectorsClient() {
         <section className="mt-7">
           <div className="flex items-center justify-between gap-3">
             <p className="text-base font-semibold text-black">Connected accounts</p>
-            <button
-              type="button"
-              onClick={() => setCatalogOpen(true)}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-slate-950 px-4 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+            <Link
+              href="/dashboard/connectors/new"
+              className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-slate-950 px-4 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50"
               title="Connect an account"
               aria-label="Connect an account"
             >
@@ -582,7 +659,7 @@ export function ConnectorsClient() {
                 <path d="M12 5v14" /><path d="M5 12h14" />
               </svg>
               Connect account
-            </button>
+            </Link>
           </div>
 
           {visibleConnectors.length === 0 ? (
@@ -590,13 +667,12 @@ export function ConnectorsClient() {
               <p className="text-sm text-black/70">
                 Nothing connected yet. Browse integrations to add Gmail, Calendar, and more.
               </p>
-              <button
-                type="button"
-                onClick={() => setCatalogOpen(true)}
+              <Link
+                href="/dashboard/connectors/new"
                 className="inline-flex h-10 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98]"
               >
                 Browse integrations
-              </button>
+              </Link>
             </div>
           ) : (
             <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -609,11 +685,18 @@ export function ConnectorsClient() {
                     className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/30 p-3.5"
                   >
                     <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-                      {Icon ? <Icon className="size-5" /> : (
-                        <span className="text-xs font-bold uppercase text-slate-400">
-                          {account.provider.slice(0, 2)}
-                        </span>
-                      )}
+                      <ConnectorLogo
+                        provider={account.provider}
+                        alt={account.label}
+                        className="size-5 object-contain"
+                        fallback={
+                          Icon ? <Icon className="size-5" /> : (
+                            <span className="text-xs font-bold uppercase text-slate-400">
+                              {account.provider.slice(0, 2)}
+                            </span>
+                          )
+                        }
+                      />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-black">{account.label}</p>
@@ -641,44 +724,6 @@ export function ConnectorsClient() {
         </section>
 
       </section>
-
-      {catalogOpen && (
-        <IntegrationsDialog
-          activeCategory={activeCategory}
-          setActiveCategory={setActiveCategory}
-          searchOpen={searchOpen}
-          setSearchOpen={setSearchOpen}
-          connectorQuery={connectorQuery}
-          setConnectorQuery={setConnectorQuery}
-          filteredConnectors={filteredConnectors}
-          connectedByProvider={connectedByProvider}
-          connectedByProviderAll={connectedByProviderAll}
-          telegramLinked={telegramLinked}
-          slackLinked={slackLinked}
-          onClose={() => setCatalogOpen(false)}
-          onSetup={(connector) => { setSetupEditAccount(null); setSetupConnector(connector); }}
-          onAddAccount={(connector) => { setSetupEditAccount(null); setSetupConnector(connector); }}
-          onEditAccount={(connector, account) => { setSetupEditAccount(account); setSetupConnector(connector); }}
-          onUnlink={(connector) => void deleteConnector(connector)}
-          onRemoveAccount={(id, label) => void deleteConnectorById(id, label)}
-          onSaveSettings={saveConnectorSettings}
-        />
-      )}
-
-      {setupConnector ? (
-        <SetupDialog
-          connector={setupConnector}
-          editAccount={setupEditAccount}
-          error={setupError}
-          onClose={() => {
-            setSetupConnector(null);
-            setSetupEditAccount(null);
-            setSetupError(null);
-          }}
-          onSubmit={(e, c) => void saveManualConnector(e, c, setupEditAccount)}
-          submitting={setupSubmitting}
-        />
-      ) : null}
     </main>
   );
 }
@@ -831,7 +876,12 @@ function SettingsPanel({
         <div className="relative flex items-center gap-3 border-b border-slate-200 px-5 pb-5 pt-7 sm:px-6 sm:pb-5 sm:pt-6">
           <span className="absolute left-1/2 top-2.5 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <Icon className="h-5 w-5" />
+            <ConnectorLogo
+              provider={connector.provider}
+              alt={connector.title}
+              className="h-5 w-5 object-contain"
+              fallback={<Icon className="h-5 w-5" />}
+            />
           </span>
           <div className="min-w-0 flex-1">
             <h2 id="settings-panel-title" className="text-base font-semibold text-slate-950">
@@ -851,7 +901,7 @@ function SettingsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
           >
             <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
@@ -952,7 +1002,7 @@ function SettingsPanel({
                     value={notifScope}
                     onChange={(e) => setNotifScope(e.target.value)}
                     disabled={!notifEnabled}
-                    className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#FE7F2D] disabled:opacity-40"
+                    className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#D9BEF4] disabled:opacity-40"
                   >
                     {SCOPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -1003,7 +1053,7 @@ function SettingsPanel({
                     <select
                       value={reminderMinutes}
                       onChange={(e) => setReminderMinutes(e.target.value)}
-                      className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#FE7F2D]"
+                      className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#D9BEF4]"
                     >
                       {REMINDER_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -1022,7 +1072,7 @@ function SettingsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="h-10 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+            className="h-10 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
           >
             Cancel
           </button>
@@ -1040,199 +1090,7 @@ function SettingsPanel({
   );
 }
 
-function IntegrationsDialog({
-  activeCategory,
-  setActiveCategory,
-  searchOpen,
-  setSearchOpen,
-  connectorQuery,
-  setConnectorQuery,
-  filteredConnectors,
-  connectedByProvider,
-  connectedByProviderAll,
-  telegramLinked,
-  slackLinked,
-  onClose,
-  onSetup,
-  onAddAccount,
-  onEditAccount,
-  onUnlink,
-  onRemoveAccount,
-  onSaveSettings,
-}: {
-  activeCategory: (typeof categories)[number];
-  setActiveCategory: (category: (typeof categories)[number]) => void;
-  searchOpen: boolean;
-  setSearchOpen: Dispatch<SetStateAction<boolean>>;
-  connectorQuery: string;
-  setConnectorQuery: (value: string) => void;
-  filteredConnectors: ConnectorCatalogItem[];
-  connectedByProvider: Map<string, ConnectorSummary>;
-  connectedByProviderAll: Map<string, ConnectorSummary[]>;
-  telegramLinked: boolean | null;
-  slackLinked: boolean | null;
-  onClose: () => void;
-  onSetup: (connector: ConnectorCatalogItem) => void;
-  onAddAccount: (connector: ConnectorCatalogItem) => void;
-  onEditAccount: (connector: ConnectorCatalogItem, account: ConnectorSummary) => void;
-  onUnlink: (connector: ConnectorCatalogItem) => void;
-  onRemoveAccount: (id: string, label: string) => void;
-  onSaveSettings: (accountId: string, metadata: Record<string, unknown>) => Promise<void>;
-}) {
-  const [closing, setClosing] = useState(false);
-
-  function handleClose() {
-    if (closing) return;
-    setClosing(true);
-    setTimeout(onClose, 140);
-  }
-
-  return (
-    <div
-      className={`fixed inset-0 z-50 flex bg-slate-950/55 p-0 backdrop-blur-[6px] sm:px-4 sm:py-8 ${closing ? "dialog-backdrop-exit" : "dialog-backdrop-enter"}`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="integrations-dialog-title"
-      onClick={handleClose}
-    >
-      <div
-        className={`relative mb-0 mt-auto flex max-h-[92dvh] w-full max-w-[1000px] flex-col overflow-hidden rounded-t-[28px] border border-b-0 border-slate-200 bg-white shadow-[0_-20px_60px_-24px_rgba(15,23,42,0.5)] sm:m-auto sm:max-h-[85vh] sm:rounded-[28px] sm:border-b sm:shadow-[0_28px_80px_-20px_rgba(15,23,42,0.45)] ${closing ? "dialog-panel-exit" : "dialog-panel-enter"}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="relative flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 pb-5 pt-7 sm:px-6 sm:pb-5 sm:pt-6">
-          <span className="absolute left-1/2 top-2.5 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-black" id="integrations-dialog-title">
-              Browse integrations
-            </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Connect approved apps or encrypted business credentials.
-            </p>
-          </div>
-          <button
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
-            onClick={handleClose}
-            type="button"
-            aria-label="Close"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="shrink-0 border-b border-slate-200 px-5 pt-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex w-max gap-1.5">
-                {categories.map((category) => {
-                  const active = activeCategory === category;
-                  return (
-                    <button
-                      className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
-                        active
-                          ? "bg-slate-950 text-white"
-                          : "text-black/70 hover:bg-slate-100 hover:text-black"
-                      }`}
-                      key={category}
-                      onClick={() => setActiveCategory(category)}
-                      type="button"
-                    >
-                      {category}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchOpen((open) => {
-                  if (open) setConnectorQuery("");
-                  return !open;
-                });
-              }}
-              aria-label={searchOpen ? "Close search" : "Search integrations"}
-              aria-expanded={searchOpen}
-              className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40 ${
-                searchOpen
-                  ? "border-slate-950 bg-slate-950 text-white"
-                  : "border-slate-200 bg-white text-black/70 hover:border-slate-300 hover:text-black"
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-            </button>
-          </div>
-
-          {searchOpen && (
-            <div className="mt-2.5 mb-4 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#FE7F2D] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#FE7F2D]/10">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-              <input
-                value={connectorQuery}
-                onChange={(e) => setConnectorQuery(e.target.value)}
-                placeholder="Search integrations..."
-                className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
-                aria-label="Search integrations"
-                autoComplete="off"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setConnectorQuery("");
-                  setSearchOpen(false);
-                }}
-                aria-label="Close search"
-                className="text-black/40 transition-colors hover:text-black"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {!searchOpen && <div className="pb-4" />}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-          {filteredConnectors.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-500">
-              No integrations match "{connectorQuery}".
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredConnectors.map((connector) => (
-                <ConnectorRow
-                  connector={connector}
-                  key={connector.id}
-                  linkedConnector={connectedByProvider.get(connector.provider)}
-                  linkedAccounts={connectedByProviderAll.get(connector.provider) ?? []}
-                  onSetup={() => onSetup(connector)}
-                  onAddAccount={() => onAddAccount(connector)}
-                  onEditAccount={(account) => onEditAccount(connector, account)}
-                  onUnlink={() => onUnlink(connector)}
-                  onRemoveAccount={onRemoveAccount}
-                  onSaveSettings={onSaveSettings}
-                  telegramLinked={telegramLinked}
-                  slackLinked={slackLinked}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConnectorRow({
+export function ConnectorRow({
   connector,
   linkedConnector,
   linkedAccounts,
@@ -1275,7 +1133,12 @@ function ConnectorRow({
         <div>
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-              <Icon className="size-6" />
+              <ConnectorLogo
+                provider={connector.provider}
+                alt={connector.title}
+                className="size-6 object-contain"
+                fallback={<Icon className="size-6" />}
+              />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1435,7 +1298,7 @@ function GearIcon() {
   );
 }
 
-function SetupDialog({
+export function SetupDialog({
   connector,
   editAccount,
   error,
@@ -1460,6 +1323,19 @@ function SetupDialog({
   const isEdit = Boolean(editAccount);
   const oauthHref = `/api/connectors/${connector.provider}/start?returnTo=%2Fdashboard%2Fconnectors%3Fconnected%3D${connector.provider}`;
   const [closing, setClosing] = useState(false);
+  // Figma has no "list my teams" API — the team a webhook gets registered
+  // for has to come from the user, so it's appended to the OAuth start URL.
+  const isFigma = connector.provider === "figma";
+  const [figmaTeamId, setFigmaTeamId] = useState("");
+  const figmaOauthHref = `${oauthHref}&teamId=${encodeURIComponent(figmaTeamId.trim())}`;
+  // Box webhooks watch a single folder, not "the whole account" — same idea
+  // as Figma's teamId, the folder id has to come from the user up front.
+  const isBox = connector.provider === "box";
+  const [boxFolderId, setBoxFolderId] = useState("");
+  const boxOauthHref = `${oauthHref}&folderId=${encodeURIComponent(boxFolderId.trim())}`;
+  const requiresExtraField = isFigma || isBox;
+  const extraFieldMissing = (isFigma && !figmaTeamId.trim()) || (isBox && !boxFolderId.trim());
+  const resolvedOauthHref = isFigma ? figmaOauthHref : isBox ? boxOauthHref : oauthHref;
 
   function handleClose() {
     if (closing) return;
@@ -1489,7 +1365,7 @@ function SetupDialog({
         <div className="relative border-b border-slate-200 px-5 pb-5 pt-7 sm:px-6 sm:pb-6 sm:pt-6">
           <span className="absolute left-1/2 top-2.5 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
           <button
-            className="absolute right-4 top-4 flex size-9 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+            className="absolute right-4 top-4 flex size-9 cursor-pointer items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
             onClick={handleClose}
             type="button"
             aria-label="Close"
@@ -1504,7 +1380,12 @@ function SetupDialog({
           </p>
           <div className="mt-4 flex items-start gap-4 pr-10">
             <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <Icon className="size-7" />
+              <ConnectorLogo
+                provider={connector.provider}
+                alt={connector.title}
+                className="size-7 object-contain"
+                fallback={<Icon className="size-7" />}
+              />
             </span>
             <div>
               <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-slate-950" id="connector-setup-title">
@@ -1538,9 +1419,54 @@ function SetupDialog({
                     </a>
                   </p>
                 )}
+                {isFigma && (
+                  <div className="mb-3">
+                    <label htmlFor="figma-team-id" className="mb-1.5 block text-xs font-medium text-slate-600">
+                      Figma team ID
+                    </label>
+                    <input
+                      id="figma-team-id"
+                      type="text"
+                      inputMode="numeric"
+                      value={figmaTeamId}
+                      onChange={(event) => setFigmaTeamId(event.target.value)}
+                      placeholder="e.g. 123456789012345678"
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-slate-400"
+                    />
+                    <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                      Find this in your team&apos;s URL: figma.com/files/team/&lt;team id&gt;/... Webhooks (needed for
+                      comment-triggered automations) only work on Organization/Enterprise Figma plans.
+                    </p>
+                  </div>
+                )}
+                {isBox && (
+                  <div className="mb-3">
+                    <label htmlFor="box-folder-id" className="mb-1.5 block text-xs font-medium text-slate-600">
+                      Box folder ID
+                    </label>
+                    <input
+                      id="box-folder-id"
+                      type="text"
+                      inputMode="numeric"
+                      value={boxFolderId}
+                      onChange={(event) => setBoxFolderId(event.target.value)}
+                      placeholder="e.g. 123456789012"
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-slate-400"
+                    />
+                    <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                      Find this in the folder&apos;s URL: app.box.com/folder/&lt;folder id&gt;. Box webhooks watch one folder at a time, not your whole account.
+                    </p>
+                  </div>
+                )}
                 <a
-                  href={oauthHref}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50"
+                  href={resolvedOauthHref}
+                  aria-disabled={requiresExtraField && extraFieldMissing}
+                  onClick={(event) => {
+                    if (requiresExtraField && extraFieldMissing) event.preventDefault();
+                  }}
+                  className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50 ${
+                    requiresExtraField && extraFieldMissing ? "cursor-not-allowed opacity-50" : ""
+                  }`}
                 >
                   Continue to {connector.title}
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1587,7 +1513,7 @@ function SetupDialog({
                     <label className="flex flex-col gap-2 text-sm">
                       <span className="font-medium text-slate-700">Account name</span>
                       <input
-                        className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#FE7F2D] focus:ring-4 focus:ring-[#FE7F2D]/10"
+                        className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#D9BEF4] focus:ring-4 focus:ring-[#D9BEF4]/10"
                         name="_name"
                         placeholder={`e.g. Production ${connector.title}, Staging DB`}
                         defaultValue={editAccount?.label ?? ""}
@@ -1603,7 +1529,7 @@ function SetupDialog({
                     <label className="flex flex-col gap-2 text-sm" key={field.name}>
                       <span className="font-medium text-slate-700">{field.label}</span>
                       <input
-                        className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#FE7F2D] focus:ring-4 focus:ring-[#FE7F2D]/10"
+                        className="h-11 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[#D9BEF4] focus:ring-4 focus:ring-[#D9BEF4]/10"
                         name={field.name}
                         placeholder={isEdit ? "Leave blank to keep existing credentials" : field.placeholder}
                         required={!isEdit && field.required !== false}
@@ -1623,14 +1549,14 @@ function SetupDialog({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="h-11 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/40"
+                  className="h-11 cursor-pointer rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FE7F2D]/50 sm:px-5"
+                  className="inline-flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50 sm:px-5"
                 >
                   {submitting ? (
                     "Saving…"

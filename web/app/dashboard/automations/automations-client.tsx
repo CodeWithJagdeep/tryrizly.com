@@ -65,7 +65,7 @@ export function AutomationsClient() {
           <button
             type="button"
             onClick={createFlow}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-[#FE7F2D] px-5 text-sm font-normal text-white transition hover:brightness-105"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-[#D9BEF4] px-5 text-sm font-normal text-white transition hover:brightness-105"
           >
             + New automation
           </button>
@@ -75,9 +75,9 @@ export function AutomationsClient() {
           <button
             type="button"
             onClick={createFlow}
-            className="mt-8 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center transition hover:border-[#FE7F2D]/60"
+            className="mt-8 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center transition hover:border-[#D9BEF4]/60"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FE7F2D]/10 text-[#FE7F2D]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D9BEF4]/10 text-[#D9BEF4]">
               <BoltIcon className="h-5 w-5" />
             </span>
             <p className="mt-2 text-sm font-normal text-slate-700">No automations yet</p>
@@ -94,7 +94,7 @@ export function AutomationsClient() {
                 className="group flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm"
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FE7F2D]/10 text-[#FE7F2D]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D9BEF4]/10 text-[#D9BEF4]">
                     <BoltIcon className="h-4 w-4" />
                   </span>
                   <p className="min-w-0 flex-1 truncate text-sm font-normal text-slate-900">{flow.name || "Untitled automation"}</p>

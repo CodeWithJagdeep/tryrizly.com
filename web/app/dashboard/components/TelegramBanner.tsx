@@ -33,7 +33,7 @@ export function TelegramBanner() {
   const anyLinked = telegramLinked === true || slackLinked === true;
   const statusKnown = telegramLinked !== null && slackLinked !== null;
 
-  if (!statusKnown || anyLinked || dismissed || pathname?.startsWith("/dashboard/channels")) return null;
+  if (!statusKnown || anyLinked || dismissed || pathname?.startsWith("/dashboard/telegram") || pathname?.startsWith("/dashboard/slack")) return null;
 
   return (
     <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
@@ -52,7 +52,7 @@ export function TelegramBanner() {
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <Link
-          href="/dashboard/channels"
+          href="/dashboard/telegram"
           className="inline-flex h-8 items-center justify-center rounded-lg bg-black px-4 text-sm font-medium text-white transition hover:opacity-90"
         >
           Connect

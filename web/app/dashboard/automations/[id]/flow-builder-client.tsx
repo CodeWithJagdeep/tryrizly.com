@@ -21,7 +21,7 @@ import {
 } from "@xyflow/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   AirtableIcon,
@@ -48,6 +48,7 @@ import {
   TrelloIcon,
   TwilioIcon,
 } from "../../../components/ConnectorIcons";
+import { ConnectorLogo } from "../../../components/ConnectorLogo";
 import { ArrowUpIcon, ClockIcon, PlugIcon, WandIcon } from "../../components/icons";
 import { MarkdownMessage } from "../../components/MarkdownMessage";
 import {
@@ -157,6 +158,7 @@ const DETAILED_APPS: AppDef[] = [
       { name: "New Pull Request", description: "Triggers when a new pull request is opened.", kind: "Instant" },
       { name: "New Issue", description: "Triggers when a new issue is created.", kind: "Instant" },
       { name: "New Push", description: "Triggers when a commit is pushed to a branch.", kind: "Instant" },
+      { name: "New Comment on Issue/PR", description: "Triggers when someone comments on an issue or pull request.", kind: "Instant" },
     ],
     actions: [
       { name: "Create Issue", description: "Creates a new issue in a repository.", kind: "Action" },
@@ -168,6 +170,11 @@ const DETAILED_APPS: AppDef[] = [
     name: "Notion",
     category: "Productivity & Files",
     triggers: [
+      // Push-only, fed by the Notion webhook receiver — see
+      // AiCoreService.notionWebhookEvent. The only Notion trigger that
+      // actually runs; the two below are cosmetic ("New Database Item" has
+      // no cheap poll endpoint to back it, "Updated" has the same problem).
+      { name: "New Comment", description: "Triggers when someone comments on a page in your workspace.", kind: "Instant" },
       { name: "New Database Item", description: "Triggers when a new item is added to a database.", kind: "Polling" },
       { name: "Updated Database Item", description: "Triggers when an item in a database is updated.", kind: "Polling" },
     ],
@@ -221,8 +228,15 @@ const REMAINING_APPS: AppDef[] = [
     id: "calcom",
     name: "Cal.com",
     category: "Scheduling",
-    triggers: [{ name: "New Booking", description: "Triggers when a new booking is made in Cal.com.", kind: "Instant" }],
-    actions: [{ name: "Create Booking", description: "Creates a booking in Cal.com.", kind: "Action" }],
+    triggers: [
+      { name: "New Booking", description: "Triggers when a new booking is made in Cal.com.", kind: "Instant" },
+      { name: "Booking Cancelled", description: "Triggers when a booking is cancelled in Cal.com.", kind: "Instant" },
+      { name: "Booking Rescheduled", description: "Triggers when a booking is rescheduled in Cal.com.", kind: "Instant" },
+      { name: "Meeting Started", description: "Triggers when a Cal.com meeting is about to start.", kind: "Instant" },
+      { name: "Meeting Ended", description: "Triggers when a Cal.com meeting has just ended.", kind: "Instant" },
+      { name: "Out of Office Created", description: "Triggers when you mark yourself out of office in Cal.com.", kind: "Instant" },
+    ],
+    actions: [],
   },
   {
     id: "razorpay",
@@ -249,7 +263,10 @@ const REMAINING_APPS: AppDef[] = [
     name: "Discord",
     category: "Communication",
     triggers: [{ name: "New Message", description: "Triggers when a new message is posted in Discord.", kind: "Instant" }],
-    actions: [{ name: "Send Message", description: "Sends a message in Discord.", kind: "Action" }],
+    actions: [
+      { name: "Send Message", description: "Sends a DM — to yourself, or to another Discord user by ID.", kind: "Action" },
+      { name: "Send Channel Message", description: "Sends a message to a channel in one of your connected servers.", kind: "Action" },
+    ],
   },
   {
     id: "mongodb",
@@ -336,6 +353,150 @@ const REMAINING_APPS: AppDef[] = [
     triggers: [],
     actions: [{ name: "Send SMS", description: "Sends a text message via your Twilio number.", kind: "Action" }],
   },
+  // Everything below is push-only (or, for BambooHR, poll-only) — trigger-only,
+  // no live actions yet. Titles must match shared/automations/types.ts's
+  // LIVE_TRIGGER_EVENTS exactly (isEventLive checks against that list).
+  {
+    id: "shopify",
+    name: "Shopify",
+    category: "E-commerce",
+    triggers: [
+      { name: "New Order", description: "Triggers when a new order is placed in your Shopify store.", kind: "Instant" },
+      { name: "Low Inventory", description: "Triggers when a product's inventory drops.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "calendly",
+    name: "Calendly",
+    category: "Scheduling",
+    triggers: [
+      { name: "Booking Created", description: "Triggers when someone books a new event on your Calendly.", kind: "Instant" },
+      { name: "Booking Cancelled", description: "Triggers when a Calendly booking is cancelled.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "typeform",
+    name: "Typeform",
+    category: "Productivity & Files",
+    triggers: [{ name: "New Submission", description: "Triggers when someone submits your Typeform.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "gumroad",
+    name: "Gumroad",
+    category: "E-commerce",
+    triggers: [{ name: "New Sale", description: "Triggers when you make a new sale on Gumroad.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "lemonsqueezy",
+    name: "Lemon Squeezy",
+    category: "E-commerce",
+    triggers: [{ name: "New Sale", description: "Triggers when you make a new sale on Lemon Squeezy.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "dropbox",
+    name: "Dropbox",
+    category: "Productivity & Files",
+    triggers: [
+      { name: "File Changed", description: "Triggers when any file changes anywhere in your Dropbox.", kind: "Instant" },
+      { name: "New File in Folder", description: "Triggers when a new file is added to a specific folder.", kind: "Instant" },
+      { name: "New or Updated File in Folder", description: "Triggers when a file is added or edited in a specific folder.", kind: "Instant" },
+      { name: "New Shared File", description: "Triggers when a new file is shared with you.", kind: "Polling" },
+    ],
+    actions: [],
+  },
+  {
+    id: "figma",
+    name: "Figma",
+    category: "Design",
+    triggers: [{ name: "New Comment", description: "Triggers when someone comments on a Figma file.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "uptimerobot",
+    name: "UptimeRobot",
+    category: "Developer & IT Tools",
+    triggers: [
+      { name: "Monitor Down", description: "Triggers when a monitored site or service goes down.", kind: "Instant" },
+      { name: "Monitor Up", description: "Triggers when a monitored site or service comes back up.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "quickbooks",
+    name: "QuickBooks",
+    category: "Finance & Accounting",
+    triggers: [
+      { name: "New Invoice", description: "Triggers when a new invoice is created in QuickBooks.", kind: "Instant" },
+      { name: "Invoice Paid", description: "Triggers when an invoice is paid in QuickBooks.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "xero",
+    name: "Xero",
+    category: "Finance & Accounting",
+    triggers: [{ name: "New Invoice", description: "Triggers when a new invoice is created in Xero.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "wise",
+    name: "Wise",
+    category: "Finance & Accounting",
+    triggers: [{ name: "New Transaction", description: "Triggers when a new transaction hits your Wise balance.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "bamboohr",
+    name: "BambooHR",
+    category: "HR",
+    triggers: [
+      { name: "New Time Off Request", description: "Triggers when an employee submits a time-off request.", kind: "Polling" },
+      { name: "New Hire", description: "Triggers when a new employee is added in BambooHR.", kind: "Polling" },
+    ],
+    actions: [],
+  },
+  {
+    id: "deel",
+    name: "Deel",
+    category: "HR",
+    triggers: [
+      { name: "New Contract", description: "Triggers when a new contract is created in Deel.", kind: "Instant" },
+      { name: "Payment Completed", description: "Triggers when a Deel payment completes.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "box",
+    name: "Box",
+    category: "Productivity & Files",
+    triggers: [{ name: "File Changed", description: "Triggers when a file changes in your connected Box folder.", kind: "Instant" }],
+    actions: [],
+  },
+  {
+    id: "statuspage",
+    name: "Statuspage",
+    category: "Developer & IT Tools",
+    triggers: [
+      { name: "New Incident", description: "Triggers when a new incident is reported on your status page.", kind: "Instant" },
+      { name: "Incident Update", description: "Triggers when an incident is updated on your status page.", kind: "Instant" },
+    ],
+    actions: [],
+  },
+  {
+    id: "betterstack",
+    name: "Better Stack",
+    category: "Developer & IT Tools",
+    triggers: [
+      { name: "Incident Started", description: "Triggers when a Better Stack incident starts.", kind: "Instant" },
+      { name: "Incident Resolved", description: "Triggers when a Better Stack incident is resolved.", kind: "Instant" },
+    ],
+    actions: [],
+  },
 ];
 
 // No cosmetic-only Google Workspace apps remain — all five (Drive, Sheets,
@@ -402,7 +563,17 @@ function AppIcon({ app, className }: { app: string; className?: string }) {
   if (app === "schedule" || app === "delay") return <ClockIcon className={className} />;
   if (app === "filter") return <BranchGlyph className={className} />;
   if (app === "ai") return <WandIcon className={className} />;
-  return <PlugIcon className={className} />;
+  // Apps with no hand-drawn icon component fall back to the real downloaded
+  // logo (see ConnectorLogo.tsx / connector-logo-manifest.ts), not a bare
+  // plug glyph — every app added after the icon-set batch lands here.
+  return (
+    <ConnectorLogo
+      provider={app}
+      alt={appName(app)}
+      className={className}
+      fallback={<PlugIcon className={className} />}
+    />
+  );
 }
 
 const appDef = (id: string) => APPS.find((a) => a.id === id);
@@ -411,25 +582,54 @@ const appName = (id: string) => appDef(id)?.name ?? "";
 // How each app is actually connected in Rizly — the "Account" step differs a lot
 // by provider, so the config panel branches on this instead of always showing an
 // OAuth "Sign in" button.
-type ConnectMethod = "oauth" | "bot" | "secret" | "none";
+type ConnectMethod = "oauth" | "bot" | "slack_bot" | "discord_bot" | "secret" | "none";
 
 function connectMethod(appId: string): ConnectMethod {
   if (appId === "telegram") return "bot"; // deep-link / QR to the Rizly bot
+  // Slack installs via its own "Add to Slack" OAuth flow on /dashboard/slack,
+  // not the generic /api/connectors/[provider]/start route (which 400s with
+  // "Unsupported OAuth provider: slack" — that route only handles the plain
+  // single-token OAuth apps, Slack's install grant isn't one of those).
+  if (appId === "slack") return "slack_bot";
+  // Discord installs per-server via its own "Add to Discord" bot-install flow
+  // (not the generic OAuth start route, and — unlike Slack — resolved right
+  // here in the dialog instead of bouncing out to a separate dashboard page).
+  if (appId === "discord") return "discord_bot";
   if (appId === "schedule" || appId === "delay" || appId === "filter" || appId === "ai") return "none"; // built-in, no account
   if (
     appId === "stripe" ||
     appId === "postgres" ||
-    appId === "discord" ||
     appId === "jira" ||
     appId === "pagerduty" ||
     appId === "trello" ||
-    appId === "twilio"
+    appId === "twilio" ||
+    // Manual API-key/token connectors added later -- none of these have a
+    // real OAuth exchange on the backend, so they must not fall through to
+    // the "oauth" default below (that's what broke Calendly's connected-
+    // account detection: it silently rendered a Sign-in flow instead of
+    // recognizing the already-connected manual account).
+    appId === "calendly" ||
+    appId === "typeform" ||
+    appId === "gumroad" ||
+    appId === "lemonsqueezy" ||
+    appId === "uptimerobot" ||
+    appId === "bamboohr" ||
+    appId === "statuspage" ||
+    appId === "betterstack" ||
+    appId === "wise"
   ) {
     return "secret";
   }
   // Google Sheets is OAuth (bundled under google_workspace), despite sharing
-  // the "Databases" category label with Postgres/MongoDB below.
-  if (appId === "google-sheets" || appId === "google-drive" || appId === "google-docs" || appId === "google-meet") {
+  // the "Databases" category label with Postgres/MongoDB below. Airtable is
+  // real OAuth too (PKCE), despite sharing that same category label.
+  if (
+    appId === "google-sheets" ||
+    appId === "google-drive" ||
+    appId === "google-docs" ||
+    appId === "google-meet" ||
+    appId === "airtable"
+  ) {
     return "oauth";
   }
   // Databases and AI models connect with a connection string / API key.
@@ -460,22 +660,85 @@ function oauthProviderFor(appId: string): string {
 
 const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   schedule: ["Every Day", "Every Hour", "Every Week"],
-  gmail: ["New Email Matching Search"],
-  calendar: ["New Event"],
+  // "New Label" only detects a label being freshly *applied* to a message
+  // (there's no cheap "label object was just created" event to poll) — see
+  // SchedulerService.pollOneAutomation's gmail branch for the exact caveat.
+  gmail: [
+    "New Email Matching Search",
+    "New Email",
+    "New Attachment",
+    "New Conversation",
+    "New Starred Email",
+    "New Label",
+    "New Labeled Email",
+    "New Labeled Conversation",
+  ],
+  // "Event Cancelled" and "New or Updated Event" are approximate: Calendar's
+  // list API doesn't push deletions/updates separately, so both are derived
+  // by diffing successive polls against flow.cursor — see SchedulerService.
+  calendar: ["New Event", "Event Start", "Event Cancelled", "New or Updated Event"],
+  calcom: [
+    "New Booking",
+    "Booking Cancelled",
+    "Booking Rescheduled",
+    "Meeting Started",
+    "Meeting Ended",
+    "Out of Office Created",
+  ],
+  jira: ["New Issue"],
+  pagerduty: ["New Incident"],
+  trello: ["New Card"],
+  // Polled (not a webhook — the GitHub connector is a plain PAT with no
+  // webhook-registration flow) via SchedulerService's "github" branches.
+  github: ["New Pull Request", "New Issue", "New Push", "New Comment on Issue/PR"],
+  mongodb: ["New Document"],
+  "google-drive": ["New File"],
   "google-sheets": ["New Row"],
   "google-forms": ["New Submission"],
   "google-meet": ["Meeting Started"],
   airtable: ["New Record"],
+  notion: ["New Comment"],
+  discord: ["New Message"],
+  telegram: ["New Message"],
+  slack: ["New Message Posted to Channel", "New Mention", "New Reaction Added"],
+  shopify: ["New Order", "Low Inventory"],
+  calendly: ["Booking Created", "Booking Cancelled"],
+  typeform: ["New Submission"],
+  gumroad: ["New Sale"],
+  lemonsqueezy: ["New Sale"],
+  dropbox: ["File Changed", "New File in Folder", "New or Updated File in Folder", "New Shared File"],
+  figma: ["New Comment"],
+  uptimerobot: ["Monitor Down", "Monitor Up"],
+  quickbooks: ["New Invoice", "Invoice Paid"],
+  xero: ["New Invoice"],
+  wise: ["New Transaction"],
+  deel: ["New Contract", "Payment Completed"],
+  box: ["File Changed"],
+  statuspage: ["New Incident", "Incident Update"],
+  betterstack: ["Incident Started", "Incident Resolved"],
+  stripe: ["New Payment", "New Subscription", "Failed Charge"],
+  razorpay: ["New Payment", "Failed Payment"],
+  paypal: ["New Payment", "New Refund"],
+  bamboohr: ["New Time Off Request", "New Hire"],
 };
 
 const LIVE_ACTION_EVENTS: Record<string, string[]> = {
-  slack: ["Send Channel Message", "Send Direct Message"],
+  // "Send Channel Message" is deliberately excluded — it silently sends to
+  // the linked Slack DM, not the actual channel (see the matching comment
+  // in shared/src/automations/types.ts). Keep this list in sync with that
+  // file since web can't import it directly (nested, separately-deployed repo).
+  slack: ["Send Direct Message"],
   telegram: ["Send Message", "Notify Me"],
-  calcom: ["Create Booking"],
-  discord: ["Send Message"],
+  discord: ["Send Message", "Send Channel Message"],
   github: ["Create Issue"],
   notion: ["Create Page"],
   stripe: ["Create Customer"],
+  razorpay: ["Create Invoice"],
+  paypal: ["Create Invoice"],
+  gmail: ["Send Email", "Create Draft", "Reply to Email", "Add Label to Email"],
+  // "Find Availability" is read-only (Calendar's freeBusy endpoint) but still
+  // an "action" step in the catalog, not a trigger.
+  calendar: ["Create Detailed Event", "Update Event", "Find Availability"],
   "google-drive": ["Upload File"],
   "google-sheets": ["Create Row"],
   "google-docs": ["Create Document"],
@@ -872,12 +1135,14 @@ function Builder({ flowId }: { flowId: string }) {
       }
 
       // Persist what's now on the canvas so the built flow survives navigation.
-      const flow = await saveFlow({
+      const { flow, error } = await saveFlow({
         id: flowId,
         name: nameRef.current.trim() || "Untitled Zap",
         steps: stepsRef.current.map((s) => ({ ...s, subtitle: appName(s.app) })),
       });
-      if (flow) {
+      if (error) {
+        setPublishError(error);
+      } else if (flow) {
         setStatus(flow.status);
         setSaved(true);
       }
@@ -957,18 +1222,27 @@ function Builder({ flowId }: { flowId: string }) {
   }, [steps.length, rf]);
 
   async function handleSave() {
-    const flow = await saveFlow({
+    const { flow, error } = await saveFlow({
       id: flowId,
       name: name.trim() || "Untitled Zap",
       steps: steps.map((s) => ({ ...s, subtitle: appName(s.app) })),
     });
+    if (error) {
+      setPublishError(error);
+      return;
+    }
     if (flow) setStatus(flow.status);
+    setPublishError(null);
     setSaved(true);
   }
 
   async function handleDuplicate() {
     const newId = newFlowId();
-    await saveFlow({ id: newId, name: `${name.trim() || "Untitled Zap"} (copy)`, steps });
+    const { error } = await saveFlow({ id: newId, name: `${name.trim() || "Untitled Zap"} (copy)`, steps });
+    if (error) {
+      setPublishError(error);
+      return;
+    }
     router.push(`/dashboard/automations/${newId}`);
   }
 
@@ -985,7 +1259,11 @@ function Builder({ flowId }: { flowId: string }) {
     setPublishing(true);
     try {
       // Persist the latest edits first — activation reads the saved flow.
-      await saveFlow({ id: flowId, name: name.trim() || "Untitled Zap", steps });
+      const { error: saveError } = await saveFlow({ id: flowId, name: name.trim() || "Untitled Zap", steps });
+      if (saveError) {
+        setPublishError(saveError);
+        return;
+      }
       setSaved(true);
       const result =
         status === "active" ? await pauseFlow(flowId) : await activateFlow(flowId);
@@ -1082,6 +1360,7 @@ function Builder({ flowId }: { flowId: string }) {
                 key={selectedStep.id}
                 step={selectedStep}
                 index={selectedIndex}
+                triggerApp={steps[0]?.app}
                 runs={runs}
                 runsLoading={runsLoading}
                 runsError={runsError}
@@ -1358,6 +1637,7 @@ function SubBar({ publishError }: { publishError: string | null }) {
 function ConfigPanel({
   step,
   index,
+  triggerApp,
   runs,
   runsLoading,
   runsError,
@@ -1369,6 +1649,7 @@ function ConfigPanel({
 }: {
   step: AutomationStep;
   index: number;
+  triggerApp?: string;
   runs: AutomationRun[];
   runsLoading: boolean;
   runsError: string | null;
@@ -1552,6 +1833,7 @@ function ConfigPanel({
             {/* Account — the connect UX differs by provider */}
             <AccountField
               app={step.app}
+              title={step.title}
               value={typeof step.config?.account === "string" ? step.config.account : undefined}
               onChange={(account) => onPatch({ config: { ...(step.config ?? {}), account } })}
             />
@@ -1561,8 +1843,10 @@ function ConfigPanel({
               <AutomationConfigFields
                 app={step.app}
                 kind={step.kind}
+                title={step.title}
                 config={step.config ?? {}}
                 onChange={(config) => onPatch({ config })}
+                triggerApp={triggerApp}
               />
             )}
           </div>
@@ -2683,10 +2967,12 @@ function AccountAvatar({ label, picture }: { label: string; picture?: string }) 
 // flow (or Telegram deep-link) as the connectors page, not flipping local state.
 function AccountField({
   app,
+  title,
   value,
   onChange,
 }: {
   app: string;
+  title?: string;
   value?: string;
   onChange?: (accountId: string | undefined) => void;
 }) {
@@ -2699,14 +2985,34 @@ function AccountField({
   const dropdownRef = useRef<HTMLDivElement>(null);
   // OAuth accounts for this provider — null while loading, [] when none linked.
   const [accounts, setAccounts] = useState<AccountOption[] | null>(null);
+  // Discord's "Add to Discord" install link — null while loading/unconfigured.
+  const [discordInstallUrl, setDiscordInstallUrl] = useState<string | null>(null);
   const returnTo = typeof window !== "undefined" ? window.location.pathname : "/dashboard/automations";
+
+  useEffect(() => {
+    if (method !== "discord_bot") return;
+    fetch("/api/onboarding/discord/token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ returnTo }),
+    })
+      .then((r) => r.json())
+      .then((data: { installUrl?: string | null }) => setDiscordInstallUrl(data.installUrl ?? null))
+      .catch(() => setDiscordInstallUrl(null));
+  }, [method, returnTo]);
   // Connections made from the automation builder request only the scopes a step
   // needs (e.g. Gmail read-only) — see automationOauthScopesByProvider in ai-core.
   const addHref = `/api/connectors/${provider}/start?returnTo=${encodeURIComponent(returnTo)}&scopeProfile=automation`;
 
   // Legacy combined "google" rows still count as gmail/calendar until reconnect.
+  // Discord's real bot connection saves under "discord_surface" (kept distinct
+  // so linking it can never clobber the legacy manual "discord" webhook
+  // connector's own row) -- count that as a match too.
   const matchesProvider = useCallback(
-    (p?: string) => p === provider || ((provider === "gmail" || provider === "calendar") && p === "google"),
+    (p?: string) =>
+      p === provider ||
+      ((provider === "gmail" || provider === "calendar") && p === "google") ||
+      (provider === "discord" && p === "discord_surface"),
     [provider],
   );
 
@@ -2718,6 +3024,29 @@ function AccountField({
         .then((r) => r.json())
         .then((data: { linked?: boolean }) => setStatus(data.linked ? "connected" : "disconnected"))
         .catch(() => setStatus("disconnected"));
+      return;
+    }
+    if (method === "slack_bot") {
+      setStatus("loading");
+      fetch("/api/slack")
+        .then((r) => r.json())
+        .then((data: { linked?: boolean }) => setStatus(data.linked ? "connected" : "disconnected"))
+        .catch(() => setStatus("disconnected"));
+      return;
+    }
+    if (method === "discord_bot") {
+      setAccounts(null);
+      fetch("/api/discord/channels")
+        .then((r) => r.json())
+        .then((rows: unknown) => {
+          const list: AccountOption[] = Array.isArray(rows)
+            ? (rows as Array<{ guildId?: string; guildName?: string }>)
+                .filter((g): g is { guildId: string; guildName: string } => Boolean(g.guildId && g.guildName))
+                .map((g) => ({ id: g.guildId, label: g.guildName }))
+            : [];
+          setAccounts(list);
+        })
+        .catch(() => setAccounts([]));
       return;
     }
     setAccounts(null);
@@ -2767,13 +3096,20 @@ function AccountField({
 
   // Auto-select the (only) account so the step is usable without an extra click.
   useEffect(() => {
-    if (method !== "oauth" && method !== "secret") return;
+    if (method !== "oauth" && method !== "secret" && method !== "discord_bot") return;
     if (!accounts || accounts.length === 0) return;
     if (!value || !accounts.some((a) => a.id === value)) {
       onChange?.(accounts[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, method]);
+
+  // Discord's DM action ("Send Message") never needs a server — it targets
+  // yourself or a specific user id, resolved entirely in AutomationConfigFields'
+  // own "Send to" control below. Only the channel-based steps (the trigger,
+  // and "Send Channel Message") need a server picked here. This must come
+  // after every hook above so hook order never changes across renders.
+  if (app === "discord" && title === "Send Message") return null;
 
   if (method === "none") {
     return (
@@ -2872,26 +3208,6 @@ function AccountField({
     );
   }
 
-  if (status === "connected") {
-    return (
-      <Field label="Account" required>
-        <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-          <span className="flex items-center gap-2 text-[14px] text-emerald-800">
-            <CheckGlyph className="h-4 w-4 text-emerald-600" />
-            {`${name} · @rizly_bot`}
-          </span>
-          <Link
-            href="/dashboard/connectors"
-            className="text-[13px] font-medium text-slate-500 underline hover:text-slate-700"
-          >
-            Manage
-          </Link>
-        </div>
-        <p className="mt-2 text-[12px] text-emerald-700">Connected. Ready to use in this step.</p>
-      </Field>
-    );
-  }
-
   if (method === "bot") {
     if (status === "loading") {
       return (
@@ -2899,6 +3215,62 @@ function AccountField({
           <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
             Checking connection…
           </div>
+        </Field>
+      );
+    }
+    if (status === "connected") {
+      // Same dropdown chrome as Gmail's oauth accounts list, so a connected
+      // bot-style app (Telegram) doesn't look like a second-class integration
+      // -- just with one account and "Reconnect" in place of "Add account",
+      // since a single Rizly account only ever links one Telegram chat.
+      return (
+        <Field label="Account" required>
+          <div ref={dropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className={`flex h-12 w-full items-center gap-2.5 rounded-xl border bg-white px-3 text-left transition ${
+                open ? "border-[#6C4BF4]" : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <AccountAvatar label={name} />
+              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-900">{name}</span>
+              <SelectChevrons className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+            {open && (
+              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.25)]">
+                <div className="flex w-full items-center gap-2.5 rounded-lg bg-[#6C4BF4]/8 px-2.5 py-2 text-left">
+                  <AccountAvatar label={name} />
+                  <span className="min-w-0 flex-1 truncate text-[14px] text-slate-900">{name}</span>
+                  <CheckGlyph className="h-4 w-4 shrink-0 text-[#6C4BF4]" />
+                </div>
+                <div className="my-1 h-px bg-slate-100" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setDialogOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-slate-50"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400">
+                    <PlusGlyph />
+                  </span>
+                  <span className="text-[14px] font-medium text-[#6C4BF4]">Reconnect / switch chat</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {dialogOpen && (
+            <TelegramConnectDialog
+              appName={name}
+              onClose={() => setDialogOpen(false)}
+              onConnected={() => {
+                setDialogOpen(false);
+                refresh();
+              }}
+            />
+          )}
         </Field>
       );
     }
@@ -2932,12 +3304,185 @@ function AccountField({
     );
   }
 
-  if (method === "secret") {
-    const secretKind = app === "postgres" ? "a connection string" : app === "discord" ? "a webhook URL" : "an API key";
+  if (method === "slack_bot") {
+    if (status === "loading") {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+            Checking connection…
+          </div>
+        </Field>
+      );
+    }
+    if (status === "connected") {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <span className="flex items-center gap-2 text-[14px] text-emerald-800">
+              <CheckGlyph className="h-4 w-4 text-emerald-600" />
+              {name}
+            </span>
+            <Link href="/dashboard/slack" className="text-[13px] font-medium text-slate-500 underline hover:text-slate-700">
+              Manage
+            </Link>
+          </div>
+          <p className="mt-2 text-[12px] text-emerald-700">Connected. Ready to use in this step.</p>
+        </Field>
+      );
+    }
     return (
       <Field label="Account" required>
         <Link
-          href="/dashboard/connectors"
+          href="/dashboard/slack"
+          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300"
+        >
+          <span className="text-[14px] text-slate-400">Connect {name}</span>
+          <span className="rounded-md bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-medium text-white">Connect</span>
+        </Link>
+        <p className="mt-3 text-[13px] leading-relaxed text-slate-500">
+          {name} connects through the &quot;Add to Slack&quot; install flow on its own dashboard page, not a plain OAuth sign-in.
+        </p>
+      </Field>
+    );
+  }
+
+  // ── Discord: same dropdown chrome as the oauth branch, but backed by the
+  // servers the bot's installed into instead of a generic connectors list —
+  // resolved right here in the dialog, never bouncing out to another page.
+  if (method === "discord_bot") {
+    if (accounts === null) {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+            Checking connection…
+          </div>
+        </Field>
+      );
+    }
+    if (accounts.length === 0) {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <span className="text-[14px] text-slate-400">No server connected</span>
+            {discordInstallUrl ? (
+              <a
+                href={discordInstallUrl}
+                className="rounded-lg bg-[#6C4BF4] px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm shadow-[#6C4BF4]/25 transition hover:brightness-105"
+              >
+                Add to Discord
+              </a>
+            ) : (
+              <span className="text-[13px] text-slate-400">Loading…</span>
+            )}
+          </div>
+          <p className="mt-2.5 text-[12px] leading-relaxed text-slate-400">
+            Installs the Rizly bot into a server you pick on Discord, then brings you right back here.
+          </p>
+        </Field>
+      );
+    }
+    const selectedId = value && accounts.some((a) => a.id === value) ? value : accounts[0].id;
+    const selectedAcc = accounts.find((a) => a.id === selectedId) ?? accounts[0];
+    return (
+      <Field label="Server" required>
+        <div ref={dropdownRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className={`flex h-12 w-full items-center gap-2.5 rounded-xl border bg-white px-3 text-left transition ${
+              open ? "border-[#6C4BF4]" : "border-slate-200 hover:border-slate-300"
+            }`}
+          >
+            <AccountAvatar label={selectedAcc.label} />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-900">{selectedAcc.label}</span>
+            <SelectChevrons className="h-4 w-4 shrink-0 text-slate-400" />
+          </button>
+
+          {open && (
+            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.25)]">
+              {accounts.map((a) => {
+                const isSel = a.id === selectedId;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      onChange?.(a.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
+                      isSel ? "bg-[#6C4BF4]/8" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <AccountAvatar label={a.label} />
+                    <span className="min-w-0 flex-1 truncate text-[14px] text-slate-900">{a.label}</span>
+                    {isSel && <CheckGlyph className="h-4 w-4 shrink-0 text-[#6C4BF4]" />}
+                  </button>
+                );
+              })}
+              <div className="my-1 h-px bg-slate-100" />
+              {discordInstallUrl && (
+                <a
+                  href={discordInstallUrl}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-slate-50"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400">
+                    <PlusGlyph />
+                  </span>
+                  <span className="text-[14px] font-medium text-[#6C4BF4]">Add another server</span>
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="mt-2.5 text-[12px] leading-relaxed text-slate-400">
+          Pick which channel below — this just narrows it to one server&apos;s channels.
+        </p>
+      </Field>
+    );
+  }
+
+  if (method === "secret") {
+    // "Secret"-method apps never had their connected state checked here before
+    // -- `status` above is only ever set for "bot" (Telegram), so this branch
+    // always rendered "Connect" regardless of whether the app was genuinely
+    // connected. Use the accounts list (already fetched by refresh() for every
+    // non-bot method) as the real source of truth instead.
+    if (accounts === null) {
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-400">
+            Checking connection…
+          </div>
+        </Field>
+      );
+    }
+    // Deep-links straight to this app's setup dialog on the connectors page
+    // (?setup=) and back to this exact automation once saved (?returnTo=) --
+    // same round-trip the oauth branch above gets from /api/connectors/[provider]/start.
+    const connectorsHref = `/dashboard/connectors?setup=${encodeURIComponent(app)}&returnTo=${encodeURIComponent(returnTo)}`;
+    if (accounts.length > 0) {
+      const acc = accounts[0];
+      return (
+        <Field label="Account" required>
+          <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <span className="flex items-center gap-2 text-[14px] text-emerald-800">
+              <CheckGlyph className="h-4 w-4 text-emerald-600" />
+              {acc.label}
+            </span>
+            <Link href="/dashboard/connectors" className="text-[13px] font-medium text-slate-500 underline hover:text-slate-700">
+              Manage
+            </Link>
+          </div>
+          <p className="mt-2 text-[12px] text-emerald-700">Connected. Ready to use in this step.</p>
+        </Field>
+      );
+    }
+    const secretKind = app === "postgres" ? "a connection string" : "an API key";
+    return (
+      <Field label="Account" required>
+        <Link
+          href={connectorsHref}
           className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:border-slate-300"
         >
           <span className="text-[14px] text-slate-400">Connect {name}</span>
@@ -2956,16 +3501,29 @@ function AccountField({
 
 // ── Per-app config fields — only the live app/event combos reach here ──────────
 
+// Per-trigger variable hints shown under downstream message fields, so users
+// know what {{field}} placeholders are actually available from that trigger
+// instead of guessing. Keep in sync with the payload each trigger's poll
+// branch in SchedulerService actually builds.
+const TRIGGER_VARIABLE_HINTS: Record<string, string> = {
+  calcom: "{{title}}, {{attendeeName}}, {{attendeeEmail}}, {{startTime}}",
+  gmail: "{{from}}, {{subject}}",
+};
+
 function AutomationConfigFields({
   app,
   kind,
+  title,
   config,
   onChange,
+  triggerApp,
 }: {
   app: string;
   kind: AutomationStep["kind"];
+  title?: string;
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
+  triggerApp?: string;
 }) {
   function set(patch: Record<string, unknown>) {
     onChange({ ...config, ...patch });
@@ -3097,26 +3655,96 @@ function AutomationConfigFields({
     );
   }
 
+  if (app === "calcom") {
+    const attendeeEmail = typeof config.attendeeEmail === "string" ? config.attendeeEmail : "";
+    return (
+      <>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-500">
+          Checks your Cal.com account for bookings matching this event, every poll.
+        </div>
+        <Field label="Attendee email (optional)">
+          <input
+            value={attendeeEmail}
+            onChange={(e) => set({ attendeeEmail: e.target.value })}
+            placeholder="name@example.com — leave blank to match every booking"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Optional filter — only fires for bookings with this attendee. Leave blank to match every booking.
+          </p>
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "slack") {
+    // "New Message Posted to Channel" is the only Slack trigger that takes a
+    // channel — the workspace-wide ones (New Mention / New Reaction Added)
+    // have an empty config and must fall through to the message branch below
+    // rendering nothing, not a channel picker they'd ignore.
+    if (kind === "trigger") {
+      if (title !== "New Message Posted to Channel") return null;
+      return (
+        <Field label="Channel" required>
+          <SlackChannelPicker
+            channelId={typeof config.channelId === "string" ? config.channelId : ""}
+            onSelect={(channelId, channelName) => set({ channelId, channelName })}
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Fires when a new message is posted in this channel of your linked workspace.
+          </p>
+        </Field>
+      );
+    }
+
+    if (title === "Send Channel Message") {
+      const hint = TRIGGER_VARIABLE_HINTS[triggerApp ?? ""];
+      return (
+        <>
+          <Field label="Channel" required>
+            <SlackChannelPicker
+              channelId={typeof config.channelId === "string" ? config.channelId : ""}
+              onSelect={(channelId, channelName) => set({ channelId, channelName })}
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              Rizly posts to public channels without being invited. Private channels still need the bot added.
+            </p>
+          </Field>
+          <Field label="Message" required>
+            <textarea
+              value={typeof config.message === "string" ? config.message : ""}
+              onChange={(e) => set({ message: e.target.value })}
+              rows={4}
+              placeholder={hint ? `Use variables like ${hint}` : "e.g. New email from {{from}}: {{subject}}"}
+              className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to insert data from the trigger.
+            </p>
+          </Field>
+        </>
+      );
+    }
+    // "Send Direct Message" falls through to the shared DM branch below.
+  }
+
   if (app === "slack" || app === "telegram") {
+    const hint = TRIGGER_VARIABLE_HINTS[triggerApp ?? ""];
     return (
       <Field label="Message" required>
         <textarea
           value={typeof config.message === "string" ? config.message : ""}
           onChange={(e) => set({ message: e.target.value })}
           rows={4}
-          placeholder="e.g. New email from {{from}}: {{subject}}"
+          placeholder={hint ? `Use variables like ${hint}` : "e.g. New email from {{from}}: {{subject}}"}
           className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
         />
         <p className="mt-2 text-[12px] text-slate-400">
           Sent to your linked {appName(app)} {app === "slack" ? "DM" : "chat"}. Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to
-          insert data from the trigger (e.g. <code className="rounded bg-slate-100 px-1 py-0.5">{"{{subject}}"}</code>).
+          insert data from the trigger{hint ? <> — available here: <code className="rounded bg-slate-100 px-1 py-0.5">{hint}</code></> : <> (e.g. <code className="rounded bg-slate-100 px-1 py-0.5">{"{{subject}}"}</code>)</>}.
         </p>
       </Field>
     );
-  }
-
-  if (app === "calcom") {
-    return <CalComBookingFields config={config} onChange={onChange} />;
   }
 
   if (app === "google-drive") {
@@ -3431,23 +4059,12 @@ function AutomationConfigFields({
   if (app === "airtable") {
     const isTrigger = kind === "trigger";
     return (
-      <>
-        <Field label="Base ID" required>
-          <input
-            value={typeof config.baseId === "string" ? config.baseId : ""}
-            onChange={(e) => set({ baseId: e.target.value })}
-            placeholder="From the base's API docs URL (starts with app...)"
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-          />
-        </Field>
-        <Field label="Table" required>
-          <input
-            value={typeof config.table === "string" ? config.table : ""}
-            onChange={(e) => set({ table: e.target.value })}
-            placeholder="e.g. Leads"
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-          />
-        </Field>
+      <AirtableConfigFields
+        baseId={typeof config.baseId === "string" ? config.baseId : ""}
+        table={typeof config.table === "string" ? config.table : ""}
+        onSelectBase={(baseId) => set({ baseId, table: "" })}
+        onSelectTable={(table) => set({ table })}
+      >
         {!isTrigger && (
           <Field label="Fields (JSON)" required>
             <textarea
@@ -3457,12 +4074,9 @@ function AutomationConfigFields({
               placeholder={'{ "Name": "{{from}}", "Status": "New" }'}
               className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-[13px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
             />
-            <p className="mt-2 text-[12px] text-slate-400">
-              Only the values inside the JSON are filled from <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code>.
-            </p>
           </Field>
         )}
-      </>
+      </AirtableConfigFields>
     );
   }
 
@@ -3534,24 +4148,123 @@ function AutomationConfigFields({
   }
 
   if (app === "discord") {
+    const guildId = typeof config.account === "string" ? config.account : undefined;
+    if (kind === "trigger") {
+      return (
+        <Field label="Channel" required>
+          <DiscordChannelPicker
+            guildId={guildId}
+            channelId={typeof config.channelId === "string" ? config.channelId : ""}
+            onSelect={(channelId, channelName) => set({ channelId, channelName })}
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Fires when a new message is posted in this channel, in one of your own connected servers.
+          </p>
+        </Field>
+      );
+    }
+
+    if (title === "Send Channel Message") {
+      return (
+        <>
+          <Field label="Channel" required>
+            <DiscordChannelPicker
+              guildId={guildId}
+              channelId={typeof config.channelId === "string" ? config.channelId : ""}
+              onSelect={(channelId, channelName) => set({ channelId, channelName })}
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              Narrowed to the server selected above. Use &quot;Add another server&quot; there to connect more.
+            </p>
+          </Field>
+          <Field label="Message" required>
+            <textarea
+              value={typeof config.message === "string" ? config.message : ""}
+              onChange={(e) => set({ message: e.target.value })}
+              rows={4}
+              placeholder="e.g. New email from {{from}}: {{subject}}"
+              className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to insert data from the trigger.
+            </p>
+          </Field>
+        </>
+      );
+    }
+
+    // "Send Message" — a DM, either to yourself or to another Discord user by id.
+    const target = config.target === "user" ? "user" : "self";
     return (
-      <Field label="Message" required>
-        <textarea
-          value={typeof config.message === "string" ? config.message : ""}
-          onChange={(e) => set({ message: e.target.value })}
-          rows={4}
-          placeholder="e.g. New email from {{from}}: {{subject}}"
-          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+      <>
+        <Field label="Send to">
+          <select
+            value={target}
+            onChange={(e) => set({ target: e.target.value === "user" ? "user" : "self" })}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="self">Myself (the account you linked)</option>
+            <option value="user">A specific Discord user</option>
+          </select>
+        </Field>
+        {target === "user" && (
+          <Field label="Discord user ID" required>
+            <input
+              value={typeof config.targetUserId === "string" ? config.targetUserId : ""}
+              onChange={(e) => set({ targetUserId: e.target.value })}
+              placeholder="e.g. 123456789012345678"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+            />
+            <p className="mt-2 text-[12px] text-slate-400">
+              The numeric Discord user ID (right-click their name in Discord with Developer Mode on → Copy User ID).
+              The Rizly bot must share a server with them to DM them.
+            </p>
+          </Field>
+        )}
+        <Field label="Message" required>
+          <textarea
+            value={typeof config.message === "string" ? config.message : ""}
+            onChange={(e) => set({ message: e.target.value })}
+            rows={4}
+            placeholder="e.g. New email from {{from}}: {{subject}}"
+            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
+          />
+          <p className="mt-2 text-[12px] text-slate-400">
+            Use <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to insert data from the trigger.
+          </p>
+        </Field>
+      </>
+    );
+  }
+
+  if (app === "dropbox" && (title === "New File in Folder" || title === "New or Updated File in Folder")) {
+    return (
+      <Field label="Folder path" required>
+        <input
+          value={typeof config.folderPath === "string" ? config.folderPath : ""}
+          onChange={(e) => set({ folderPath: e.target.value })}
+          placeholder="/Projects/Reports"
+          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
         />
         <p className="mt-2 text-[12px] text-slate-400">
-          Posted to the channel your webhook is set up for. Use{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5">{"{{field}}"}</code> to insert data from the trigger.
+          Matches this folder and everything inside it — e.g. /Projects/Reports.
         </p>
       </Field>
     );
   }
 
   if (app === "github") {
+    if (kind === "trigger") {
+      return (
+        <GitHubRepoConfigFields
+          repo={typeof config.repo === "string" ? config.repo : ""}
+          branch={typeof config.branch === "string" ? config.branch : ""}
+          showBranch={title === "New Push"}
+          onSelectRepo={(repo) => set({ repo })}
+          onSelectBranch={(branch) => set({ branch })}
+        />
+      );
+    }
     return (
       <>
         <Field label="Repository" required>
@@ -3809,7 +4522,6 @@ function AutomationConfigFields({
   return null;
 }
 
-type CalComEventType = { id: number; title: string };
 
 // "Enhance with AI" — rewrites the user's rough instruction into a precise
 // prompt via a real LLM call (see gateway's /api/automations/enhance-prompt),
@@ -3864,71 +4576,404 @@ function EnhancePromptButton({
   );
 }
 
-function CalComBookingFields({
-  config,
-  onChange,
+type GitHubRepo = { fullName: string; private: boolean };
+
+/** Repo picker for every GitHub trigger, with an optional branch picker (only "New Push" needs one — GitHub defaults to the repo's default branch otherwise). */
+function GitHubRepoConfigFields({
+  repo,
+  branch,
+  showBranch,
+  onSelectRepo,
+  onSelectBranch,
 }: {
-  config: Record<string, unknown>;
-  onChange: (config: Record<string, unknown>) => void;
+  repo: string;
+  branch: string;
+  showBranch: boolean;
+  onSelectRepo: (repo: string) => void;
+  onSelectBranch: (branch: string) => void;
 }) {
-  const [eventTypes, setEventTypes] = useState<CalComEventType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [repos, setRepos] = useState<GitHubRepo[] | null>(null);
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/automations/calcom-event-types")
+    let cancelled = false;
+    fetch("/api/automations/github-repos")
       .then((r) => r.json())
-      .then((data: { eventTypes?: CalComEventType[] }) => setEventTypes(data.eventTypes ?? []))
-      .catch(() => setEventTypes([]))
-      .finally(() => setLoading(false));
+      .then((data: { connected?: boolean; repos?: GitHubRepo[] }) => {
+        if (cancelled) return;
+        if (!data.connected) {
+          setError("GitHub isn't connected yet.");
+          return;
+        }
+        setRepos(data.repos ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load GitHub repositories");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  function set(patch: Record<string, unknown>) {
-    onChange({ ...config, ...patch });
+  useEffect(() => {
+    if (!showBranch || !repo) {
+      setBranches(null);
+      return;
+    }
+    let cancelled = false;
+    setBranches(null);
+    fetch(`/api/automations/github-branches?repo=${encodeURIComponent(repo)}`)
+      .then((r) => r.json())
+      .then((data: { connected?: boolean; branches?: string[] }) => {
+        if (cancelled) return;
+        setBranches(data.connected ? (data.branches ?? []) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, showBranch]);
+
+  if (error) {
+    return <p className="text-[12px] text-red-500">{error}</p>;
   }
 
   return (
     <>
-      <Field label="Event type" required>
-        <select
-          value={typeof config.eventTypeId === "number" ? config.eventTypeId : ""}
-          onChange={(e) => set({ eventTypeId: Number(e.target.value) })}
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
-        >
-          <option value="" disabled>
-            {loading ? "Loading event types…" : eventTypes.length === 0 ? "No Cal.com event types found" : "Choose an event type"}
-          </option>
-          {eventTypes.map((et) => (
-            <option key={et.id} value={et.id}>
-              {et.title}
+      <Field label="Repository" required>
+        {repos === null ? (
+          <p className="text-[13px] text-slate-400">Loading repositories…</p>
+        ) : (
+          <select
+            value={repo}
+            onChange={(e) => onSelectRepo(e.target.value)}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="" disabled>
+              {repos.length === 0 ? "No repositories found" : "Choose a repository"}
             </option>
-          ))}
-        </select>
+            {repos.map((r) => (
+              <option key={r.fullName} value={r.fullName}>
+                {r.fullName}
+              </option>
+            ))}
+          </select>
+        )}
       </Field>
-      <Field label="Attendee name" required>
-        <input
-          value={typeof config.attendeeName === "string" ? config.attendeeName : ""}
-          onChange={(e) => set({ attendeeName: e.target.value })}
-          placeholder="e.g. {{from}}"
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-        />
-      </Field>
-      <Field label="Attendee email" required>
-        <input
-          value={typeof config.attendeeEmail === "string" ? config.attendeeEmail : ""}
-          onChange={(e) => set({ attendeeEmail: e.target.value })}
-          placeholder="name@example.com"
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#6C4BF4]"
-        />
-      </Field>
-      <Field label="Start time" required>
-        <input
-          type="datetime-local"
-          value={typeof config.start === "string" ? config.start : ""}
-          onChange={(e) => set({ start: e.target.value })}
-          className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
-        />
-      </Field>
+      {showBranch && (
+        <Field label="Branch">
+          {!repo ? (
+            <p className="text-[13px] text-slate-400">Pick a repository first.</p>
+          ) : branches === null ? (
+            <p className="text-[13px] text-slate-400">Loading branches…</p>
+          ) : (
+            <select
+              value={branch}
+              onChange={(e) => onSelectBranch(e.target.value)}
+              className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+            >
+              <option value="">Default branch</option>
+              {branches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
     </>
+  );
+}
+
+type AirtableBase = { id: string; name: string };
+type AirtableField = { id: string; name: string; type: string };
+type AirtableTable = { id: string; name: string; fields: AirtableField[] };
+
+/** Base + table pickers shared by the "New Record" trigger and "Create Record" action, plus a field-name hint for the latter's Fields JSON (passed as children). */
+function AirtableConfigFields({
+  baseId,
+  table,
+  onSelectBase,
+  onSelectTable,
+  children,
+}: {
+  baseId: string;
+  table: string;
+  onSelectBase: (baseId: string) => void;
+  onSelectTable: (table: string) => void;
+  children?: ReactNode;
+}) {
+  const [bases, setBases] = useState<AirtableBase[] | null>(null);
+  const [tables, setTables] = useState<AirtableTable[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/automations/airtable-bases")
+      .then((r) => r.json())
+      .then((data: { connected?: boolean; bases?: AirtableBase[]; error?: string }) => {
+        if (cancelled) return;
+        if (!data.connected) {
+          setError("Airtable isn't connected yet.");
+          return;
+        }
+        if (data.error) {
+          setError(
+            data.error === "airtable_invalid_credentials"
+              ? "Airtable rejected the connection — reconnect it above to grant base access."
+              : `Couldn't load Airtable bases (${data.error}).`,
+          );
+          return;
+        }
+        setBases(data.bases ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load Airtable bases");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!baseId) {
+      setTables(null);
+      return;
+    }
+    let cancelled = false;
+    setTables(null);
+    fetch(`/api/automations/airtable-tables?baseId=${encodeURIComponent(baseId)}`)
+      .then((r) => r.json())
+      .then((data: { connected?: boolean; tables?: AirtableTable[] }) => {
+        if (cancelled) return;
+        setTables(data.connected ? (data.tables ?? []) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTables([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseId]);
+
+  const selectedTable = tables?.find((t) => t.name === table || t.id === table);
+
+  if (error) {
+    return <p className="text-[12px] text-red-500">{error}</p>;
+  }
+
+  return (
+    <>
+      <Field label="Base" required>
+        {bases === null ? (
+          <p className="text-[13px] text-slate-400">Loading bases…</p>
+        ) : (
+          <select
+            value={baseId}
+            onChange={(e) => onSelectBase(e.target.value)}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="" disabled>
+              {bases.length === 0 ? "No bases found" : "Choose a base"}
+            </option>
+            {bases.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field label="Table" required>
+        {!baseId ? (
+          <p className="text-[13px] text-slate-400">Pick a base first.</p>
+        ) : tables === null ? (
+          <p className="text-[13px] text-slate-400">Loading tables…</p>
+        ) : (
+          <select
+            value={selectedTable?.name ?? ""}
+            onChange={(e) => onSelectTable(e.target.value)}
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+          >
+            <option value="" disabled>
+              {tables.length === 0 ? "No tables found" : "Choose a table"}
+            </option>
+            {tables.map((t) => (
+              <option key={t.id} value={t.name}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      {children}
+      {selectedTable && selectedTable.fields.length > 0 && (
+        <p className="text-[12px] text-slate-400">
+          Fields in {selectedTable.name}:{" "}
+          {selectedTable.fields.map((f, i) => (
+            <span key={f.id}>
+              <code className="rounded bg-slate-100 px-1 py-0.5">{f.name}</code>
+              {i < selectedTable.fields.length - 1 ? ", " : ""}
+            </span>
+          ))}
+        </p>
+      )}
+    </>
+  );
+}
+
+type DiscordGuildChannels = {
+  guildId: string;
+  guildName: string;
+  channels: Array<{ channelId: string; name: string }>;
+};
+
+/** Native grouped <select> — a searchable combobox is overkill for what's usually a handful of channels. */
+function DiscordChannelPicker({
+  guildId,
+  channelId,
+  onSelect,
+}: {
+  guildId?: string;
+  channelId: string;
+  onSelect: (channelId: string, channelName: string) => void;
+}) {
+  const [allGuilds, setAllGuilds] = useState<DiscordGuildChannels[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/discord/channels")
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        if (cancelled) return;
+        if (Array.isArray(data)) setAllGuilds(data as DiscordGuildChannels[]);
+        else setError("Could not load Discord channels");
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load Discord channels");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return <p className="text-[12px] text-red-500">{error}</p>;
+  }
+
+  if (!allGuilds) {
+    return <p className="text-[13px] text-slate-400">Loading channels…</p>;
+  }
+
+  // Narrow to the server picked in the "Server" field above, if any.
+  const guilds = guildId ? allGuilds.filter((g) => g.guildId === guildId) : allGuilds;
+
+  if (guilds.length === 0 || guilds.every((g) => g.channels.length === 0)) {
+    return (
+      <p className="text-[13px] text-slate-400">
+        No channels yet — use &quot;Add another server&quot; above to install the bot somewhere first.
+      </p>
+    );
+  }
+
+  return (
+    <select
+      value={channelId}
+      onChange={(e) => {
+        const selected = e.target.value;
+        const name = guilds.flatMap((g) => g.channels).find((c) => c.channelId === selected)?.name ?? "";
+        onSelect(selected, name);
+      }}
+      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+    >
+      <option value="" disabled>
+        Choose a channel
+      </option>
+      {guilds.map((guild) =>
+        guild.channels.length === 0 ? null : (
+          <optgroup key={guild.guildId} label={guild.guildName}>
+            {guild.channels.map((c) => (
+              <option key={c.channelId} value={c.channelId}>
+                #{c.name}
+              </option>
+            ))}
+          </optgroup>
+        ),
+      )}
+    </select>
+  );
+}
+
+/** Slack's channel picker. Flat, unlike Discord's — a Rizly account links exactly one Slack workspace, so there's no server tier to group by. */
+function SlackChannelPicker({
+  channelId,
+  onSelect,
+}: {
+  channelId: string;
+  onSelect: (channelId: string, channelName: string) => void;
+}) {
+  const [channels, setChannels] = useState<Array<{ channelId: string; name: string }> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/slack/channels")
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        if (cancelled) return;
+        if (Array.isArray(data)) setChannels(data as Array<{ channelId: string; name: string }>);
+        else setError("Could not load Slack channels");
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load Slack channels");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return <p className="text-[12px] text-red-500">{error}</p>;
+  }
+
+  if (!channels) {
+    return <p className="text-[13px] text-slate-400">Loading channels…</p>;
+  }
+
+  if (channels.length === 0) {
+    // Most often an older install predating the channels:read scope — the
+    // workspace has to go through "Add to Slack" again before this fills in.
+    return (
+      <p className="text-[13px] text-slate-400">
+        No channels found — reconnect Slack from the Slack page to grant channel access.
+      </p>
+    );
+  }
+
+  return (
+    <select
+      value={channelId}
+      onChange={(e) => {
+        const selected = e.target.value;
+        const name = channels.find((c) => c.channelId === selected)?.name ?? "";
+        onSelect(selected, name);
+      }}
+      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-900 outline-none transition focus:border-[#6C4BF4]"
+    >
+      <option value="" disabled>
+        Choose a channel
+      </option>
+      {channels.map((c) => (
+        <option key={c.channelId} value={c.channelId}>
+          #{c.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

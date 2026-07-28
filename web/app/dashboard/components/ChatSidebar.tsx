@@ -5,19 +5,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  CalComIcon,
-  GitHubIcon,
-  GmailIcon,
-  MongoDbIcon,
-  MpesaIcon,
-  NotionIcon,
-  PostgresIcon,
-  RazorpayIcon,
-  SlackIcon,
-  StripeIcon,
-  TelegramIcon,
-} from "../../components/ConnectorIcons";
-import {
   BellIcon,
   BoltIcon,
   CalendarIcon,
@@ -25,31 +12,12 @@ import {
   ClockIcon,
   GearIcon,
   HomeIcon,
-  LayersIcon,
   MailIcon,
   PanelToggleIcon,
   PlugIcon,
-  PlusIcon,
   UsersIcon,
   VideoIcon,
 } from "./icons";
-
-// Icons for the "Connected apps" strip — keyed by connector provider id.
-const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  gmail: GmailIcon,
-  calendar: CalendarIcon,
-  google: GmailIcon,
-  calcom: CalComIcon,
-  github: GitHubIcon,
-  notion: NotionIcon,
-  slack: SlackIcon,
-  telegram: TelegramIcon,
-  stripe: StripeIcon,
-  razorpay: RazorpayIcon,
-  postgres: PostgresIcon,
-  mongodb: MongoDbIcon,
-  mpesa: MpesaIcon,
-};
 import { type ChatSession, subscribeToOpenSearch } from "../lib/chat-store";
 import {
   initSidebarCollapsed,
@@ -69,12 +37,9 @@ export function ChatSidebar() {
   const [history, setHistory] = useState<ChatSession[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [telegramLinked, setTelegramLinked] = useState(true);
-  const [slackLinked, setSlackLinked] = useState(true);
   const [emailBadge, setEmailBadge] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [connectedApps, setConnectedApps] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -132,31 +97,6 @@ export function ChatSidebar() {
   }, [pathname]);
 
   useEffect(() => {
-    fetch("/api/onboarding/status")
-      .then((r) => r.json())
-      .then((d: { onboarding?: { telegramLinked?: boolean; slackLinked?: boolean } }) => {
-        setTelegramLinked(Boolean(d.onboarding?.telegramLinked));
-        setSlackLinked(Boolean(d.onboarding?.slackLinked));
-      })
-      .catch(() => null);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch("/api/connectors");
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { provider: string }[];
-        if (!cancelled) setConnectedApps(data.map((c) => c.provider));
-      } catch { /* best-effort */ }
-    };
-    void load();
-    const t = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, []);
-
-  useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
@@ -188,14 +128,6 @@ export function ChatSidebar() {
           { href: "/dashboard/scheduled", icon: <ClockIcon className={iconCls} />, label: "Scheduled" },
           { href: "/dashboard/automations", icon: <BoltIcon className={iconCls} />, label: "Automations" },
           { href: "/dashboard/connectors", icon: <PlugIcon className={iconCls} />, label: "Connectors" },
-        ],
-        [
-          {
-            href: "/dashboard/channels",
-            icon: <LayersIcon className={iconCls} />,
-            label: "Channels",
-            badge: !telegramLinked && !slackLinked ? "!" : undefined,
-          },
         ],
       ];
 
@@ -255,9 +187,7 @@ export function ChatSidebar() {
             {items.map((item) => {
               const isActive = item.href === "/dashboard"
                 ? pathname === "/dashboard"
-                : pathname.startsWith(item.href) ||
-                  (item.href === "/dashboard/channels" &&
-                    (pathname.startsWith("/dashboard/telegram") || pathname.startsWith("/dashboard/slack")));
+                : pathname.startsWith(item.href);
               return (
                 <Link
                   key={`${item.href}-${item.label}`}
@@ -287,37 +217,6 @@ export function ChatSidebar() {
             })}
           </div>
         ))}
-
-        {/* Apps — quick-glance grid of connected integrations, links to full connectors page */}
-        {!collapsed && !isFlowBuilder && (
-          <div className="mb-3 border-t border-slate-200/70 pt-3">
-            <div className="px-2.5">
-              <SectionLabel>Apps</SectionLabel>
-            </div>
-            <div className="flex flex-wrap gap-1.5 px-2.5 pt-1.5">
-              {connectedApps.map((provider) => {
-                const Icon = APP_ICONS[provider];
-                return (
-                  <Link
-                    key={provider}
-                    href="/dashboard/connectors"
-                    title={provider}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200 transition-transform hover:-translate-y-0.5 hover:ring-slate-300 hover:shadow"
-                  >
-                    {Icon ? <Icon className="h-full w-full" /> : <PlugIcon className="h-3.5 w-3.5 text-slate-400" />}
-                  </Link>
-                );
-              })}
-              <Link
-                href="/dashboard/connectors"
-                title="Add an app"
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400 transition-colors hover:border-slate-400 hover:text-slate-600"
-              >
-                <PlusIcon className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          </div>
-        )}
 
         {/* Chat history (from database, not localStorage) */}
         {!collapsed && (

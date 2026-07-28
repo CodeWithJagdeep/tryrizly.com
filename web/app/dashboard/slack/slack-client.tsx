@@ -19,6 +19,7 @@ function formatDate(iso: string) {
 
 export function SlackClient() {
   const [linked, setLinked] = useState<boolean | null>(null);
+  const [displayName, setDisplayName] = useState<string | undefined>(undefined);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [slack, setSlack] = useState<{ installUrl: string; linkCommand: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -33,10 +34,12 @@ export function SlackClient() {
       const data = (await response.json()) as {
         linked?: boolean;
         turns?: ConversationTurn[];
+        displayName?: string;
         error?: string;
       };
       if (data.error) throw new Error(data.error);
       setLinked(Boolean(data.linked));
+      setDisplayName(data.displayName);
       setTurns(data.turns ?? []);
       setLoadError(null);
     } catch (error) {
@@ -85,7 +88,9 @@ export function SlackClient() {
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Slack</h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              The live conversation Riz sees from your Slack DM
+              {linked && displayName
+                ? `Connected as ${displayName}`
+                : "The live conversation Riz sees from your Slack DM"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -181,7 +186,7 @@ function TurnRow({ turn, first }: { turn: ConversationTurn; first: boolean }) {
     >
       <span
         className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
-          isUser ? "bg-slate-100 text-slate-600" : "bg-[#FE7F2D]/10 text-[#FE7F2D]"
+          isUser ? "bg-slate-100 text-slate-600" : "bg-[#D9BEF4]/10 text-[#D9BEF4]"
         }`}
       >
         {isUser ? "You" : "R"}

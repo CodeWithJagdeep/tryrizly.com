@@ -24,6 +24,7 @@ export type ConnectorProvider =
   // pattern as the gmail/calendar split (see GoogleService.findAccount).
   | "google_workspace"
   // Manual API-key/token connectors — no OAuth app registration needed.
+  // (jira and pagerduty also support an OAuth shape — see ConnectorOAuthProvider.)
   | "jira"
   | "pagerduty"
   | "trello"
@@ -120,7 +121,9 @@ export type ConnectorOAuthProvider =
   | "deel"
   | "box"
   | "jira"
-  | "calendly";
+  | "calendly"
+  | "airtable"
+  | "pagerduty";
 
 export type StartOAuthInput = {
   userId?: string;
@@ -225,7 +228,20 @@ export type JiraConnectorSecret = {
   expiresAt?: number;
   cloudId?: string;
 };
-export type PagerDutyConnectorSecret = { apiKey: string; fromEmail: string };
+/**
+ * Manual (apiKey + fromEmail, `Token token=` auth) and OAuth (accessToken,
+ * Bearer auth) are mutually exclusive shapes — pagerduty.service.ts branches
+ * on which fields are present. fromEmail/the "From" header is only required
+ * for the manual API-key shape; an OAuth token already identifies the acting
+ * user to PagerDuty.
+ */
+export type PagerDutyConnectorSecret = {
+  apiKey?: string;
+  fromEmail?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+};
 export type TrelloConnectorSecret = { apiKey: string; token: string };
 export type AirtableConnectorSecret = { apiKey: string };
 export type TwilioConnectorSecret = { accountSid: string; authToken: string; fromNumber: string };

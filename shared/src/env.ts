@@ -228,6 +228,12 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/github/callback"),
+  PAGERDUTY_CLIENT_ID: z.string().optional(),
+  PAGERDUTY_CLIENT_SECRET: z.string().optional(),
+  PAGERDUTY_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/pagerduty/callback"),
   // Stripe Apps OAuth. The client ID and mode-specific app developer key come
   // from Developers > Apps after uploading the public OAuth app. The secret
   // key is backend-only and must never be exposed through Next.js `env`.
@@ -280,6 +286,14 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:4000/api/connectors/figma/callback"),
+  // Airtable OAuth app. PKCE (S256) is mandatory on every request regardless
+  // of confidential/public client — see startOAuth's airtable branch.
+  AIRTABLE_CLIENT_ID: z.string().optional(),
+  AIRTABLE_CLIENT_SECRET: z.string().optional(),
+  AIRTABLE_REDIRECT_URI: z
+    .string()
+    .url()
+    .default("http://localhost:4000/api/connectors/airtable/callback"),
   STRIPE_APP_REDIRECT_URI: z
     .string()
     .url()

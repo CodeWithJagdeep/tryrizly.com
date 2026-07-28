@@ -71,6 +71,7 @@ const ALL_TOOL_NAMES = [
   "set_away_mode",
   "end_away_mode",
   "list_automations",
+  "describe_automation_event",
   "create_automation",
   "activate_automation",
   "pause_automation",
@@ -205,6 +206,7 @@ const SKILLS: readonly AgentSkill[] = [
       "List, design, create, activate, or pause structured proactive automation flows.",
     tools: [
       "list_automations",
+      "describe_automation_event",
       "create_automation",
       "activate_automation",
       "pause_automation",

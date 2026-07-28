@@ -67,6 +67,13 @@ export class DiscordRepository {
     );
   }
 
+  /** Tags a guild with the user who ran its "Add to Discord" install, so listGuilds(userId) can scope the flow-builder's picker to guilds that user actually owns. */
+  async setGuildOwner(guildId: string, userId: string): Promise<void> {
+    await this.ensureIndexes();
+    const db = await getDb();
+    await db.collection("discord_guilds").updateOne({ guildId }, { $set: { installedByUserId: userId } });
+  }
+
   async upsertChannel(guildId: string, channelId: string, name: string, type: number): Promise<void> {
     await this.ensureIndexes();
     const db = await getDb();
@@ -118,12 +125,12 @@ export class DiscordRepository {
     return records.map((r) => ({ guildId: r.guildId, channelId: r.channelId, name: r.name, type: r.type }));
   }
 
-  /** Every installed guild, for the flow-builder's channel picker (paired with listChannels per guild). */
-  async listGuilds(): Promise<Array<{ guildId: string; name: string }>> {
+  /** Guilds owned by this user (installed via their own "Add to Discord" flow), for the flow-builder's channel picker. Scoped so one user can never target another user's server. */
+  async listGuilds(userId: string): Promise<Array<{ guildId: string; name: string }>> {
     const db = await getDb();
     const records = await db
-      .collection<{ guildId: string; name: string }>("discord_guilds")
-      .find({})
+      .collection<{ guildId: string; name: string; installedByUserId?: string }>("discord_guilds")
+      .find({ installedByUserId: userId })
       .toArray();
     return records.map((r) => ({ guildId: r.guildId, name: r.name }));
   }
@@ -167,21 +174,30 @@ export class DiscordRepository {
 
   // --- DM identity linking (mirrors AuthRepository's Slack-link methods) --
 
-  async createDiscordLinkToken(email: string, ttlMs: number): Promise<string> {
+  async createDiscordLinkToken(email: string, ttlMs: number, returnTo?: string): Promise<string> {
     await this.ensureIndexes();
     const db = await getDb();
-    const collection = db.collection<{ token: string; email: string; expiresAt: Date }>(
+    const collection = db.collection<{ token: string; email: string; expiresAt: Date; returnTo?: string }>(
       "discord_link_tokens",
     );
 
     const existing = await collection.findOne({ email, expiresAt: { $gt: new Date() } });
-    if (existing) return existing.token;
+    if (existing) {
+      // A re-request (e.g. opening "Add to Discord" from a different page) must
+      // still land back on the CURRENT caller's page, not wherever the first
+      // request came from — keep the token but refresh its returnTo.
+      if (returnTo && returnTo !== existing.returnTo) {
+        await collection.updateOne({ token: existing.token }, { $set: { returnTo } });
+      }
+      return existing.token;
+    }
 
     const token = randomBytes(16).toString("base64url");
     await collection.deleteMany({ email });
     await collection.insertOne({
       token,
       email,
+      returnTo,
       expiresAt: new Date(Date.now() + ttlMs),
     });
     return token;
@@ -190,7 +206,7 @@ export class DiscordRepository {
   async consumeDiscordLinkToken(
     token: string,
     discordKey?: string,
-  ): Promise<{ email: string } | null> {
+  ): Promise<{ email: string; returnTo?: string } | null> {
     await this.ensureIndexes();
     const db = await getDb();
     const now = new Date();
@@ -198,6 +214,7 @@ export class DiscordRepository {
       token: string;
       email: string;
       expiresAt: Date;
+      returnTo?: string;
       claimedByDiscordKey?: string;
       claimedAt?: Date;
     }>("discord_link_tokens");
@@ -212,14 +229,14 @@ export class DiscordRepository {
         { $set: { claimedByDiscordKey: discordKey, claimedAt: now } },
         { returnDocument: "after" },
       );
-      return record ? { email: record.email } : null;
+      return record ? { email: record.email, returnTo: record.returnTo } : null;
     }
 
     const record = await collection.findOneAndDelete({ token });
     if (!record || record.expiresAt.getTime() < Date.now()) {
       return null;
     }
-    return { email: record.email };
+    return { email: record.email, returnTo: record.returnTo };
   }
 
   /** One-to-one, same contract as linkSlackUser: an identity already owned by a *different* account is refused, not stolen. */

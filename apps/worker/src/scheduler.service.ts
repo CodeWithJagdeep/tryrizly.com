@@ -30,6 +30,29 @@ import {
 } from "./automation-trigger-dedupe";
 
 /**
+ * Flattens a Cal.com booking's first attendee into top-level `attendeeName` /
+ * `attendeeEmail` fields so later flow steps can reference them as
+ * `{{attendeeName}}` / `{{attendeeEmail}}` — `interpolate()` only does flat
+ * key lookups, it can't walk into `attendees[0].email`.
+ */
+function withCalcomVariables<T extends { attendees?: { name: string; email: string }[] }>(
+  booking: T,
+): T & { attendeeName?: string; attendeeEmail?: string } {
+  const first = booking.attendees?.[0];
+  return { ...booking, attendeeName: first?.name, attendeeEmail: first?.email };
+}
+
+/** Optional trigger-level filter — only fires for bookings from this attendee email, if configured. */
+function matchesCalcomAttendeeFilter(
+  booking: { attendees?: { name: string; email: string }[] },
+  triggerConfig: Record<string, unknown> | undefined,
+): boolean {
+  const filterEmail = String(triggerConfig?.attendeeEmail ?? "").trim().toLowerCase();
+  if (!filterEmail) return true;
+  return (booking.attendees ?? []).some((a) => a.email.toLowerCase() === filterEmail);
+}
+
+/**
  * The cron heartbeat. It owns no intelligence: on each tick it asks ai-core to
  * do the thinking (compose the brief / scan the calendar and schedule meeting
  * reminders). Keeping the brain in ai-core and the clock here matches the
@@ -904,20 +927,134 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       newItems = (result.events ?? [])
         .filter((e) => e.hangoutLink && !seen.has(e.id))
         .map((e) => ({ itemId: e.id, payload: { ...e } }));
-    } else if (trigger.app === "calcom") {
-      // Polls every upcoming booking on the account — CalComBooking has no
-      // eventTypeId field to scope by, so (unlike the "Create Booking" action)
-      // there's no per-event-type config for this trigger.
+    } else if (trigger.app === "calcom" && trigger.title === "Meeting Started") {
+      // Same "tight forward window" trick as google-meet above — "started"
+      // means the booking's startTime falls inside this poll's window.
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
-          bookings?: Array<{ id: number; uid: string; title: string; startTime: string }>;
+          bookings?: Array<{
+            id: number;
+            uid: string;
+            title: string;
+            startTime: string;
+            attendees?: { name: string; email: string }[];
+          }>;
+        }>("automation.calcom.listBookings", { userId: flow.userId, status: "upcoming" }),
+      );
+      if (!result?.connected) return;
+      const windowEnd = now.getTime() + env.AUTOMATION_POLL_MINUTES * 60_000;
+      newItems = (result.bookings ?? [])
+        .filter((b) => {
+          const startMs = new Date(b.startTime).getTime();
+          return (
+            startMs >= now.getTime() &&
+            startMs <= windowEnd &&
+            !seen.has(b.uid) &&
+            matchesCalcomAttendeeFilter(b, trigger.config)
+          );
+        })
+        .map((b) => ({ itemId: b.uid, payload: withCalcomVariables(b) }));
+    } else if (trigger.app === "calcom" && trigger.title === "Meeting Ended") {
+      // Cal.com's "past" status list is exactly what we want here — bookings
+      // whose endTime just fell behind "now" within this poll's window.
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          bookings?: Array<{
+            id: number;
+            uid: string;
+            title: string;
+            endTime: string;
+            attendees?: { name: string; email: string }[];
+          }>;
+        }>("automation.calcom.listBookings", { userId: flow.userId, status: "past" }),
+      );
+      if (!result?.connected) return;
+      const windowStart = now.getTime() - env.AUTOMATION_POLL_MINUTES * 60_000;
+      newItems = (result.bookings ?? [])
+        .filter((b) => {
+          const endMs = new Date(b.endTime).getTime();
+          return (
+            endMs >= windowStart &&
+            endMs <= now.getTime() &&
+            !seen.has(b.uid) &&
+            matchesCalcomAttendeeFilter(b, trigger.config)
+          );
+        })
+        .map((b) => ({ itemId: b.uid, payload: withCalcomVariables(b) }));
+    } else if (trigger.app === "calcom" && trigger.title === "Out of Office Created") {
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          entries?: Array<{ id: number; uuid: string; start: string; end: string; reason?: string }>;
+        }>("automation.calcom.listOutOfOffice", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.entries ?? [])
+        .filter((o) => !seen.has(o.uuid))
+        .map((o) => ({ itemId: o.uuid, payload: { ...o } }));
+    } else if (trigger.app === "calcom" && trigger.title === "Booking Cancelled") {
+      // Cal.com keeps cancelled bookings queryable by status (unlike Calendar,
+      // which drops them from the list entirely) — a cancelled uid we haven't
+      // seen before is a fresh cancellation.
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          bookings?: Array<{
+            id: number;
+            uid: string;
+            title: string;
+            startTime: string;
+            attendees?: { name: string; email: string }[];
+          }>;
+        }>("automation.calcom.listBookings", { userId: flow.userId, status: "cancelled" }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.bookings ?? [])
+        .filter((b) => !seen.has(b.uid) && matchesCalcomAttendeeFilter(b, trigger.config))
+        .map((b) => ({ itemId: b.uid, payload: { ...withCalcomVariables(b), cancelled: true } }));
+    } else if (trigger.app === "calcom" && trigger.title === "Booking Rescheduled") {
+      // A reschedule creates a new booking uid carrying `fromReschedule` (the
+      // prior uid) — the dedup id is that new uid, so each reschedule fires once.
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          bookings?: Array<{
+            id: number;
+            uid: string;
+            title: string;
+            startTime: string;
+            fromReschedule?: string;
+            attendees?: { name: string; email: string }[];
+          }>;
         }>("automation.calcom.listBookings", { userId: flow.userId }),
       );
       if (!result?.connected) return;
       newItems = (result.bookings ?? [])
-        .filter((b) => !seen.has(b.uid))
-        .map((b) => ({ itemId: b.uid, payload: { ...b } }));
+        .filter((b) => b.fromReschedule && !seen.has(b.uid) && matchesCalcomAttendeeFilter(b, trigger.config))
+        .map((b) => ({ itemId: b.uid, payload: withCalcomVariables(b) }));
+    } else if (trigger.app === "calcom") {
+      // Polls every upcoming booking on the account — CalComBooking has no
+      // eventTypeId field to scope by, so (unlike the "Create Booking" action)
+      // there's no per-event-type config for this trigger. Optional
+      // attendeeEmail filter (trigger.config) narrows it to one attendee.
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          bookings?: Array<{
+            id: number;
+            uid: string;
+            title: string;
+            startTime: string;
+            attendees?: { name: string; email: string }[];
+          }>;
+        }>("automation.calcom.listBookings", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.bookings ?? [])
+        .filter((b) => !seen.has(b.uid) && matchesCalcomAttendeeFilter(b, trigger.config))
+        .map((b) => ({ itemId: b.uid, payload: withCalcomVariables(b) }));
     } else if (trigger.app === "jira") {
       const projectKey = String(trigger.config?.projectKey ?? "").trim() || undefined;
       const result = await firstValueFrom(
@@ -944,6 +1081,17 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       newItems = (result.incidents ?? [])
         .filter((i) => !seen.has(i.id))
         .map((i) => ({ itemId: i.id, payload: { ...i } }));
+    } else if (trigger.app === "dropbox" && trigger.title === "New Shared File") {
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          files?: Array<{ id: string; name?: string; url?: string; sharedAt?: string }>;
+        }>("automation.dropbox.listSharedFiles", { userId: flow.userId }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.files ?? [])
+        .filter((f) => !seen.has(f.id))
+        .map((f) => ({ itemId: f.id, payload: { ...f } }));
     } else if (trigger.app === "trello") {
       const listId = String(trigger.config?.listId ?? "").trim();
       if (!listId) return;
@@ -1018,10 +1166,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
           },
         }));
     } else if (trigger.app === "github" && trigger.title === "New Push") {
-      // sha is omitted from the underlying request — GitHub defaults commit
-      // listing to the repo's default branch, so no separate lookup is needed.
+      // branch is optional — omitted, GitHub defaults commit listing to the
+      // repo's default branch, so no separate default-branch lookup is needed.
       const repo = String(trigger.config?.repo ?? "").trim();
       if (!repo) return;
+      const branch = String(trigger.config?.branch ?? "").trim() || undefined;
       const result = await firstValueFrom(
         this.aiCore.send<{
           connected: boolean;
@@ -1031,7 +1180,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             commit: { message: string; author?: { name?: string; date?: string } };
             author?: { login?: string } | null;
           }>;
-        }>("automation.github.listNewCommits", { userId: flow.userId, repo }),
+        }>("automation.github.listNewCommits", { userId: flow.userId, repo, branch }),
       );
       if (!result?.connected) return;
       newItems = (result.commits ?? [])
@@ -1044,6 +1193,35 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             author: c.author?.login ?? c.commit.author?.name,
             date: c.commit.author?.date,
             url: c.html_url,
+          },
+        }));
+    } else if (trigger.app === "github" && trigger.title === "New Comment on Issue/PR") {
+      const repo = String(trigger.config?.repo ?? "").trim();
+      if (!repo) return;
+      const result = await firstValueFrom(
+        this.aiCore.send<{
+          connected: boolean;
+          comments?: Array<{
+            id: number;
+            html_url: string;
+            body: string;
+            created_at: string;
+            user?: { login?: string };
+            issue_url: string;
+          }>;
+        }>("automation.github.listNewComments", { userId: flow.userId, repo }),
+      );
+      if (!result?.connected) return;
+      newItems = (result.comments ?? [])
+        .filter((c) => !seen.has(String(c.id)))
+        .map((c) => ({
+          itemId: String(c.id),
+          payload: {
+            body: c.body,
+            author: c.user?.login,
+            url: c.html_url,
+            issueUrl: c.issue_url,
+            createdAt: c.created_at,
           },
         }));
     } else if (trigger.app === "mongodb") {

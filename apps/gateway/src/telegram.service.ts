@@ -36,8 +36,10 @@ async function sendWelcomeEmail(email: string, name: string | undefined): Promis
 }
 
 type TelegramChat = { id: number };
+type TelegramFrom = { username?: string; first_name?: string; last_name?: string };
 type TelegramMessage = {
   chat: TelegramChat;
+  from?: TelegramFrom;
   text?: string;
   voice?: { file_id: string };
 };
@@ -151,7 +153,7 @@ export class TelegramService {
 
     const startMatch = text.match(START_TOKEN);
     if (startMatch) {
-      await this.handleStart(chatId, startMatch[1]);
+      await this.handleStart(chatId, startMatch[1], message?.from);
       return;
     }
 
@@ -200,7 +202,13 @@ export class TelegramService {
     await this.runChat(chatId, text, key);
   }
 
-  private async handleStart(chatId: number, token: string): Promise<void> {
+  private async handleStart(chatId: number, token: string, from?: TelegramFrom): Promise<void> {
+    // Shows who's actually linked ("Telegram (@username)" or a plain first
+    // name) instead of the same generic label for every account — mirrors
+    // the Discord/Slack username fixes.
+    const displayName = from?.username
+      ? `@${from.username}`
+      : [from?.first_name, from?.last_name].filter(Boolean).join(" ") || undefined;
     const record = await this.authRepo.consumeTelegramLinkToken(token, String(chatId));
 
     if (!record) {
@@ -222,7 +230,7 @@ export class TelegramService {
     const userId = userIdFromEmail(record.email);
     const userBeforeLink = await this.authRepo.getUser(record.email);
     const isFirstOnboarding = !userBeforeLink?.onboarding?.completedAt;
-    const linked = await this.authRepo.linkTelegramChat(String(chatId), record.email, userId);
+    const linked = await this.authRepo.linkTelegramChat(String(chatId), record.email, userId, displayName);
 
     if (!linked.ok) {
       await sendTelegramMessage({
@@ -245,9 +253,9 @@ export class TelegramService {
         userId,
         provider: "telegram",
         authType: "manual",
-        label: "Telegram",
+        label: displayName ? `Telegram (${displayName})` : "Telegram",
         secret: { chatId: String(chatId) },
-        metadata: { setup: "telegram_link" },
+        metadata: { setup: "telegram_link", telegramDisplayName: displayName ?? null },
       });
     } catch (error) {
       logger.warn("failed to save telegram connector record", {
@@ -370,7 +378,7 @@ export class TelegramService {
         userId,
         message: "approved",
         approve: true,
-        pendingApproval: { id: pending.id, tool: pending.tool, payload: pending.payload },
+        pendingApproval: { id: pending.id, executionId: pending.executionId, tool: pending.tool, payload: pending.payload },
         history,
       });
     } finally {

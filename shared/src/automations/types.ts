@@ -251,14 +251,29 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   // list API doesn't push deletions/updates separately, so both are derived
   // by diffing successive polls against flow.cursor — see SchedulerService.
   calendar: ["New Event", "Event Start", "Event Cancelled", "New or Updated Event"],
-  calcom: ["New Booking"],
+  // "Booking Cancelled" polls the cancelled-status list (Cal.com keeps those
+  // queryable, unlike Calendar which drops cancellations from its list
+  // entirely). "Booking Rescheduled" polls upcoming bookings and looks for
+  // the new booking's `fromReschedule` field. "Meeting Started"/"Meeting
+  // Ended" use the same forward/backward poll-window trick as google-meet
+  // and calendar's "Event Start". "Out of Office Created" polls
+  // GET /v2/me/ooo, a separate Cal.com resource from bookings entirely —
+  // see SchedulerService's matching calcom branches.
+  calcom: [
+    "New Booking",
+    "Booking Cancelled",
+    "Booking Rescheduled",
+    "Meeting Started",
+    "Meeting Ended",
+    "Out of Office Created",
+  ],
   jira: ["New Issue"],
   pagerduty: ["New Incident"],
   trello: ["New Card"],
   // Polled (not a webhook — see AGENTS.md/the GitHub connector, which is a
   // plain PAT with no webhook-registration flow) via SchedulerService's
   // "github" branches.
-  github: ["New Pull Request", "New Issue", "New Push"],
+  github: ["New Pull Request", "New Issue", "New Push", "New Comment on Issue/PR"],
   mongodb: ["New Document"],
   "google-drive": ["New File"],
   // Both poll a Sheet (the Forms trigger reads the form's own response
@@ -298,7 +313,12 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
   typeform: ["New Submission"],
   gumroad: ["New Sale"],
   lemonsqueezy: ["New Sale"],
-  dropbox: ["File Changed"],
+  // "File Changed" is account-wide with no folder scoping. The other three
+  // are Zapier-style: folder-scoped (folderPath config) for the first two,
+  // and a poll against the sharing API (not the webhook/delta path) for the
+  // third — see AiCoreService.dropboxWebhookEvent and scheduler.service.ts's
+  // "dropbox" + "New Shared File" branch.
+  dropbox: ["File Changed", "New File in Folder", "New or Updated File in Folder", "New Shared File"],
   figma: ["New Comment"],
   uptimerobot: ["Monitor Down", "Monitor Up"],
   quickbooks: ["New Invoice", "Invoice Paid"],
@@ -318,17 +338,14 @@ export const LIVE_TRIGGER_EVENTS: Record<string, string[]> = {
 
 /** Which action events actually run, per app. Everything else is UI-only. */
 export const LIVE_ACTION_EVENTS: Record<string, string[]> = {
-  // "Send Channel Message" is NOT live despite the name suggesting channel
-  // targeting — the current implementation just sends to the linked Slack
-  // DM, identical to "Send Direct Message" (see automation-run.worker.service.ts's
-  // slack branch). Leaving it listed here would be actively misleading, not
-  // just "coming soon" — it appears to work but silently does the wrong
-  // thing. Re-add once real channel-targeting (channel picker + channels:read/
-  // chat:write.public scopes) is built.
-  slack: ["Send Direct Message"],
+  // "Send Channel Message" now targets a real channel (worker branches on
+  // title; schema requires channelId; chat:write.public added to
+  // SLACK_SURFACE_BOT_SCOPES). Workspaces installed before that scope landed
+  // must "Add to Slack" again, or posting to a channel the bot isn't in
+  // fails with not_in_channel.
+  slack: ["Send Direct Message", "Send Channel Message"],
   telegram: ["Send Message", "Notify Me"],
-  calcom: ["Create Booking"],
-  discord: ["Send Message"],
+  discord: ["Send Message", "Send Channel Message"],
   github: ["Create Issue"],
   notion: ["Create Page"],
   stripe: ["Create Customer"],

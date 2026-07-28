@@ -21,6 +21,7 @@ import type {
   DataSourceSecretResult,
   GoogleOAuthProvider,
   JiraConnectorSecret,
+  PagerDutyConnectorSecret,
   SaveConnectorInput,
   StartOAuthInput,
   StripeConnectorSecret,
@@ -969,6 +970,35 @@ export class ConnectorService {
     await this.repository.updateById(account.id, { metadata: { ...account.metadata, dropboxCursor: cursor } });
   }
 
+  /**
+   * Distinguishes "New File in Folder" from "New or Updated File in Folder":
+   * a file id seen here for the first time is genuinely new; a repeat
+   * appearance is an edit/move. The seen-set is a JSON array (metadata values
+   * can't hold arrays directly) capped at the most recent 500 ids so it can't
+   * grow unbounded on a heavily-edited account.
+   */
+  async filterNewDropboxFileIds(userId: string, candidateIds: string[]): Promise<Set<string>> {
+    const account = await this.repository.find(userId, "dropbox");
+    if (!account) return new Set();
+    const raw = account.metadata.dropboxSeenFileIds;
+    let seen: string[] = [];
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) seen = parsed.filter((v): v is string => typeof v === "string");
+      } catch {
+        seen = [];
+      }
+    }
+    const seenSet = new Set(seen);
+    const newIds = new Set(candidateIds.filter((id) => !seenSet.has(id)));
+    const updated = [...seen, ...candidateIds.filter((id) => !seenSet.has(id))].slice(-500);
+    await this.repository.updateById(account.id, {
+      metadata: { ...account.metadata, dropboxSeenFileIds: JSON.stringify(updated) },
+    });
+    return newIds;
+  }
+
   /** Decrypts Figma OAuth credentials. Returns null if not connected. */
   async getFigmaSecret(userId: string): Promise<{ accessToken: string; teamId?: string } | null> {
     const account = await this.repository.find(userId, "figma");
@@ -1444,15 +1474,29 @@ export class ConnectorService {
     return null;
   }
 
-  /** Decrypts a PagerDuty REST API key + the "From" user email PagerDuty requires on writes. */
-  async getPagerDutySecret(userId: string): Promise<{ apiKey: string; fromEmail: string } | null> {
+  /**
+   * Decrypts PagerDuty credentials — either the OAuth shape (accessToken) or
+   * the manual fallback (apiKey + the "From" user email PagerDuty requires on
+   * API-key writes). pagerduty.service.ts branches on which fields are present.
+   */
+  async getPagerDutySecret(userId: string): Promise<PagerDutyConnectorSecret | null> {
     const account = await this.repository.find(userId, "pagerduty");
     if (!account) return null;
     const payload = this.vault.decrypt(account.encryptedPayload);
+
+    const accessToken = stringSecret(payload.accessToken);
+    if (accessToken) {
+      return {
+        accessToken,
+        refreshToken: stringSecret(payload.refreshToken),
+        expiresAt: numberSecret(payload.expiresAt),
+      };
+    }
+
     const apiKey = stringSecret(payload.apiKey);
     const fromEmail = stringSecret(payload.fromEmail);
-    if (!apiKey || !fromEmail) return null;
-    return { apiKey, fromEmail };
+    if (apiKey && fromEmail) return { apiKey, fromEmail };
+    return null;
   }
 
   /** Decrypts a Trello API key + token pair. Returns null if not connected. */
@@ -1466,12 +1510,17 @@ export class ConnectorService {
     return { apiKey, token };
   }
 
-  /** Decrypts an Airtable personal access token. Returns null if not connected. */
+  /**
+   * Decrypts an Airtable bearer token. Works for either connection type:
+   * a manual personal access token (`apiKey`) or an OAuth access token
+   * (`accessToken`, from completeAirtableOAuth) — Airtable's REST API accepts
+   * both as an identical `Bearer <token>` header, so callers never need to care.
+   */
   async getAirtableSecret(userId: string): Promise<{ apiKey: string } | null> {
     const account = await this.repository.find(userId, "airtable");
     if (!account) return null;
     const payload = this.vault.decrypt(account.encryptedPayload);
-    const apiKey = stringSecret(payload.apiKey);
+    const apiKey = stringSecret(payload.apiKey) ?? stringSecret(payload.accessToken);
     if (!apiKey) return null;
     return { apiKey };
   }
@@ -1683,6 +1732,13 @@ export class ConnectorService {
       const missingConfig = missingOAuthConfig(input.provider);
       if (missingConfig) return missingConfig;
       statePayload = { folderId };
+    } else if (input.provider === "airtable") {
+      // PKCE is mandatory for every Airtable OAuth client, confidential or not.
+      const missingConfig = missingOAuthConfig(input.provider);
+      if (missingConfig) return missingConfig;
+      const codeVerifier = generateCodeVerifier();
+      codeChallenge = codeChallengeFor(codeVerifier);
+      statePayload = { codeVerifier };
     } else {
       const missingConfig = missingOAuthConfig(input.provider);
       if (missingConfig) return missingConfig;
@@ -1720,6 +1776,22 @@ export class ConnectorService {
       authUrl: url.toString(),
       scopes,
     };
+  }
+
+  /**
+   * Recovers the `returnTo` the OAuth flow started with, for the callback's
+   * error path — the provider (Airtable, Google, etc.) redirects back with
+   * `?error=...` instead of `?code=...`, so completeOAuth's normal state
+   * consumption never runs. Without this, every OAuth error bounced the
+   * principal to the generic /dashboard/connectors instead of wherever they
+   * actually started (e.g. mid-automation). Consuming the state here is fine
+   * — an errored attempt can't be retried with the same state anyway.
+   */
+  async resolveOAuthReturnTo(rawState: string | undefined): Promise<string | undefined> {
+    const state = rawState ? verifyOAuthState(rawState) : undefined;
+    if (!state) return undefined;
+    const storedState = await this.repository.consumeOAuthState(state.stateId, state.provider);
+    return storedState?.returnTo;
   }
 
   async completeOAuth(input: CompleteOAuthInput): Promise<CompleteOAuthResult> {
@@ -1875,6 +1947,27 @@ export class ConnectorService {
 
     if (provider === "calendly") {
       return this.completeCalendlyOAuth({
+        code: input.code,
+        userId,
+        returnTo: storedState.returnTo,
+      });
+    }
+
+    if (provider === "airtable") {
+      const codeVerifier = codeVerifierFromEncryptedState(this.vault, storedState.encryptedPayload);
+      if (!codeVerifier) {
+        throw new Error("Airtable OAuth state is missing the PKCE code_verifier");
+      }
+      return this.completeAirtableOAuth({
+        code: input.code,
+        userId,
+        returnTo: storedState.returnTo,
+        codeVerifier,
+      });
+    }
+
+    if (provider === "pagerduty") {
+      return this.completePagerDutyOAuth({
         code: input.code,
         userId,
         returnTo: storedState.returnTo,
@@ -2267,6 +2360,67 @@ export class ConnectorService {
     return { ...this.toSummary(account), returnTo: input.returnTo };
   }
 
+  private async completeAirtableOAuth(input: {
+    code: string;
+    userId: string;
+    returnTo?: string;
+    codeVerifier: string;
+  }): Promise<CompleteOAuthResult> {
+    if (!env.AIRTABLE_CLIENT_ID) {
+      throw new Error("Airtable OAuth env vars are missing");
+    }
+    // Confidential client (we hold a secret) -> Basic auth per Airtable's docs;
+    // PKCE's code_verifier is still required in the body regardless.
+    const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+    if (env.AIRTABLE_CLIENT_SECRET) {
+      headers.authorization = `Basic ${Buffer.from(`${env.AIRTABLE_CLIENT_ID}:${env.AIRTABLE_CLIENT_SECRET}`).toString("base64")}`;
+    }
+    const response = await fetch("https://airtable.com/oauth2/v1/token", {
+      method: "POST",
+      headers,
+      body: new URLSearchParams({
+        code: input.code,
+        grant_type: "authorization_code",
+        client_id: env.AIRTABLE_CLIENT_ID,
+        redirect_uri: env.AIRTABLE_REDIRECT_URI,
+        code_verifier: input.codeVerifier,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Airtable token exchange failed: ${await response.text()}`);
+    }
+    const tokenJson = (await response.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+    };
+    const accessToken = stringSecret(tokenJson.access_token);
+    if (!accessToken) {
+      throw new Error("Airtable token exchange did not return an access token");
+    }
+
+    const whoami = await fetch("https://api.airtable.com/v0/meta/whoami", {
+      headers: { authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => (res.ok ? (res.json() as Promise<{ id?: string; email?: string }>) : null))
+      .catch(() => null);
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: "airtable",
+      authType: "oauth",
+      label: whoami?.email ? `Airtable (${whoami.email})` : providerLabel("airtable"),
+      status: "connected",
+      encryptedPayload: this.vault.encrypt({
+        accessToken,
+        refreshToken: tokenJson.refresh_token ?? null,
+      }),
+      scopes: [],
+      metadata: { setup: "oauth", airtableUserId: whoami?.id ?? null },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
   /**
    * Registers a Figma "FILE_COMMENT" webhook for the given team right after
    * OAuth completes — see FigmaWebhookAuthService for the receiver side.
@@ -2632,6 +2786,79 @@ export class ConnectorService {
     return { ...this.toSummary(account), returnTo: input.returnTo };
   }
 
+  private async completePagerDutyOAuth(input: {
+    code: string;
+    userId: string;
+    returnTo?: string;
+  }): Promise<CompleteOAuthResult> {
+    if (!env.PAGERDUTY_CLIENT_ID || !env.PAGERDUTY_CLIENT_SECRET) {
+      throw new Error("PagerDuty OAuth env vars are missing");
+    }
+    const response = await fetch("https://identity.pagerduty.com/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: env.PAGERDUTY_CLIENT_ID,
+        client_secret: env.PAGERDUTY_CLIENT_SECRET,
+        code: input.code,
+        redirect_uri: env.PAGERDUTY_REDIRECT_URI,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`PagerDuty token exchange failed: ${await response.text()}`);
+    }
+    const tokenJson = (await response.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+    const accessToken = stringSecret(tokenJson.access_token);
+    if (!accessToken) {
+      throw new Error("PagerDuty token exchange did not return an access token");
+    }
+
+    // The token already identifies the acting user to PagerDuty's API, but we
+    // still fetch the user's own record so the connector label shows a name
+    // instead of a bare "PagerDuty".
+    let ownerName: string | undefined;
+    try {
+      const meResponse = await fetch("https://api.pagerduty.com/users/me", {
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: "application/vnd.pagerduty+json;version=2",
+        },
+      });
+      if (meResponse.ok) {
+        const meJson = (await meResponse.json()) as { user?: { name?: string; email?: string } };
+        ownerName = meJson.user?.name ?? meJson.user?.email;
+      }
+    } catch {
+      // Non-fatal — falls back to the generic provider label below.
+    }
+
+    const account = await this.repository.upsert({
+      userId: input.userId,
+      provider: "pagerduty",
+      authType: "oauth",
+      label: ownerName ? `PagerDuty (${ownerName})` : providerLabel("pagerduty"),
+      status: "connected",
+      encryptedPayload: this.vault.encrypt({
+        accessToken,
+        refreshToken: tokenJson.refresh_token ?? null,
+        expiresAt: tokenExpiresAt(numberSecret(tokenJson.expires_in)) ?? null,
+      }),
+      scopes: scopesForOAuthProvider("pagerduty"),
+      metadata: {
+        setup: "oauth",
+        hasRefreshToken: Boolean(tokenJson.refresh_token),
+        ...(ownerName ? { accountName: ownerName } : {}),
+      },
+    });
+
+    return { ...this.toSummary(account), returnTo: input.returnTo };
+  }
+
   private async completeBoxOAuth(input: {
     code: string;
     userId: string;
@@ -2895,7 +3122,9 @@ function isConnectorOAuthProvider(value: unknown): value is ConnectorOAuthProvid
     value === "deel" ||
     value === "box" ||
     value === "jira" ||
-    value === "calendly"
+    value === "calendly" ||
+    value === "airtable" ||
+    value === "pagerduty"
   );
 }
 
@@ -2906,7 +3135,9 @@ function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
   // have no read-only variant of it. The GitHubService still only GETs.
   if (provider === "github") return ["repo", "read:user"];
   if (provider === "shopify") return (env.SHOPIFY_SCOPES ?? "read_orders,read_inventory").split(",").map((s) => s.trim());
-  if (provider === "dropbox") return ["files.metadata.read", "files.content.read"];
+  // sharing.read powers the "New Shared File" trigger's poll against
+  // sharing/list_received_files.
+  if (provider === "dropbox") return ["files.metadata.read", "files.content.read", "sharing.read"];
   if (provider === "figma") return ["file_comments:read", "webhooks:write"];
   if (provider === "quickbooks") return ["com.intuit.quickbooks.accounting"];
   if (provider === "xero") return ["openid", "profile", "accounting.transactions.read", "offline_access"];
@@ -2930,6 +3161,13 @@ function scopesForOAuthProvider(provider: ConnectorOAuthProvider): string[] {
       "webhooks:write",
     ];
   }
+  // schema.bases:read powers the flow-builder's base/table picker (List Bases +
+  // Get Base Schema) — data.records:* alone can't enumerate what's available.
+  if (provider === "airtable") return ["data.records:read", "data.records:write", "schema.bases:read"];
+  // The PagerDuty app was registered with a broader scoped-OAuth grant
+  // (incident_types, schedules, webhook_subscriptions) for future features,
+  // but pagerduty.service.ts today only reads/creates incidents.
+  if (provider === "pagerduty") return ["incidents.read", "incidents.write"];
   return provider === "calcom" ? calComOAuthScopes : oauthScopesByProvider[provider];
 }
 
@@ -3022,6 +3260,20 @@ function missingOAuthConfig(provider: ConnectorOAuthProvider) {
     return {
       status: "missing_config" as const,
       message: "CALENDLY_CLIENT_ID and CALENDLY_CLIENT_SECRET are missing",
+    };
+  }
+
+  if (provider === "airtable" && !env.AIRTABLE_CLIENT_ID) {
+    return {
+      status: "missing_config" as const,
+      message: "AIRTABLE_CLIENT_ID is missing",
+    };
+  }
+
+  if (provider === "pagerduty" && (!env.PAGERDUTY_CLIENT_ID || !env.PAGERDUTY_CLIENT_SECRET)) {
+    return {
+      status: "missing_config" as const,
+      message: "PAGERDUTY_CLIENT_ID and PAGERDUTY_CLIENT_SECRET are missing",
     };
   }
 
@@ -3137,6 +3389,31 @@ function authorizationUrlForProvider(
     url.searchParams.set("redirect_uri", env.CALENDLY_REDIRECT_URI);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("state", state);
+    return url.toString();
+  }
+
+  if (provider === "pagerduty") {
+    const url = new URL("https://identity.pagerduty.com/oauth/authorize");
+    url.searchParams.set("client_id", env.PAGERDUTY_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.PAGERDUTY_REDIRECT_URI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", scopes.join(" "));
+    url.searchParams.set("state", state);
+    return url.toString();
+  }
+
+  if (provider === "airtable") {
+    const url = new URL("https://airtable.com/oauth2/v1/authorize");
+    url.searchParams.set("client_id", env.AIRTABLE_CLIENT_ID ?? "");
+    url.searchParams.set("redirect_uri", env.AIRTABLE_REDIRECT_URI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", scopes.join(" "));
+    url.searchParams.set("state", state);
+    // Required on every Airtable authorize request, not just PKCE-only clients.
+    if (codeChallenge) {
+      url.searchParams.set("code_challenge", codeChallenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    }
     return url.toString();
   }
 

@@ -375,12 +375,13 @@ export const connectorCatalog: ConnectorCatalogItem[] = [
     title: "Calendly",
     description: "Automations that fire when a booking is created or cancelled.",
     category: "Scheduling",
-    // No real Calendly OAuth exchange is built on the backend -- this is a
-    // Personal Access Token connector, full stop, not an OAuth-with-fallback.
-    authType: "manual",
+    // Real OAuth exchange is built on the backend (CALENDLY_CLIENT_ID/SECRET,
+    // gateway /api/connectors/calendly/start + /callback) -- the PAT field
+    // below is only a fallback for accounts OAuth doesn't cover, same as Cal.com.
+    authType: "oauth",
     icon: CalendlyIcon,
     fields: [
-      { name: "apiToken", label: "Personal Access Token", type: "password", placeholder: "From calendly.com/integrations/api_webhooks" },
+      { name: "apiToken", label: "Personal Access Token (if OAuth doesn't work for your account)", type: "password", placeholder: "From calendly.com/integrations/api_webhooks" },
     ],
   },
   {

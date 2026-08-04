@@ -17,6 +17,7 @@ type ChatBody = {
   history?: ChatTurn[];
   approve?: boolean;
   pendingApprovalId?: string;
+  sessionId?: string;
 };
 
 export async function POST(request: Request) {
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
       userId: session.userId,
       message,
       history: body?.history ?? [],
+      sessionId: body?.sessionId,
       ...(body?.approve ? { approve: true, pendingApprovalId: body.pendingApprovalId } : {}),
     });
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -39,10 +38,10 @@ function AuthOption({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-12 w-full grid-cols-[48px_1fr_48px] items-center rounded-xl border border-white/15 bg-white/[0.04] text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`grid h-12 w-full grid-cols-[48px_1fr_48px] items-center rounded-xl border border-black/15 bg-black/[0.04] text-black transition duration-200 hover:-translate-y-0.5 hover:border-black/30 hover:bg-black/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       <span className="flex items-center justify-center">{icon}</span>
-      <span className="text-center text-sm font-medium leading-none text-white">
+      <span className="text-center text-sm font-medium leading-none text-black">
         {label}
       </span>
       <span aria-hidden="true" />
@@ -188,34 +187,19 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
   };
 
   const fieldClass =
-    "mt-2 h-12 w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 text-sm font-medium text-white outline-none transition placeholder:text-white/30 focus:border-[#D9BEF4] focus:ring-2 focus:ring-[#D9BEF4]/15";
+    "mt-2 h-12 w-full rounded-xl border border-black/15 bg-black/[0.03] px-4 text-sm font-medium text-black outline-none transition placeholder:text-black/35 focus:border-[#8b5fbf] focus:ring-2 focus:ring-[#8b5fbf]/15";
   const primaryButtonClass =
-    "mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-black transition duration-200 hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50";
+    "mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-black text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
-    <main className="font-display relative flex min-h-screen flex-col overflow-hidden bg-black px-4 py-6 text-white antialiased sm:px-8 sm:py-8">
-      <Link
-        href="/"
-        className="fixed left-5 top-5 z-20 inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-4 focus-visible:ring-offset-black sm:left-8 sm:top-7"
-        aria-label="Rizly home"
-      >
-        <Image
-          src="/rizly_white.png"
-          alt="Rizly"
-          width={112}
-          height={26}
-          className="h-8 w-auto object-contain opacity-85 brightness-0 invert"
-          priority
-        />
-      </Link>
-
-      <div className="flex flex-1 flex-col">
-          <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center py-10 text-center sm:py-14">
+    <div className="font-display relative flex flex-1 flex-col overflow-hidden bg-black pt-0 pb-10 pl-10 pr-10 text-black antialiased sm:pb-14 sm:pl-14 sm:pr-14">
+      <div className="mx-auto flex w-full max-w-8xl flex-1 flex-col overflow-hidden rounded-2xl bg-white">
+          <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 pb-16 pt-8 text-center sm:px-8 sm:pb-20 sm:pt-10 lg:px-12 lg:pb-24 lg:pt-12">
             <div className="mb-8">
-              <h1 className="mx-auto w-full max-w-full pt-8 text-4xl font-normal leading-[1.1] tracking-[-0.02em] text-white">
+              <h1 className="mx-auto w-full max-w-full pt-8 text-4xl font-normal leading-[1.1] tracking-[-0.02em] text-black">
                 Never miss something important.
               </h1>
-              <p className="mx-auto mt-3 max-w-full text-base leading-7 text-white/55">
+              <p className="mx-auto mt-3 max-w-full text-base leading-7 text-black/55">
                 {mode === "login" ? "Sign in with your work email" : "Sign up with your work email"}
               </p>
             </div>
@@ -236,9 +220,9 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
             </div>
 
             <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-white/10" />
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">or use email</span>
-              <div className="h-px flex-1 bg-white/10" />
+              <div className="h-px flex-1 bg-black/10" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/35">or use email</span>
+              <div className="h-px flex-1 bg-black/10" />
             </div>
 
             {error && (
@@ -250,7 +234,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
             {pendingVerifyEmail ? (
               <>
                 <form onSubmit={handleVerifyOtp} className="w-full">
-                  <label className="block text-sm font-medium text-white/90">
+                  <label className="block text-sm font-medium text-black/90">
                     6-digit code sent to {pendingVerifyEmail}
                   </label>
                   <input
@@ -265,16 +249,16 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                     className={`${fieldClass} text-center tracking-[0.35em]`}
                   />
                   <button type="submit" disabled={Boolean(loading) || otp.length !== 6} className={primaryButtonClass}>
-                    {loading === "email" && <Spinner dark />}
+                    {loading === "email" && <Spinner />}
                     Verify and continue
                   </button>
                 </form>
-                <p className="mt-4 text-center text-sm text-white/50">
+                <p className="mt-4 text-center text-sm text-black/50">
                   <button
                     type="button"
                     onClick={handleResendOtp}
                     disabled={resending}
-                    className="font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50"
+                    className="font-semibold text-black underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:opacity-50"
                   >
                     {resent ? "Code resent — check your inbox" : resending ? "Sending…" : "Resend code"}
                   </button>
@@ -283,7 +267,7 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
             ) : (
               <>
                 <form onSubmit={handleEmailLogin} className="w-full">
-                  <label className="block text-sm font-medium text-white/90">Email address</label>
+                  <label className="block text-sm font-medium text-black/90">Email address</label>
                   <input
                     value={email}
                     onChange={(event) => {
@@ -300,11 +284,11 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                   {showPassword && (
                     <div className="mt-4">
                       <div className="flex items-center justify-between">
-                        <label className="block text-sm font-medium text-white/90">Password</label>
+                        <label className="block text-sm font-medium text-black/90">Password</label>
                         {mode === "login" && (
                           <Link
                             href="/forgot-password"
-                            className="text-xs font-medium text-white/50 underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                            className="text-xs font-medium text-black/50 underline-offset-4 hover:text-black hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30"
                           >
                             Forgot password?
                           </Link>
@@ -325,29 +309,29 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
                   )}
 
                   <button type="submit" disabled={Boolean(loading)} className={primaryButtonClass}>
-                    {loading === "email" && <Spinner dark />}
+                    {loading === "email" && <Spinner />}
                     {showPassword ? (mode === "signup" ? "Create workspace" : "Sign in") : "Continue"}
                   </button>
                 </form>
 
-                <p className="mt-4 text-center text-base text-white/70">
+                <p className="mt-4 text-center text-base text-black/70">
                   {mode === "login" ? "New to Rizly? " : "Already have an account? "}
                   <button
                     type="button"
                     onClick={() => navigateToMode(mode === "login" ? "signup" : "login")}
-                    className="font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    className="font-semibold text-black underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30"
                   >
                     {mode === "login" ? "Create a workspace" : "Log in"}
                   </button>
                 </p>
 
-                <p className="mx-auto mt-6 max-w-full text-center text-sm leading-6 text-white/70">
+                <p className="mx-auto mt-6 max-w-full text-center text-sm leading-6 text-black/70">
                   By continuing, you agree to the{" "}
-                  <Link href="/terms" className="font-medium text-white/60 underline underline-offset-2 hover:text-white">
+                  <Link href="/terms" className="font-medium text-black/60 underline underline-offset-2 hover:text-black">
                     Terms
                   </Link>{" "}
                   and{" "}
-                  <Link href="/privacy" className="font-medium text-white/60 underline underline-offset-2 hover:text-white">
+                  <Link href="/privacy" className="font-medium text-black/60 underline underline-offset-2 hover:text-black">
                     Privacy Policy
                   </Link>
                   .
@@ -355,12 +339,8 @@ export function AuthFlow({ initialMode }: { initialMode: "login" | "signup" }) {
               </>
             )}
           </div>
-
-          <p className="text-center text-sm font-semibold uppercase tracking-[0.14em] text-white/70">
-            Private by design · approval before action
-          </p>
       </div>
-    </main>
+    </div>
   );
 }
 

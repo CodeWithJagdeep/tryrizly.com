@@ -233,6 +233,15 @@ export function UsersIcon({ className }: IconProps) {
   );
 }
 
+export function ProfileIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">
+      <circle cx="8" cy="5.3" r="2.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2.8 14c.5-2.6 2.7-4.3 5.2-4.3s4.7 1.7 5.2 4.3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function MailIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className ?? base} aria-hidden="true">

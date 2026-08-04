@@ -4,6 +4,7 @@ import { requireSession } from "../api/onboarding/_lib/require-user";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { DashboardContentShell } from "./components/DashboardContentShell";
 import { MobileNav } from "./components/MobileNav";
+import { SettingsModal } from "./components/SettingsModal";
 import { WelcomeTour } from "./components/WelcomeTour";
 
 // Auth-gated app surface — keep the whole tree out of search indexes
@@ -17,10 +18,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session) redirect("/login");
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-900">
+    <div className="dashboard-shell flex min-h-screen flex-col bg-[#1d1d1f] text-[#d1d0d3]">
       <div className="relative flex min-h-0 flex-1">
         <Suspense fallback={null}>
-          <ChatSidebar />
+          <ChatSidebar session={session} />
         </Suspense>
         <DashboardContentShell>
           {children}
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </div>
       <MobileNav />
       <WelcomeTour />
+      <SettingsModal session={session} />
     </div>
   );
 }

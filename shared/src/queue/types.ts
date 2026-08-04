@@ -3,7 +3,7 @@ export type NotificationJobName = "telegram-notification" | "meeting-reminder";
 export type NotificationJobData = {
   userId: string;
   message: string;
-  source: "gateway" | "ai-core" | "calendar" | "calcom" | "gmail" | "manual";
+  source: "gateway" | "ai-core" | "calendar" | "calcom" | "gmail" | "manual" | "morning_brief";
   taskId?: string;
   meetingId?: string;
   metadata?: Record<string, string | number | boolean | null>;

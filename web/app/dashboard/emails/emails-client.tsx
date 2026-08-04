@@ -82,16 +82,16 @@ function parseSummary(raw: string) {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  payment_due:      "bg-red-50 text-red-700 border-red-200",
-  meeting_request:  "bg-blue-50 text-blue-700 border-blue-200",
-  investor_update:  "bg-violet-50 text-violet-700 border-violet-200",
-  follow_up_needed: "bg-amber-50 text-amber-700 border-amber-200",
-  general_high:     "bg-orange-50 text-orange-700 border-orange-200",
-  account_alert:    "bg-red-50 text-red-700 border-red-200",
-  general_medium:   "bg-slate-100 text-slate-600 border-slate-300",
-  general_low:      "bg-slate-100 text-slate-500 border-slate-200",
-  newsletter:       "bg-slate-100 text-slate-500 border-slate-200",
-  otp:              "bg-slate-100 text-slate-500 border-slate-200",
+  payment_due:      "bg-red-500/10 text-red-300 border-red-500/20",
+  meeting_request:  "bg-blue-500/10 text-blue-300 border-blue-500/20",
+  investor_update:  "bg-violet-500/10 text-violet-300 border-violet-500/20",
+  follow_up_needed: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+  general_high:     "bg-orange-500/10 text-orange-300 border-orange-500/20",
+  account_alert:    "bg-red-500/10 text-red-300 border-red-500/20",
+  general_medium:   "bg-white/10 text-white/70 border-[#3a3b3f]",
+  general_low:      "bg-white/10 text-white/60 border-[#2d2e31]",
+  newsletter:       "bg-white/10 text-white/60 border-[#2d2e31]",
+  otp:              "bg-white/10 text-white/60 border-[#2d2e31]",
 };
 
 // Pure marketing/OTP noise - hidden from the "All" tab's default view,
@@ -188,26 +188,26 @@ export function EmailsClient() {
     : sentEmails;
 
   return (
-    <main className="min-h-screen bg-[#f8f8f7] text-slate-900">
+    <main className="flex h-dvh flex-col overflow-hidden bg-[#111315] text-white">
       {/* Top bar — matches the chat page's sticky chrome */}
-      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
-        <div className="flex h-8 items-center rounded-lg px-2 text-base font-normal text-slate-900 md:text-lg">
+      <div className="flex h-14 w-full shrink-0 items-center justify-between border-b border-[#2d2e31] bg-[#111315] px-4 md:px-6">
+        <div className="flex h-8 items-center rounded-lg px-2 text-base font-normal text-white md:text-lg">
           Emails
         </div>
         <CreditsBadge />
       </div>
 
       {/* Header */}
-      <header className="border-b border-slate-200 px-4 pt-1 sm:px-6">
+      <header className="shrink-0 border-b border-[#2d2e31] px-4 pt-1 sm:px-6">
         <div className="flex items-center justify-between gap-3 pb-4">
-          <p className="min-w-0 truncate text-[15px] text-slate-500">
+          <p className="min-w-0 truncate text-[15px] text-white/60">
             Every important email from your inbox, all in one place
           </p>
           <button
             type="button"
             onClick={() => void load(true)}
             disabled={refreshing || loading}
-            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-[#2d2e31] bg-[#18191b] px-3 py-1.5 text-sm text-white/70 transition hover:border-[#3a3b3f] hover:text-white disabled:opacity-40"
           >
             <RefreshIcon spinning={refreshing} />
             <span className="hidden sm:inline">Refresh</span>
@@ -216,7 +216,7 @@ export function EmailsClient() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
             <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
@@ -224,7 +224,7 @@ export function EmailsClient() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search emails…"
-            className="h-12 w-full rounded-full border border-black/20 bg-white pl-11 pr-4 text-base text-slate-900 placeholder:text-slate-400 transition focus:border-[#D9BEF4] focus:outline-none"
+            className="h-12 w-full rounded-full border border-[#2d2e31] bg-[#18191b] pl-11 pr-4 text-base text-white placeholder:text-white/40 transition focus:border-[#D9BEF4] focus:outline-none"
           />
         </div>
 
@@ -237,14 +237,14 @@ export function EmailsClient() {
               onClick={() => setActiveTab(key)}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[15px] font-normal transition ${
                 activeTab === key
-                  ? "border-black/20 bg-slate-100 text-black/80"
-                  : "border-black/20 bg-white text-black/80 hover:border-black/40 hover:bg-slate-50"
+                  ? "border-[#2d2e31] bg-white/10 text-white/80"
+                  : "border-[#2d2e31] bg-[#18191b] text-white/80 hover:border-[#3a3b3f] hover:bg-white/[0.03]"
               }`}
             >
               {label}
               {!loading && counts[key] > 0 && (
                 <span className={`rounded-full px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === key ? "bg-white text-black/80" : "bg-slate-100 text-slate-500"
+                  activeTab === key ? "bg-[#D9BEF4]/15 text-[#D9BEF4]" : "bg-white/10 text-white/60"
                 }`}>
                   {counts[key]}
                 </span>
@@ -254,18 +254,18 @@ export function EmailsClient() {
         </div>
       </header>
 
-      <div className="w-full px-4 py-6 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-3 py-16">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-            <span className="text-sm text-slate-500">Loading emails…</span>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#2d2e31] border-t-white" />
+            <span className="text-sm text-white/60">Loading emails…</span>
           </div>
         )}
 
         {/* Error */}
         {!loading && error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300">
             {error}
           </div>
         )}
@@ -285,11 +285,11 @@ export function EmailsClient() {
               <SentList emails={displayedSent} />
             ) : (
               <div className="flex flex-col items-center gap-3 py-20 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2d2e31] bg-[#18191b]">
                   <InboxIcon />
                 </div>
                 <p className="font-medium">No emails here yet</p>
-                <p className="max-w-xs text-sm text-slate-500">
+                <p className="max-w-xs text-sm text-white/60">
                   {!gmailConnected
                     ? "Connect Gmail so Riz can analyse incoming email and build this inbox from real messages."
                     : activeTab === "followups"
@@ -305,7 +305,7 @@ export function EmailsClient() {
                 {!gmailConnected && (
                   <a
                     href="/api/connectors/gmail/start?returnTo=%2Fdashboard%2Femails"
-                    className="mt-2 inline-flex items-center justify-center rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24]"
+                    className="mt-2 inline-flex items-center justify-center rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-[#1a1a1c] transition hover:brightness-95"
                   >
                     Connect Gmail
                   </a>
@@ -315,18 +315,18 @@ export function EmailsClient() {
 
             {emailTab && emailTasks.length > 0 && (
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-white/60">
                   Follow-ups Riz created from email
                 </p>
                 <div className="flex flex-col gap-2">
                   {emailTasks.map((t) => (
-                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div key={t.id} className="flex items-start gap-3 rounded-xl border border-[#2d2e31] bg-[#18191b] px-4 py-3">
                       <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-violet-500/40 bg-violet-500/10">
                         <CheckIcon />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-slate-700 leading-snug">{t.summary}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">{timeAgo(t.createdAt)}</p>
+                        <p className="text-sm text-white/80 leading-snug">{t.summary}</p>
+                        <p className="mt-1 text-[11px] text-white/40">{timeAgo(t.createdAt)}</p>
                       </div>
                     </div>
                   ))}
@@ -411,23 +411,23 @@ function EmailCard({
   return (
     <div
       onClick={() => canOpen && onOpen(email)}
-      className={`rounded-xl border border-slate-200 bg-white p-3 transition active:bg-slate-50 ${canOpen ? "cursor-pointer" : ""}`}
+      className={`rounded-xl border border-[#2d2e31] bg-[#18191b] p-3 transition active:bg-white/[0.03] ${canOpen ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white/70">
           {initials}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-semibold text-slate-900">{from || email.person || "Unknown"}</p>
-            <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.createdAt)}</span>
+            <p className="truncate text-sm font-semibold text-white">{from || email.person || "Unknown"}</p>
+            <span className="shrink-0 text-[11px] text-white/40">{formatDate(email.createdAt)}</span>
           </div>
-          <p className="mt-0.5 truncate text-sm text-slate-700">{subject || email.summary}</p>
-          {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{body}</p> : null}
+          <p className="mt-0.5 truncate text-sm text-white/80">{subject || email.summary}</p>
+          {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/60">{body}</p> : null}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className={`border px-2 py-0.5 text-[10px] font-semibold ${catColor}`}>{catLabel}</span>
             {email.sample ? (
-              <span className="border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                 Sample
               </span>
             ) : null}
@@ -461,9 +461,9 @@ function EmailTable({
   onOpen: (email: ProcessedEmail) => void;
 }) {
   return (
-    <div className="overflow-x-auto bg-white">
+    <div className="overflow-x-auto bg-[#18191b]">
       <table className="w-full min-w-[1050px] border-collapse text-left">
-        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <thead className="bg-[#18191b] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
           <tr>
             <th className="px-4 py-3">Sender</th>
             <th className="px-4 py-3">Subject</th>
@@ -518,22 +518,22 @@ function EmailTableRow({
   return (
     <tr
       onClick={() => canOpen && onOpen(email)}
-      className={`border-t border-slate-200 bg-white align-top transition hover:bg-slate-50 ${canOpen ? "cursor-pointer" : ""}`}
+      className={`border-t border-[#2d2e31] bg-[#18191b] align-top transition hover:bg-white/[0.03] ${canOpen ? "cursor-pointer" : ""}`}
     >
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-slate-600">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px] font-semibold text-white/70">
             {initials}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{from || email.person || "Unknown"}</p>
-            {email.person ? <p className="mt-0.5 text-xs text-slate-500">{email.person}</p> : null}
+            <p className="truncate text-sm font-semibold text-white">{from || email.person || "Unknown"}</p>
+            {email.person ? <p className="mt-0.5 text-xs text-white/60">{email.person}</p> : null}
           </div>
         </div>
       </td>
       <td className="max-w-[420px] px-4 py-4">
-        <p className="truncate text-sm text-slate-700">{subject || email.summary}</p>
-        {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{body}</p> : null}
+        <p className="truncate text-sm text-white/80">{subject || email.summary}</p>
+        {body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/60">{body}</p> : null}
       </td>
       <td className="px-4 py-4">
         <div className="flex flex-wrap gap-1.5">
@@ -541,17 +541,17 @@ function EmailTableRow({
             {catLabel}
           </span>
           {email.sample ? (
-            <span className="border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            <span className="border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
               Sample
             </span>
           ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDueDate(email.dueDate) || "-"}</td>
-      <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.createdAt)}</td>
+      <td className="whitespace-nowrap px-4 py-4 text-sm text-white/70">{formatDueDate(email.dueDate) || "-"}</td>
+      <td className="whitespace-nowrap px-4 py-4 text-sm text-white/70">{formatDate(email.createdAt)}</td>
       <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
         {email.sample ? (
-          <span className="text-xs text-slate-500">Sample</span>
+          <span className="text-xs text-white/60">Sample</span>
         ) : (
           <div className="flex justify-end gap-1.5">
             <ActionButton
@@ -634,12 +634,12 @@ function EmailBodyFrame({ html }: { html: string }) {
   return (
     <div>
       {remoteImagesPresent && !imagesAllowed && (
-        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 sm:flex-row sm:items-center sm:justify-between">
           <span className="min-w-0">Images are blocked to protect your privacy — senders can use them to track when you open an email.</span>
           <button
             type="button"
             onClick={() => setImagesAllowed(true)}
-            className="shrink-0 self-start rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 transition hover:bg-amber-100 sm:self-auto"
+            className="shrink-0 self-start rounded-md border border-amber-500/40 bg-[#18191b] px-2.5 py-1 font-medium text-amber-300 transition hover:bg-amber-500/20 sm:self-auto"
           >
             Show images
           </button>
@@ -762,14 +762,14 @@ function EmailDetailSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+      <div className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-[#2d2e31] bg-[#18191b] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-[#2d2e31] px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">
+            <p className="truncate text-sm font-semibold text-white">
               {message?.subject || parseSummary(email.summary).subject || "Email"}
             </p>
             {message && (
-              <p className="mt-0.5 truncate text-xs text-slate-500">
+              <p className="mt-0.5 truncate text-xs text-white/60">
                 From {message.from} · {formatDate(message.date)}
               </p>
             )}
@@ -777,7 +777,7 @@ function EmailDetailSheet({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/5 hover:text-white/80"
             aria-label="Close"
           >
             <CloseIcon />
@@ -787,12 +787,12 @@ function EmailDetailSheet({
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {loading && (
             <div className="flex items-center justify-center gap-3 py-12">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-              <span className="text-sm text-slate-500">Loading email…</span>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#2d2e31] border-t-white" />
+              <span className="text-sm text-white/60">Loading email…</span>
             </div>
           )}
           {!loading && loadError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300">
               {loadError}
             </div>
           )}
@@ -800,25 +800,25 @@ function EmailDetailSheet({
             message.bodyHtml ? (
               <EmailBodyFrame html={message.bodyHtml} />
             ) : (
-              <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body}</div>
+              <div className="whitespace-pre-wrap text-sm leading-6 text-white/80">{message.body}</div>
             )
           )}
         </div>
 
         {!loading && !loadError && message && (
-          <div className="border-t border-slate-200 px-4 py-4 sm:px-6">
+          <div className="border-t border-[#2d2e31] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:px-6 sm:pb-4">
             {!replyOpen ? (
               <button
                 type="button"
                 onClick={() => setReplyOpen(true)}
-                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
+                className="rounded-md border border-[#2d2e31] bg-[#18191b] px-4 py-2 text-sm font-medium text-white/80 transition hover:border-[#3a3b3f] hover:text-white"
               >
                 Reply
               </button>
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-white/60">
                     Reply to {message.from}
                   </p>
                   <ActionButton
@@ -831,13 +831,13 @@ function EmailDetailSheet({
                 <textarea
                   value={replyBody}
                   onChange={(e) => setReplyBody(e.target.value)}
-                  rows={8}
+                  rows={5}
                   placeholder="Write your reply, or draft one with AI…"
-                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
+                  className="w-full resize-y rounded-xl border border-[#2d2e31] bg-[#18191b] p-3 text-sm text-white placeholder:text-white/40 focus:border-[#3a3b3f] focus:outline-none"
                 />
 
-                {sendError && <p className="text-sm text-red-700">{sendError}</p>}
-                {sendSuccess && <p className="text-sm text-emerald-700">{sendSuccess}</p>}
+                {sendError && <p className="text-sm text-red-300">{sendError}</p>}
+                {sendSuccess && <p className="text-sm text-emerald-300">{sendSuccess}</p>}
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                   {scheduling && (
@@ -845,14 +845,14 @@ function EmailDetailSheet({
                       type="datetime-local"
                       value={scheduledFor}
                       onChange={(e) => setScheduledFor(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-300 focus:outline-none sm:w-auto"
+                      className="w-full rounded-lg border border-[#2d2e31] px-3 py-2 text-sm text-white focus:border-[#3a3b3f] focus:outline-none sm:w-auto"
                     />
                   )}
                   <div className="flex gap-2 sm:contents">
                     <button
                       type="button"
                       onClick={onClose}
-                      className="flex-1 rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-500 transition hover:text-slate-700 sm:flex-none"
+                      className="flex-1 rounded-md border border-[#2d2e31] px-4 py-2 text-sm text-white/60 transition hover:text-white/80 sm:flex-none"
                     >
                       Cancel
                     </button>
@@ -862,7 +862,7 @@ function EmailDetailSheet({
                       onClick={() =>
                         scheduling ? void submitReply("schedule") : setScheduling(true)
                       }
-                      className="flex-1 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-40 sm:flex-none"
+                      className="flex-1 rounded-md border border-[#3a3b3f] bg-[#18191b] px-4 py-2 text-sm font-semibold text-white/80 transition hover:border-[#3a3b3f] disabled:opacity-40 sm:flex-none"
                     >
                       {submitting === "schedule" ? "Scheduling…" : "Schedule"}
                     </button>
@@ -871,7 +871,7 @@ function EmailDetailSheet({
                     type="button"
                     disabled={!replyBody.trim() || submitting !== null}
                     onClick={() => void submitReply("send")}
-                    className="w-full rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e96f24] disabled:opacity-40 sm:w-auto"
+                    className="w-full rounded-md border border-[#D9BEF4] bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-[#1a1a1c] transition hover:brightness-95 disabled:opacity-40 sm:w-auto"
                   >
                     {submitting === "send" ? "Sending…" : "Send now"}
                   </button>
@@ -902,14 +902,14 @@ function FollowupList({ tasks }: { tasks: EmailTask[] }) {
       </div>
       <div className="flex flex-col gap-2 sm:hidden">
         {tasks.map((task) => (
-          <div key={task.id} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div key={task.id} className="flex items-start gap-3 rounded-xl border border-[#2d2e31] bg-[#18191b] p-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-700 leading-snug">{task.summary}</p>
+              <p className="text-sm text-white/80 leading-snug">{task.summary}</p>
               <div className="mt-1.5 flex items-center gap-2">
-                <span className="border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                <span className="border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
                   {task.status || "open"}
                 </span>
-                <span className="text-[11px] text-slate-400">{task.source} · {timeAgo(task.createdAt)}</span>
+                <span className="text-[11px] text-white/40">{task.source} · {timeAgo(task.createdAt)}</span>
               </div>
             </div>
           </div>
@@ -921,9 +921,9 @@ function FollowupList({ tasks }: { tasks: EmailTask[] }) {
 
 function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
   return (
-    <div className="overflow-x-auto bg-white">
+    <div className="overflow-x-auto bg-[#18191b]">
       <table className="w-full min-w-[860px] border-collapse text-left">
-        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <thead className="bg-[#18191b] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
           <tr>
             <th className="px-4 py-3">Follow-up</th>
             <th className="px-4 py-3">Source</th>
@@ -933,15 +933,15 @@ function FollowupTable({ tasks }: { tasks: EmailTask[] }) {
         </thead>
         <tbody>
           {tasks.map((task) => (
-            <tr key={task.id} className="border-t border-slate-200 bg-white transition hover:bg-slate-50">
-              <td className="px-4 py-4 text-sm text-slate-700">{task.summary}</td>
-              <td className="px-4 py-4 text-sm text-slate-600">{task.source}</td>
+            <tr key={task.id} className="border-t border-[#2d2e31] bg-[#18191b] transition hover:bg-white/[0.03]">
+              <td className="px-4 py-4 text-sm text-white/80">{task.summary}</td>
+              <td className="px-4 py-4 text-sm text-white/70">{task.source}</td>
               <td className="px-4 py-4">
-                <span className="border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+                <span className="border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-300">
                   {task.status || "open"}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{timeAgo(task.createdAt)}</td>
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/70">{timeAgo(task.createdAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -958,13 +958,13 @@ function SentList({ emails }: { emails: SentEmail[] }) {
       </div>
       <div className="flex flex-col gap-2 sm:hidden">
         {emails.map((email) => (
-          <div key={email.id} className="rounded-xl border border-slate-200 bg-white p-3">
+          <div key={email.id} className="rounded-xl border border-[#2d2e31] bg-[#18191b] p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold text-slate-900">{email.to}</p>
-              <span className="shrink-0 text-[11px] text-slate-400">{formatDate(email.sentAt)}</span>
+              <p className="truncate text-sm font-semibold text-white">{email.to}</p>
+              <span className="shrink-0 text-[11px] text-white/40">{formatDate(email.sentAt)}</span>
             </div>
-            <p className="mt-0.5 truncate text-sm text-slate-700">{email.subject}</p>
-            <span className="mt-1.5 inline-block border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+            <p className="mt-0.5 truncate text-sm text-white/80">{email.subject}</p>
+            <span className="mt-1.5 inline-block border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
               {email.sample ? "Sample" : email.status}
             </span>
           </div>
@@ -976,9 +976,9 @@ function SentList({ emails }: { emails: SentEmail[] }) {
 
 function SentTable({ emails }: { emails: SentEmail[] }) {
   return (
-    <div className="overflow-x-auto bg-white">
+    <div className="overflow-x-auto bg-[#18191b]">
       <table className="w-full min-w-[860px] border-collapse text-left">
-        <thead className="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <thead className="bg-[#18191b] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
           <tr>
             <th className="px-4 py-3">Recipient</th>
             <th className="px-4 py-3">Subject</th>
@@ -988,15 +988,15 @@ function SentTable({ emails }: { emails: SentEmail[] }) {
         </thead>
         <tbody>
           {emails.map((email) => (
-            <tr key={email.id} className="border-t border-slate-200 bg-white transition hover:bg-slate-50">
-              <td className="px-4 py-4 text-sm text-slate-700">{email.to}</td>
-              <td className="px-4 py-4 text-sm text-slate-700">{email.subject}</td>
+            <tr key={email.id} className="border-t border-[#2d2e31] bg-[#18191b] transition hover:bg-white/[0.03]">
+              <td className="px-4 py-4 text-sm text-white/80">{email.to}</td>
+              <td className="px-4 py-4 text-sm text-white/80">{email.subject}</td>
               <td className="px-4 py-4">
-                <span className="border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <span className="border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
                   {email.sample ? "Sample" : email.status}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(email.sentAt)}</td>
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/70">{formatDate(email.sentAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -1024,7 +1024,7 @@ function ActionButton({
       className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
         done
           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+          : "border-[#2d2e31] bg-[#18191b] text-white/70 hover:border-[#3a3b3f] hover:text-white"
       } disabled:opacity-50`}
     >
       {active ? "…" : done ? `✓ ${label}` : label}
@@ -1047,7 +1047,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 
 function InboxIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/40" aria-hidden="true">
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>

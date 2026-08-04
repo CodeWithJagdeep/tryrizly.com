@@ -12,6 +12,7 @@ import {
   validateAutomationStepConfig,
 } from "@heyriz/shared/automations/schemas";
 import { env } from "@heyriz/shared/env";
+import type { ConnectorService } from "../connectors/connector.service";
 import type { HeyRizTool } from "./tool.types";
 
 /**
@@ -42,13 +43,39 @@ function describeChain(trigger: { app: string }, actions: { app: string }[]): st
 }
 
 function liveOptionsMessage(): string {
-  const triggers = Object.entries(LIVE_TRIGGER_EVENTS)
-    .map(([app, events]) => `${app} (${events.join(", ")})`)
-    .join("; ");
-  const actions = Object.entries(LIVE_ACTION_EVENTS)
-    .map(([app, events]) => `${app} (${events.join(", ")})`)
-    .join("; ");
-  return `Supported triggers: ${triggers}. Supported actions: ${actions}.`;
+  return liveOptionsMessageFor(undefined);
+}
+
+// Apps that need no connector row to use: "schedule" runs off nothing but a
+// timer, "telegram" is the chat surface the principal is already talking
+// through. Everything else in LIVE_TRIGGER_EVENTS/LIVE_ACTION_EVENTS needs a
+// connected account with a matching provider id (gmail/calendar included —
+// both are separate connector rows created by the same Google OAuth grant).
+const ALWAYS_AVAILABLE_APPS = new Set(["schedule", "telegram"]);
+
+// Scoping the catalog to what's actually usable keeps this tool's biggest
+// cost line (it's re-sent on every turn the "automations" skill is loaded)
+// proportional to the principal's setup instead of every app Rizly supports.
+function liveOptionsMessageFor(connectedApps: Set<string> | undefined): string {
+  const include = (app: string) =>
+    !connectedApps || connectedApps.has(app) || ALWAYS_AVAILABLE_APPS.has(app);
+  const triggerEntries = Object.entries(LIVE_TRIGGER_EVENTS).filter(([app]) => include(app));
+  const actionEntries = Object.entries(LIVE_ACTION_EVENTS).filter(([app]) => include(app));
+  const triggers = triggerEntries.map(([app, events]) => `${app} (${events.join(", ")})`).join("; ");
+  const actions = actionEntries.map(([app, events]) => `${app} (${events.join(", ")})`).join("; ");
+
+  if (!connectedApps || (triggerEntries.length > 0 && actionEntries.length > 0)) {
+    return `Supported triggers: ${triggers || "none"}. Supported actions: ${actions || "none"}.`;
+  }
+
+  // Nothing beyond schedule/telegram is connected — still describe what's
+  // usable today (never an empty catalog) and point at the rest.
+  const more = Object.keys(LIVE_TRIGGER_EVENTS).length + Object.keys(LIVE_ACTION_EVENTS).length
+    - triggerEntries.length - actionEntries.length;
+  return (
+    `Supported triggers: ${triggers || "none"}. Supported actions: ${actions || "none"}. ` +
+    `${more} more app${more === 1 ? "" : "s"} become available once connected — call connector_status or point the principal at /dashboard/connectors.`
+  );
 }
 
 // ── list_automations ────────────────────────────────────────────────────────
@@ -158,26 +185,42 @@ type CreateAutomationPayload = {
   allowIncomplete?: boolean;
 };
 
-export function createAutomationTool(): HeyRizTool<CreateAutomationPayload> {
+// The live catalog is inlined here rather than left to liveOptionsMessage()'s
+// error path: without it the model guesses app/event strings blind, burns a
+// turn getting rejected, and sometimes invents apps that don't exist. Same
+// reasoning for pointing at describe_automation_event — a draft whose config
+// fails validation can never be activated, so "build it and run it" dies at
+// the last step unless the model knows the shape up front.
+function automationDescription(catalog: string): string {
+  return (
+    "Creates a new automation flow (trigger -> one or more actions) in the flow builder, saved as a draft (not yet running). " +
+    "Requires approval — always confirm the trigger/action chain with the principal before calling this, even though the result is only a draft. " +
+    "The principal can edit it in the flow builder afterward.\n\n" +
+    "Use ONLY these app/event combos — anything else is rejected:\n" +
+    catalog +
+    "\n\nMost events also need a `config` object (github needs a repo, discord needs a channelId, gmail needs a query). " +
+    "Call describe_automation_event first when unsure of the shape, or ask the principal for values only they know. " +
+    "A draft with invalid config cannot be activated, so get config right at creation time. " +
+    "Set allowIncomplete:true only if the principal explicitly wants a rough draft to finish in the builder themselves."
+  );
+}
+
+export function createAutomationTool(
+  connectors?: Pick<ConnectorService, "list">,
+): HeyRizTool<CreateAutomationPayload> {
   return {
     name: "create_automation",
     category: "automation",
-    // The live catalog is inlined here rather than left to liveOptionsMessage()'s
-    // error path: without it the model guesses app/event strings blind, burns a
-    // turn getting rejected, and sometimes invents apps that don't exist. Same
-    // reasoning for pointing at describe_automation_event — a draft whose config
-    // fails validation can never be activated, so "build it and run it" dies at
-    // the last step unless the model knows the shape up front.
-    description:
-      "Creates a new automation flow (trigger -> one or more actions) in the flow builder, saved as a draft (not yet running). " +
-      "No approval prompt — it's inert until activate_automation is called. The principal can edit it in the flow builder afterward.\n\n" +
-      "Use ONLY these app/event combos — anything else is rejected:\n" +
-      liveOptionsMessage() +
-      "\n\nMost events also need a `config` object (github needs a repo, discord needs a channelId, gmail needs a query). " +
-      "Call describe_automation_event first when unsure of the shape, or ask the principal for values only they know. " +
-      "A draft with invalid config cannot be activated, so get config right at creation time. " +
-      "Set allowIncomplete:true only if the principal explicitly wants a rough draft to finish in the builder themselves.",
-    approvalRequired: false,
+    description: automationDescription(liveOptionsMessage()),
+    async descriptionFor(userId: string) {
+      if (!connectors) return automationDescription(liveOptionsMessage());
+      const accounts = await connectors.list(userId);
+      const connectedApps = new Set(
+        accounts.filter((a) => a.status === "connected").map((a) => a.provider),
+      );
+      return automationDescription(liveOptionsMessageFor(connectedApps));
+    },
+    approvalRequired: true,
     sensitiveDataPolicy: "none",
     async execute({ userId, payload, context }) {
       if (!payload.name || !payload.trigger || !payload.actions?.length) {

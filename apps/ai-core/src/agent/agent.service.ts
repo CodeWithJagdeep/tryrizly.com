@@ -171,16 +171,16 @@ export class AgentService {
             return undefined;
           })
         : undefined;
-    const systemPrompt = () =>
+    const systemPrompt = async () =>
       this.prompts.assemble({
         context: input.context,
         channel: input.channel,
         activePlan: plan,
         selection: skillSelection,
-        tools: this.tools.list(),
+        tools: await this.tools.list(input.userId),
       });
     const messages: AgentMessage[] = [
-      { role: "system", content: systemPrompt() },
+      { role: "system", content: await systemPrompt() },
       ...(input.history ?? []).map(
         (turn): AgentMessage => ({ role: turn.role, content: turn.content }),
       ),
@@ -442,7 +442,7 @@ export class AgentService {
           plan = await this.plans.revise(plan, step.plan_patch);
           recoveryCheckpoint = undefined;
           finalVerificationAttempts = 0;
-          messages[0] = { role: "system", content: systemPrompt() };
+          messages[0] = { role: "system", content: await systemPrompt() };
           messages.push({
             role: "user",
             content:
@@ -494,7 +494,7 @@ export class AgentService {
           requested,
           `agent requested: ${requested.join(", ")}`,
         );
-        messages[0] = { role: "system", content: systemPrompt() };
+        messages[0] = { role: "system", content: await systemPrompt() };
         messages.push({
           role: "user",
           content:
@@ -550,7 +550,7 @@ export class AgentService {
               ["general"],
               "bounded recovery after repeated capability miss",
             );
-            messages[0] = { role: "system", content: systemPrompt() };
+            messages[0] = { role: "system", content: await systemPrompt() };
             messages.push({
               role: "user",
               content:
@@ -675,7 +675,7 @@ export class AgentService {
             ["general"],
             "bounded recovery after repeated inactive tool selection",
           );
-          messages[0] = { role: "system", content: systemPrompt() };
+          messages[0] = { role: "system", content: await systemPrompt() };
         }
         escalated = true;
         continue;
@@ -1483,6 +1483,7 @@ function describeAction(tool: string): string {
   if (tool === "send_email") return "send this email";
   if (tool === "create_calendar_event") return "put this on your calendar";
   if (tool === "reschedule_calendar_event") return "move that event";
+  if (tool === "create_automation") return "create this automation";
   return `run ${tool}`;
 }
 
@@ -1511,6 +1512,22 @@ function previewFor(tool: string, payload: unknown, timezone: string): string {
       `Move to: ${formatEventRange(str(p.newStart), str(p.newEnd), timezone)}`,
       p.notifyAttendee === false ? "" : "They'll be notified of the change.",
     ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (tool === "create_automation") {
+    const trigger = p.trigger as { app?: unknown; event?: unknown } | undefined;
+    const actions = Array.isArray(p.actions) ? p.actions : [];
+    const chain = [
+      trigger ? `When: ${str(trigger.app)} — ${str(trigger.event)}` : "",
+      ...actions.map((a) => {
+        const action = a as { app?: unknown; event?: unknown };
+        return `Then: ${str(action.app)} — ${str(action.event)}`;
+      }),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return [`"${str(p.name)}" — saved as a draft, not yet running.`, chain]
       .filter(Boolean)
       .join("\n");
   }

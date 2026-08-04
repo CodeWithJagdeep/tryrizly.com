@@ -40,6 +40,18 @@ export class AgentFinalVerifierService {
       }
     }
 
+    // Latency fast path: a planless turn where every tool call succeeded is
+    // the overwhelmingly common happy case, and the semantic judge is a full
+    // extra serial LLM round-trip. The higher-risk shapes — an active plan,
+    // zero tool evidence, or any failed/pending tool — still go to the judge.
+    if (
+      !input.plan &&
+      input.toolResults.length > 0 &&
+      input.toolResults.every((result) => result.status === "ok")
+    ) {
+      return { verdict: "accept", issues: [] };
+    }
+
     try {
       const evidence = input.toolResults.map((result) => ({
         tool: result.tool,
@@ -80,6 +92,7 @@ export class AgentFinalVerifierService {
         task: "agent",
         provider: CHEAP_TIER,
         model: CHEAP_MODEL,
+        reasoningEffort: "low",
         userId: input.userId,
       });
       const parsed = extractJson<unknown>(raw ?? "");

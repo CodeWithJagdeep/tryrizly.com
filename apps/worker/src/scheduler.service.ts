@@ -294,6 +294,23 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     const secret = env.AUTH_INTERNAL_SECRET;
     if (!gatewayUrl) return;
 
+    // Once-per-day gate: a worker restart re-registers the job scheduler and
+    // BullMQ can replay a tick, which resent an identical digest. SET NX on a
+    // per-local-day key makes only the first tick of the day actually send.
+    if (this.queue) {
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: env.DEFAULT_TIMEZONE,
+      }).format(new Date());
+      const client = (await this.queue.client) as unknown as import("ioredis").Redis;
+      const acquired = await client
+        .set(`admin-usage-digest:sent:${day}`, "1", "EX", 26 * 60 * 60, "NX")
+        .catch(() => "OK"); // Redis hiccup: fail open, better twice than never
+      if (acquired !== "OK") {
+        logger.info("admin usage digest already sent today — skipping", { day });
+        return;
+      }
+    }
+
     try {
       const headers: Record<string, string> = {};
       if (secret) headers["x-heyriz-internal-secret"] = secret;

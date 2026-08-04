@@ -70,11 +70,11 @@ const ALL_TOOL_NAMES = [
   "set_language",
   "set_away_mode",
   "end_away_mode",
-  "list_automations",
-  "describe_automation_event",
-  "create_automation",
-  "activate_automation",
-  "pause_automation",
+  // Automation tools are intentionally excluded here — the "automations"
+  // skill is hidden for the narrower V1 scope, and this list feeds the
+  // "general" fallback's tool grants. They stay owned by the (hidden)
+  // "automations" skill entry below for assertCompatible's domain-ownership
+  // check, just unreachable via routing or fallback.
 ] as const;
 
 const SKILLS: readonly AgentSkill[] = [
@@ -132,7 +132,7 @@ const SKILLS: readonly AgentSkill[] = [
     version: 1,
     description:
       "One-time or recurring reminders, follow-ups, and durable tasks.",
-    tools: ["schedule_reminder", "create_task"],
+    tools: ["schedule_reminder", "create_task", "list_tasks"],
     contextScopes: [],
     instructions:
       "Use schedule_reminder for time-triggered nudges and create_task for durable work items. A mentioned upcoming personal meeting defaults to a reminder unless the principal explicitly asks to add it to a calendar. For recurring reminders, supply repeat.cron, repeat.tz, and a stable dedupeKey. Resolve every time in the principal's timezone and ask only for genuinely missing timing.",
@@ -202,6 +202,7 @@ const SKILLS: readonly AgentSkill[] = [
   {
     id: "automations",
     version: 1,
+    hidden: true,
     description:
       "List, design, create, activate, or pause structured proactive automation flows.",
     tools: [
@@ -255,15 +256,17 @@ export class AgentSkillRegistryService implements OnModuleInit {
     private readonly runtimeTools?: ToolRegistryService,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     if (this.runtimeTools) {
-      this.assertCompatible(this.runtimeTools.list().map((tool) => tool.name));
+      this.assertCompatible((await this.runtimeTools.list()).map((tool) => tool.name));
     }
   }
 
-  list(options?: { includeFallback?: boolean }): AgentSkill[] {
+  list(options?: { includeFallback?: boolean; includeHidden?: boolean }): AgentSkill[] {
     return SKILLS.filter(
-      (skill) => options?.includeFallback === true || skill.id !== "general",
+      (skill) =>
+        (options?.includeFallback === true || skill.id !== "general") &&
+        (options?.includeHidden === true || !skill.hidden),
     ).map((skill) => ({ ...skill }));
   }
 

@@ -49,7 +49,7 @@ import {
 } from "./preferences.tools";
 import { DraftCacheService } from "./draft-cache.service";
 import { scheduleReminderTool } from "./queue.tools";
-import { createTaskTool } from "./task.tools";
+import { createTaskTool, listTasksTool } from "./task.tools";
 import { createWatchForReplyTool } from "./watch.tools";
 import { EmailClassifierService } from "../email/email-classifier.service";
 import { EmailAssessmentService } from "../email/email-assessment.service";
@@ -219,6 +219,7 @@ export class ToolRegistryService {
       createRecallDecisionsTool(this.decisions),
       createEntityBriefTool(this.entityResolver, this.eventRepo, this.decisions),
       createTaskTool(this.taskRepository),
+      listTasksTool(this.taskRepository),
       createSetHonorificTool(this.preferences),
       createSetDisplayNameTool(this.preferences),
       createSetTimezoneTool(this.preferences),
@@ -227,27 +228,33 @@ export class ToolRegistryService {
       createEndAwayModeTool(this.preferences),
       listAutomationsTool,
       describeAutomationEventTool,
-      createAutomationTool(),
+      createAutomationTool(this.connectorService),
       createActivateAutomationTool(),
       createPauseAutomationTool(),
     ];
   }
 
-  list(): HeyRizToolDefinition[] {
-    return this.tools.map(
-      ({
-        name,
-        category,
-        description,
-        approvalRequired,
-        sensitiveDataPolicy,
-      }) => ({
-        name,
-        category,
-        description,
-        approvalRequired,
-        sensitiveDataPolicy,
-      }),
+  async list(userId?: string): Promise<HeyRizToolDefinition[]> {
+    return Promise.all(
+      this.tools.map(
+        async ({
+          name,
+          category,
+          description,
+          approvalRequired,
+          sensitiveDataPolicy,
+          descriptionFor,
+        }) => ({
+          name,
+          category,
+          description:
+            userId && descriptionFor
+              ? await descriptionFor(userId).catch(() => description)
+              : description,
+          approvalRequired,
+          sensitiveDataPolicy,
+        }),
+      ),
     );
   }
 

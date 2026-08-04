@@ -23,6 +23,7 @@ export class GrokProvider implements LlmProvider {
       messages: input.messages,
       temperature: input.temperature,
       maxTokens: input.maxTokens,
+      reasoningEffort: input.reasoningEffort,
     });
   }
 }

@@ -13,7 +13,7 @@ vi.mock("@heyriz/shared/env", () => ({
   },
 }));
 
-import { ProactiveService } from "./proactive.service";
+import { ProactiveService, pickCorrelatedHint } from "./proactive.service";
 
 function memory(
   id: string,
@@ -212,5 +212,37 @@ describe("ProactiveService morning brief", () => {
     );
     expect(keys).toHaveLength(6);
     expect(new Set(keys)).toHaveProperty("size", 3);
+  });
+});
+
+describe("pickCorrelatedHint", () => {
+  const meeting = {
+    title: "15 min meeting between Aadarsh and jagdeep singh",
+    people: ["Aadarsh", "jagdeep singh", "aadarsh@example.com"],
+  };
+
+  it("rejects an unrelated newsletter that vector search ranked first", () => {
+    // Regression: the Medium Daily Digest "Build a Second Brain in 15
+    // Minutes" email was cited as the source of a real Cal.com meeting.
+    const newsletter = memory("m1", "Email from Medium Daily Digest <noreply@medium.com> (Build a Second Brain in 15 Minutes: Just Markdown, Git, and an AI Agent | Roan Brasil)", {});
+    expect(pickCorrelatedHint([newsletter], meeting)).toBeUndefined();
+  });
+
+  it("accepts an email that mentions an attendee", () => {
+    const related = memory("m2", "Email from Aadarsh confirming the 15 min intro call agenda", {});
+    const newsletter = memory("m1", "Medium Daily Digest: Build a Second Brain in 15 Minutes", {});
+    expect(pickCorrelatedHint([newsletter, related], meeting)?.id).toBe("m2");
+  });
+
+  it("matches on attendee email in metadata", () => {
+    const related = memory("m3", "Booking confirmation", { from: "aadarsh@example.com" });
+    expect(pickCorrelatedHint([related], meeting)?.id).toBe("m3");
+  });
+
+  it("cites nothing when no anchors can be derived", () => {
+    const hit = memory("m4", "Weekly sync notes", {});
+    expect(
+      pickCorrelatedHint([hit], { title: "Meeting", people: [] }),
+    ).toBeUndefined();
   });
 });

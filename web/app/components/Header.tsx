@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { UserMenu } from './UserMenu';
 
 type Session = { email: string; name?: string; userId: string };
 
@@ -138,7 +137,14 @@ function DropdownNav({ group, featured = false }: { group: DropdownGroup; featur
   );
 }
 
-export function Header({ session }: { session: Session | null }) {
+export function Header({
+  session,
+  variant = 'full',
+}: {
+  session: Session | null;
+  /** "minimal" strips the announcement bar, nav links, and right-side actions down to just the logo, and drops sticky positioning. */
+  variant?: 'full' | 'minimal';
+}) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const headerClassName = 'w-full bg-black font-display';
@@ -146,6 +152,31 @@ export function Header({ session }: { session: Session | null }) {
   const utilityLinkClassName = 'hidden h-10 items-center rounded-full px-3 text-base font-normal text-white/90 transition hover:bg-white/[0.07] hover:text-white xl:inline-flex';
   const loginClassName = 'hidden h-10 items-center rounded-full px-3 text-base font-normal text-white/90 transition hover:bg-white/[0.07] hover:text-white lg:inline-flex';
   const mobileLineClassName = 'bg-[var(--rizly-text)]';
+
+  if (variant === 'minimal') {
+    return (
+      <div className="relative w-full bg-black text-[var(--rizly-text)]">
+        <header className={headerClassName}>
+          <nav
+            className="mx-auto flex h-[72px] w-full max-w-[88rem] items-center border-b border-white/10 px-5 sm:px-8 lg:px-14"
+            aria-label="Main navigation"
+          >
+            <Link className="group/logo flex w-fit shrink-0 items-center gap-3 transition-opacity hover:opacity-90" href="/">
+              <Image
+                alt="rizly Logo"
+                width={112}
+                height={26}
+                className="h-8 w-auto object-contain opacity-85 brightness-0 invert"
+                src="/rizly_white.png"
+                priority
+              />
+              <PixelMark />
+            </Link>
+          </nav>
+        </header>
+      </div>
+    );
+  }
 
   return (
     <div className="sticky top-0 z-50 w-full bg-black text-[var(--rizly-text)]">
@@ -155,20 +186,20 @@ export function Header({ session }: { session: Session | null }) {
             className="rizly-announcement group grid min-w-0 flex-1 grid-cols-[auto_minmax(0,auto)_minmax(24px,1fr)_auto] items-center gap-3 text-[13px] font-normal text-white/90 sm:gap-5 sm:text-sm"
             href="/agent"
           >
-            <span className="rizly-announcement-badge relative inline-flex shrink-0 items-center gap-2 overflow-hidden bg-[var(--rizly-ai)] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#EAECF0] shadow-[0_8px_24px_-14px_rgba(35,61,77,0.7)]">
+            <span className="rizly-announcement-badge relative inline-flex shrink-0 items-center gap-2 overflow-hidden bg-[var(--rizly-ai)] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white shadow-[0_8px_24px_-14px_rgba(35,61,77,0.7)]">
               <span className="relative h-1.5 w-1.5">
                 <span className="absolute inset-0 rounded-full bg-[var(--rizly-accent)]/40 motion-safe:animate-ping" />
                 <span className="absolute inset-0 rounded-full bg-[var(--rizly-accent)]" />
               </span>
-              Field note 01
+              Field Note 01
             </span>
             <span className="truncate transition-colors duration-200 group-hover:text-white">
-              Meet Riz — the operator that asks before it acts
+              Introducing Riz, the operator that asks before it acts
             </span>
             <span aria-hidden="true" className="rizly-pixel-rail h-[3px] min-w-0" />
             <span
               aria-hidden="true"
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--rizly-ai)]/20 text-[var(--rizly-ai)] transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:translate-x-1 group-hover:border-[var(--rizly-ai)]/55 group-hover:bg-[var(--rizly-ai)]/10 group-active:scale-[0.96]"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/20 text-white transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:translate-x-1 group-hover:border-white/55 group-hover:bg-white/10 group-active:scale-[0.96]"
             >
               ↗
             </span>
@@ -207,14 +238,19 @@ export function Header({ session }: { session: Session | null }) {
             Contact sales
           </Link>
           {session ? (
-            <UserMenu session={session} />
+            <Link
+              className="rizly-stepped-button inline-flex h-11 items-center justify-center border border-white bg-white px-5 text-base font-normal text-black transition-[transform,background-color,color] duration-200 hover:-translate-y-0.5 hover:bg-white/90 active:scale-[0.98]"
+              href="/dashboard"
+            >
+              Go to dashboard
+            </Link>
           ) : (
             <>
               <Link className={loginClassName} href="/login">
                 Log in
               </Link>
               <Link
-                className="rizly-stepped-button inline-flex h-11 items-center justify-center border border-[var(--rizly-ai)]/55 bg-transparent px-5 text-base font-normal text-white/90 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--rizly-ai)] hover:bg-[var(--rizly-ai)]/10 hover:text-white active:scale-[0.98]"
+                className="rizly-stepped-button inline-flex h-11 items-center justify-center border border-white bg-white px-5 text-base font-normal text-black transition-[transform,background-color,color] duration-200 hover:-translate-y-0.5 hover:bg-white/90 active:scale-[0.98]"
                 href="/signup"
               >
                 Get started

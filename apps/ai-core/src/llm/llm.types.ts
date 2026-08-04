@@ -31,6 +31,12 @@ export type LlmCompletionInput = {
   temperature?: number;
   /** Max output tokens (Anthropic requires it; OpenAI/Grok ignore when unset). */
   maxTokens?: number;
+  /**
+   * Thinking budget for reasoning models (grok-3-mini, o-series). Set "low"
+   * on latency-sensitive judge/classifier calls where a short verdict is the
+   * whole job; leave unset to keep the provider default.
+   */
+  reasoningEffort?: "low" | "high";
   /** Which routing tier to use; falls back to the default provider if unset. */
   task?: LlmTask;
   /** Who this call is billed to — required for usage-ledger cost tracking. */

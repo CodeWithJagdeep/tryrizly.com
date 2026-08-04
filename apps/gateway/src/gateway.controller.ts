@@ -63,6 +63,8 @@ type ChatHttpBody = {
   approve?: boolean;
   /** Only ever an opaque id from a prior response — never trust tool/payload from the client. */
   pendingApprovalId?: string;
+  /** Client-assigned conversation id (web dashboard) for chat-history grouping. */
+  sessionId?: string;
 };
 type ChatResult = {
   reply: string;
@@ -273,6 +275,7 @@ export class GatewayController {
       message: body.message,
       history: body.history,
       channel: "web",
+      sessionId: body.sessionId,
       ...(approval ? { approve: true, pendingApproval: approval } : {}),
     });
 
@@ -338,6 +341,7 @@ export class GatewayController {
         message: body.message,
         history: body.history,
         channel: "web",
+        sessionId: body.sessionId,
         ...(approval ? { approve: true, pendingApproval: approval } : {}),
       })
       .subscribe({
@@ -716,13 +720,25 @@ export class GatewayController {
   listChatHistory(
     @Headers("x-heyriz-internal-secret") secret: string | undefined,
     @Query("userId") userId = "default",
-    @Query("limit") limit = "50",
+    @Query("limit") limit = "500",
   ) {
     this.requireInternal(secret);
-    return this.gatewayService.sendToAiCore("chat.listMemories", {
+    return this.gatewayService.sendToAiCore("chat.listMessages", {
       userId,
-      limit: parseInt(limit, 10) || 50,
+      limit: parseInt(limit, 10) || 500,
     });
+  }
+
+  @Delete("api/chat/history/:sessionId")
+  @HttpCode(200)
+  deleteChatSession(
+    @Headers("x-heyriz-internal-secret") secret: string | undefined,
+    @Param("sessionId") sessionId: string,
+    @Query("userId") userId: string | undefined,
+  ) {
+    this.requireInternal(secret);
+    if (!userId) throw new BadRequestException("userId is required");
+    return this.gatewayService.sendToAiCore("chat.deleteSession", { userId, sessionId });
   }
 
   @Get("api/emails/processed")

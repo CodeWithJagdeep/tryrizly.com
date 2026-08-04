@@ -214,7 +214,7 @@ export class ProactiveService {
       userId,
       message: text,
       runAt: new Date().toISOString(),
-      source: "calendar",
+      source: "morning_brief",
       dedupeKey: `brief:${userId}:${dayKey(new Date())}`,
       metadata: { kind: "morning_brief" },
     });
@@ -298,23 +298,15 @@ export class ProactiveService {
         start: event.start,
         end: event.end,
       });
-      const plans = [
-        {
-          kind: "t30",
-          at: startMs - 30 * MIN,
-          text: `Heads up, ${honorific} - "${event.title}" in 30 minutes${context}.${join}`,
-        },
-        {
-          kind: "t5",
-          at: startMs - 5 * MIN,
-          text: `"${event.title}" starts in 5 minutes, ${honorific}${context}.${join}`,
-        },
-        {
-          kind: "late",
-          at: startMs + 2 * MIN,
-          text: `${honorific}, "${event.title}" has started. Want me to open the link?${join}`,
-        },
-      ];
+      const endMs = event.end ? Date.parse(event.end) : NaN;
+      const plans = meetingReminderPlans({
+        title: event.title,
+        honorific,
+        startMs,
+        endMs: Number.isNaN(endMs) ? undefined : endMs,
+        context,
+        join,
+      });
 
       for (const plan of plans) {
         if (plan.at <= Date.now()) continue;
@@ -329,6 +321,7 @@ export class ProactiveService {
             meetingId: canonicalId,
             sourceId: event.id,
             source: "google",
+            expiresAt: new Date(plan.expiresAt).toISOString(),
           },
         });
         scheduled.push({
@@ -399,23 +392,15 @@ export class ProactiveService {
         start: booking.startTime,
         end: booking.endTime,
       });
-      const plans = [
-        {
-          kind: "t30",
-          at: startMs - 30 * MIN,
-          text: `Heads up, ${honorific} - "${booking.title}" in 30 minutes${context}.${join}`,
-        },
-        {
-          kind: "t5",
-          at: startMs - 5 * MIN,
-          text: `"${booking.title}" starts in 5 minutes, ${honorific}${context}.${join}`,
-        },
-        {
-          kind: "late",
-          at: startMs + 2 * MIN,
-          text: `${honorific}, "${booking.title}" has started. Want me to open the link?${join}`,
-        },
-      ];
+      const endMs = booking.endTime ? Date.parse(booking.endTime) : NaN;
+      const plans = meetingReminderPlans({
+        title: booking.title,
+        honorific,
+        startMs,
+        endMs: Number.isNaN(endMs) ? undefined : endMs,
+        context,
+        join,
+      });
 
       for (const plan of plans) {
         if (plan.at <= Date.now()) continue;
@@ -430,6 +415,7 @@ export class ProactiveService {
             meetingId: canonicalId,
             sourceId: meetingId,
             source: "calcom",
+            expiresAt: new Date(plan.expiresAt).toISOString(),
           },
         });
         scheduled.push({
@@ -613,13 +599,16 @@ export class ProactiveService {
     event: CalendarEvent,
     timeoutMs?: number,
   ) {
-    const query = [event.title, ...(event.attendees ?? [])].filter(Boolean).join(" ");
+    const attendees = event.attendees ?? [];
+    const query = [event.title, ...attendees].filter(Boolean).join(" ");
     if (!env.BACKGROUND_AI_ENABLED) return undefined;
     if (!query.trim()) return undefined;
 
     const search = this.vectorMemory
-      .search({ userId, query, limit: 1 })
-      .then((hits) => hits[0]);
+      .search({ userId, query, limit: 5 })
+      .then((hits) =>
+        pickCorrelatedHint(hits, { title: event.title, people: attendees }),
+      );
 
     try {
       return timeoutMs ? await withTimeout(search, timeoutMs) : await search;
@@ -633,6 +622,9 @@ export class ProactiveService {
     booking: CalComBooking,
     timeoutMs?: number,
   ) {
+    const people = booking.attendees.flatMap((a) =>
+      [a.name, a.email].filter((v): v is string => Boolean(v)),
+    );
     const query = [
       booking.title,
       ...booking.attendees.map((a) => a.name || a.email),
@@ -641,8 +633,10 @@ export class ProactiveService {
     if (!query.trim()) return undefined;
 
     const search = this.vectorMemory
-      .search({ userId, query, limit: 1 })
-      .then((hits) => hits[0]);
+      .search({ userId, query, limit: 5 })
+      .then((hits) =>
+        pickCorrelatedHint(hits, { title: booking.title, people }),
+      );
 
     try {
       return timeoutMs ? await withTimeout(search, timeoutMs) : await search;
@@ -868,6 +862,84 @@ function ensureSentence(value: string): string {
   const cleaned = cleanLine(value).replace(/[.;,:\s]+$/, "");
   if (!cleaned) return "Review this email today.";
   return `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}.`;
+}
+
+// Each reminder carries an expiresAt so the delivery worker can drop it if it
+// would arrive after it stopped being useful (worker backlog, restart replay).
+// A "starts in 5 minutes" nudge delivered the next day is worse than silence.
+function meetingReminderPlans(meeting: {
+  title: string;
+  honorific: string;
+  startMs: number;
+  endMs?: number;
+  context: string;
+  join: string;
+}) {
+  const { title, honorific, startMs, endMs, context, join } = meeting;
+  const meetingEnd = endMs && endMs > startMs ? endMs : startMs + 60 * MIN;
+  return [
+    {
+      kind: "t30",
+      at: startMs - 30 * MIN,
+      expiresAt: startMs,
+      text: `Heads up, ${honorific} - "${title}" in 30 minutes${context}.${join}`,
+    },
+    {
+      kind: "t5",
+      at: startMs - 5 * MIN,
+      expiresAt: startMs + 2 * MIN,
+      text: `"${title}" starts in 5 minutes, ${honorific}${context}.${join}`,
+    },
+    {
+      kind: "late",
+      at: startMs + 2 * MIN,
+      expiresAt: meetingEnd,
+      text: `${honorific}, "${title}" has started. Want me to open the link?${join}`,
+    },
+  ];
+}
+
+// Words too generic to prove an email is about a specific meeting. Vector
+// similarity alone happily matches an unrelated newsletter to "15 min meeting
+// between X and Y", so a hint is only cited when it shares a person or a
+// distinctive title word with the event — otherwise no citation at all.
+const HINT_STOPWORDS = new Set([
+  "meeting", "meet", "call", "sync", "chat", "catch", "catchup", "check",
+  "checkin", "minute", "minutes", "min", "mins", "hour", "with", "and",
+  "between", "the", "for", "about", "quick", "weekly", "daily", "monthly",
+  "standup", "review", "session", "discussion", "intro", "introduction",
+]);
+
+export function hintAnchors(meeting: { title?: string; people: string[] }): string[] {
+  const anchors = new Set<string>();
+  for (const person of meeting.people) {
+    const value = person.trim().toLowerCase();
+    if (!value) continue;
+    if (value.includes("@")) {
+      anchors.add(value);
+      continue;
+    }
+    for (const word of value.split(/\s+/)) {
+      if (word.length >= 3 && !HINT_STOPWORDS.has(word)) anchors.add(word);
+    }
+  }
+  for (const word of (meeting.title ?? "").toLowerCase().split(/[^a-z0-9@.]+/)) {
+    if (word.length >= 4 && !HINT_STOPWORDS.has(word) && !/^\d+$/.test(word)) {
+      anchors.add(word);
+    }
+  }
+  return [...anchors];
+}
+
+export function pickCorrelatedHint<
+  T extends { summary: string; metadata?: Record<string, unknown> },
+>(hits: T[], meeting: { title?: string; people: string[] }): T | undefined {
+  const anchors = hintAnchors(meeting);
+  if (anchors.length === 0) return undefined;
+  return hits.find((hit) => {
+    const haystack = `${hit.summary} ${JSON.stringify(hit.metadata ?? {})}`.toLowerCase();
+    return anchors.some((anchor) => haystack.includes(anchor));
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {

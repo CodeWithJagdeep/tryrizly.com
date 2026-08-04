@@ -393,6 +393,16 @@ export class AiCoreController {
     return this.aiCoreService.listChatMemories(payload);
   }
 
+  @MessagePattern("chat.listMessages")
+  listChatMessages(@Payload() payload: { userId?: string; limit?: number }) {
+    return this.aiCoreService.listChatMessages(payload);
+  }
+
+  @MessagePattern("chat.deleteSession")
+  deleteChatSession(@Payload() payload: { userId?: string; sessionId: string }) {
+    return this.aiCoreService.deleteChatSession(payload);
+  }
+
   @MessagePattern("email.process")
   processEmail(@Payload() payload: EmailEventJobData) {
     return this.aiCoreService.processEmail(payload);

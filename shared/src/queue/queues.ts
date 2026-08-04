@@ -44,6 +44,9 @@ export async function enqueueReminder(request: ReminderRequest) {
   const taskId = request.taskId ?? crypto.randomUUID();
 
   if (request.repeat) {
+    if (!request.repeat.cron) {
+      throw new Error("repeat.cron is required for a recurring reminder");
+    }
     const schedulerId = safeJobId(request.dedupeKey ?? `reminder:${taskId}`);
     const job = await getNotificationQueue().upsertJobScheduler(
       schedulerId,

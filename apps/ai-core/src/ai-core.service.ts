@@ -40,6 +40,7 @@ import {
 import { formatAwayDigest } from "./tools/preferences.tools";
 import { primaryUpdatesInboxQuery } from "./google/gmail-search";
 import { AutoMemoryService } from "./memory/auto-memory.service";
+import { ChatMessageRepository } from "./chat/chat-message.repository";
 import { VectorMemoryService } from "./memory/vector-memory.service";
 import type { MemoryWriteInput } from "./memory/memory.types";
 import { LlmRouterService, extractJson } from "./llm/llm-router.service";
@@ -98,6 +99,8 @@ export type ChatPayload = {
   history?: ConversationTurn[];
   /** Where the reply renders: web dashboard (Markdown) or telegram (plain text). Defaults to telegram. */
   channel?: "web" | "telegram";
+  /** Client-assigned conversation id (web dashboard). Groups turns into one sidebar entry deterministically instead of a time-gap heuristic. */
+  sessionId?: string;
 };
 
 type ToolExecutePayload = {
@@ -133,6 +136,8 @@ export class AiCoreService {
     private readonly agent: AgentService,
     @Inject(AutoMemoryService)
     private readonly autoMemory: AutoMemoryService,
+    @Inject(ChatMessageRepository)
+    private readonly chatMessages: ChatMessageRepository,
     @Inject(ProactiveService)
     private readonly proactive: ProactiveService,
     @Inject(DigestService)
@@ -566,6 +571,44 @@ export class AiCoreService {
       onProgress,
     });
 
+    // Raw transcript for the dashboard sidebar — unconditional, unlike the
+    // background-AI writes below, since this is just recording what already
+    // happened, not doing extra inference. The user-turn insert is awaited
+    // before the assistant-turn insert is issued so `seq` (an autoincrement,
+    // used for display order) reflects turn order — two un-awaited inserts
+    // fired back-to-back can otherwise reach Postgres in either order.
+    const sessionId = body.sessionId ?? null;
+    await this.chatMessages
+      .append({
+        userId,
+        sessionId,
+        role: "user",
+        content: message,
+        source: body.channel ?? "telegram",
+      })
+      .catch((error: unknown) =>
+        logger.warn("chat message log failed", {
+          role: "user",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    if (result.reply) {
+      void this.chatMessages
+        .append({
+          userId,
+          sessionId,
+          role: "assistant",
+          content: result.reply,
+          source: body.channel ?? "telegram",
+        })
+        .catch((error: unknown) =>
+          logger.warn("chat message log failed", {
+            role: "assistant",
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+    }
+
     if (
       env.BACKGROUND_AI_ENABLED &&
       (await this.budgetGate.check(userId)).state !== "exceeded"
@@ -749,6 +792,19 @@ export class AiCoreService {
     // Only conversation turns have the "User: ... | Assistant: ..." shape —
     // auto-memory notes and event summaries don't and would break parsing.
     return memories.filter((m) => m.metadata.kind === "turn");
+  }
+
+  /** Raw per-turn transcript for the dashboard's chat history sidebar. */
+  async listChatMessages(body: { userId?: string; limit?: number }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const limit = body.limit ?? 500;
+    return this.chatMessages.list(userId, limit);
+  }
+
+  async deleteChatSession(body: { userId?: string; sessionId: string }) {
+    const userId = body.userId ?? env.DEFAULT_USER_ID;
+    const removed = await this.chatMessages.deleteBySession(userId, body.sessionId);
+    return { ok: true, removed };
   }
 
   async scheduleReminder(body: ReminderRequest) {

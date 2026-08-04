@@ -29,6 +29,7 @@ import { AirtableService } from "./connectors/airtable.service";
 import { TwilioService } from "./connectors/twilio.service";
 import { TextToQueryService } from "./connectors/text-to-query.service";
 import { NotificationLogRepository } from "./notifications/notification-log.repository";
+import { ChatMessageRepository } from "./chat/chat-message.repository";
 import { AccountDeletionService } from "./account/account-deletion.service";
 import { SourceReceiptRepository } from "./intelligence/source-receipt.repository";
 import { AgentPlanRepository } from "./planning/agent-plan.repository";
@@ -131,6 +132,7 @@ import { PromptAssemblerService } from "./prompt/prompt-assembler.service";
     UserPreferencesRepository,
     VectorMemoryService,
     NotificationLogRepository,
+    ChatMessageRepository,
     SourceReceiptRepository,
   ],
 })

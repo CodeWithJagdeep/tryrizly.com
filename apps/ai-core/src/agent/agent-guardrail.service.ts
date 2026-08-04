@@ -84,6 +84,7 @@ export class AgentGuardrailService {
         task: "agent",
         provider: CHEAP_TIER,
         model: CHEAP_MODEL,
+        reasoningEffort: "low",
         userId,
       });
       return /^\s*yes\b/i.test(verdict ?? "");

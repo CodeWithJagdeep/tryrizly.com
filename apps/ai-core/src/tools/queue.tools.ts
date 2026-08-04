@@ -11,7 +11,9 @@ export const scheduleReminderTool: HeyRizTool<ReminderRequest> = {
     "reminder, set runAt to the principal's LOCAL wall-clock time as a naive " +
     '"YYYY-MM-DDTHH:mm" string (no timezone/offset) — the server converts it to ' +
     "the principal's saved timezone for you; do not compute a UTC offset yourself. " +
-    'For a recurring reminder ("every day at 8pm"), set repeat: { cron } instead ' +
+    'A timer or one-off delay ("in 20 minutes", "at 5pm") is a ONE-TIME reminder: ' +
+    "compute runAt from the current time and do NOT set repeat. " +
+    'Only for a truly recurring reminder ("every day at 8pm") set repeat: { cron } instead ' +
     "of runAt — a standard 5-field cron evaluated in the principal's saved timezone " +
     "(tz is filled in server-side; only set it to override with a different zone). " +
     "Use a stable dedupeKey for recurring reminders so re-saying the same request " +
@@ -19,6 +21,18 @@ export const scheduleReminderTool: HeyRizTool<ReminderRequest> = {
   approvalRequired: false,
   sensitiveDataPolicy: "none",
   async execute({ userId, payload, context }) {
+    // A repeat without a cron pattern would blow up inside BullMQ's job
+    // scheduler; bounce it back as a correctable input error instead.
+    if (payload.repeat && !payload.repeat.cron) {
+      return {
+        tool: "schedule_reminder",
+        status: "invalid_input",
+        message:
+          "repeat was set without a cron pattern. For a one-time reminder or " +
+          "timer, omit repeat and set runAt; for a recurring one, set " +
+          "repeat.cron to a 5-field cron expression.",
+      };
+    }
     const normalized: ReminderRequest = {
       ...payload,
       userId,

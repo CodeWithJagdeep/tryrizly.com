@@ -21,8 +21,8 @@ export function DashboardContentShell({ children }: { children: React.ReactNode 
 
   return (
     <div
-      className={`flex min-h-0 flex-1 flex-col pb-16 lg:pb-0 ${
-        collapsed ? "lg:pl-16" : "lg:pl-64"
+      className={`dashboard-content flex min-h-0 flex-1 flex-col bg-[#1d1d1f] pb-16 lg:h-dvh lg:overflow-hidden lg:pb-0 ${
+        collapsed ? "lg:pl-16" : "lg:pl-[292px]"
       }`}
     >
       {children}

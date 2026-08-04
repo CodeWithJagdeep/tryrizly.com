@@ -19,6 +19,9 @@ export type HeyRizToolDefinition = {
   description: string;
   approvalRequired: boolean;
   sensitiveDataPolicy: "none" | "live_fetch_only" | "read_only";
+  /** Per-user override of `description` (e.g. to scope a catalog to connected
+   * apps only). Falls back to the static `description` when absent or when it throws. */
+  descriptionFor?: (userId: string) => Promise<string>;
 };
 
 export type ToolExecutionInput<TPayload = unknown> = {

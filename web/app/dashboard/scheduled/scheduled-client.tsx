@@ -204,12 +204,12 @@ export function ScheduledClient() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 pt-5">
+    <main className="flex h-screen flex-col overflow-hidden bg-[#111315] text-white/90">
+      <header className="shrink-0 border-b border-[#2d2e31] bg-[#111315] px-6 pt-5">
         <div className="flex items-center justify-between gap-4 pb-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Scheduled</h1>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <h1 className="text-xl font-semibold tracking-tight text-white/90">Scheduled</h1>
+            <p className="mt-0.5 text-sm text-white/90">
               Reminders, follow-ups and priorities Riz is tracking
             </p>
           </div>
@@ -218,7 +218,7 @@ export function ScheduledClient() {
               type="button"
               onClick={() => void load(true)}
               disabled={refreshing || loading}
-              className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+              className="flex items-center gap-2 rounded-md border border-[#2d2e31] bg-[#18191b] px-3 py-1.5 text-sm text-white/90 transition hover:border-[#3a3b3f] hover:text-white/90 disabled:opacity-40"
             >
               <RefreshIcon spinning={refreshing} />
               Refresh
@@ -226,7 +226,7 @@ export function ScheduledClient() {
             <button
               type="button"
               onClick={openCreate}
-              className="flex items-center gap-2 rounded-md bg-[#D9BEF4] px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-105"
+              className="flex items-center gap-2 rounded-md bg-[#D9BEF4] px-3 py-1.5 text-sm font-semibold text-[#1a1a1c] transition hover:brightness-95"
             >
               <PlusIcon />
               New Reminder
@@ -240,7 +240,7 @@ export function ScheduledClient() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search schedule..."
-            className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
+            className="w-full rounded-md border border-[#2d2e31] bg-[#18191b] py-2 pl-9 pr-4 text-sm text-white/90 placeholder:text-white/40 outline-none transition focus:border-[#D9BEF4]/50"
           />
         </div>
 
@@ -250,16 +250,16 @@ export function ScheduledClient() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium text-white/90 transition ${
                 activeTab === tab.key
-                  ? "border-slate-900 text-slate-900"
-                  : "border-transparent text-slate-500 hover:text-slate-600"
+                  ? "border-white/90 opacity-100"
+                  : "border-transparent opacity-60 hover:opacity-90"
               }`}
             >
               {tab.label}
               {!loading && countForTab(tab.key, counts) > 0 && (
                 <span className={`rounded px-1.5 py-0.5 text-[11px] leading-none ${
-                  activeTab === tab.key ? "bg-[#D9BEF4]/10 text-white" : "bg-slate-100 text-slate-500"
+                  activeTab === tab.key ? "bg-[#D9BEF4]/15 text-[#D9BEF4]" : "bg-white/10 text-white/90"
                 }`}>
                   {countForTab(tab.key, counts)}
                 </span>
@@ -269,7 +269,7 @@ export function ScheduledClient() {
         </div>
       </header>
 
-      <div className="w-full px-6 py-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         {loadError ? (
           <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 px-5 py-4 text-sm text-red-300">
             {loadError}
@@ -289,21 +289,21 @@ export function ScheduledClient() {
       </div>
 
       {createOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/55 px-4 py-5 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h2 className="text-base font-semibold text-slate-900">New Reminder</h2>
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 px-4 py-5 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-md rounded-xl border border-[#2d2e31] bg-[#18191b] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2d2e31] px-5 py-4">
+              <h2 className="text-base font-semibold text-white/90">New Reminder</h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                className="rounded-md px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                className="rounded-md px-2 py-1 text-sm text-white/90 transition hover:bg-white/5 hover:text-white/90"
               >
                 Close
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-500">Reminder</label>
+                <label className="mb-1.5 block text-xs font-medium text-white/90">Reminder</label>
                 <textarea
                   autoFocus
                   value={createMessage}
@@ -313,16 +313,16 @@ export function ScheduledClient() {
                   }}
                   placeholder="Remind me to take medicine"
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-slate-400"
+                  className="w-full resize-none rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm leading-6 text-white/90 outline-none transition placeholder:text-white/40 focus:border-[#D9BEF4]/50"
                 />
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-500">Schedule type</label>
+                <label className="mb-1.5 block text-xs font-medium text-white/90">Schedule type</label>
                 <select
                   value={createRepeat}
                   onChange={(event) => setCreateRepeat(event.target.value as ReminderRepeat)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  className="w-full rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm text-white/90 outline-none transition focus:border-[#D9BEF4]/50"
                 >
                   <option value="once">One time</option>
                   <option value="daily">Daily</option>
@@ -335,23 +335,23 @@ export function ScheduledClient() {
               <div className="grid grid-cols-2 gap-3">
                 {createRepeat === "once" && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
+                    <label className="mb-1.5 block text-xs font-medium text-white/90">Date</label>
                     <input
                       type="date"
                       value={createDate}
                       onChange={(event) => setCreateDate(event.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                      className="w-full rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm text-white/90 outline-none transition focus:border-[#D9BEF4]/50"
                     />
                   </div>
                 )}
 
                 {createRepeat === "weekly" && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Day</label>
+                    <label className="mb-1.5 block text-xs font-medium text-white/90">Day</label>
                     <select
                       value={createWeekday}
                       onChange={(event) => setCreateWeekday(event.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                      className="w-full rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm text-white/90 outline-none transition focus:border-[#D9BEF4]/50"
                     >
                       {WEEKDAYS.map((day) => (
                         <option key={day.value} value={day.value}>{day.label}</option>
@@ -362,30 +362,30 @@ export function ScheduledClient() {
 
                 {createRepeat === "monthly" && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-500">Day of month</label>
+                    <label className="mb-1.5 block text-xs font-medium text-white/90">Day of month</label>
                     <input
                       type="number"
                       min="1"
                       max="31"
                       value={createMonthDay}
                       onChange={(event) => setCreateMonthDay(event.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                      className="w-full rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm text-white/90 outline-none transition focus:border-[#D9BEF4]/50"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">Time</label>
+                  <label className="mb-1.5 block text-xs font-medium text-white/90">Time</label>
                   <input
                     type="time"
                     value={createTime}
                     onChange={(event) => setCreateTime(event.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                    className="w-full rounded-lg border border-[#2d2e31] bg-[#111315] px-3 py-2 text-sm text-white/90 outline-none transition focus:border-[#D9BEF4]/50"
                   />
                 </div>
               </div>
 
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-white/90">
                 {scheduleSummary(createRepeat, createDate, createTime, createWeekday, createMonthDay)}
               </p>
               {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
@@ -393,7 +393,7 @@ export function ScheduledClient() {
                 <button
                   type="button"
                   onClick={() => setCreateOpen(false)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/5 hover:text-white/90"
                 >
                   Cancel
                 </button>
@@ -401,7 +401,7 @@ export function ScheduledClient() {
                   type="button"
                   onClick={() => void submitCreate()}
                   disabled={creating}
-                  className="rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-[#D9BEF4] px-4 py-2 text-sm font-semibold text-[#1a1a1c] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Scheduling…" : "Schedule"}
                 </button>
@@ -422,7 +422,7 @@ function buildRows(reminders: ScheduledReminder[], tasks: PrincipalTask[]): Sche
       id: `reminder-${reminder.id}`,
       rawId: reminder.id,
       type: "Reminder",
-      title: reminder.message,
+      title: reminder.message?.trim() || "Untitled reminder",
       detail: reminder.recurring
         ? `Repeats ${reminder.cron ?? "on schedule"}${reminder.tz ? ` in ${reminder.tz}` : ""}`
         : isFired
@@ -636,11 +636,11 @@ function ScheduleTable({
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-slate-200 bg-slate-50">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-[#2d2e31] bg-[#18191b]">
           <CalendarIcon />
         </div>
-        <p className="mt-4 text-sm font-medium text-slate-900">No scheduled work in this view</p>
-        <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
+        <p className="mt-4 text-sm font-medium text-white/90">No scheduled work in this view</p>
+        <p className="mt-1 max-w-sm text-sm leading-6 text-white/90">
           Try another tab or ask Riz to create a reminder or follow-up.
         </p>
       </div>
@@ -648,10 +648,10 @@ function ScheduleTable({
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-md border border-slate-200 bg-white">
+    <div className="w-full overflow-hidden rounded-md border border-[#2d2e31] bg-[#18191b]">
       <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] border-collapse text-left">
-        <thead className="bg-white text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <thead className="bg-[#18191b] text-xs font-semibold uppercase tracking-[0.08em] text-white/90">
           <tr>
             <th className="px-4 py-3">Type</th>
             <th className="px-4 py-3">Schedule item</th>
@@ -662,37 +662,37 @@ function ScheduleTable({
             <th className="px-4 py-3 text-right">Action</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200">
+        <tbody className="divide-y divide-[#2d2e31]">
           {rows.map((row) => {
             const historic = isHistoric(row);
             return (
-            <tr key={row.id} className={`align-top transition hover:bg-slate-50 ${historic ? "opacity-55" : ""}`}>
+            <tr key={row.id} className={`align-top transition hover:bg-white/[0.03] ${historic ? "opacity-55" : ""}`}>
               <td className="whitespace-nowrap px-4 py-4">
                 <TypeBadge type={row.type} />
               </td>
               <td className="max-w-[380px] px-4 py-4">
-                <p className={`text-sm font-medium leading-5 ${historic ? "line-through text-slate-400" : "text-slate-900"}`}>{row.title}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{row.detail}</p>
+                <p className={`text-sm font-medium leading-5 ${historic ? "line-through text-white/90" : "text-white/90"}`}>{row.title}</p>
+                <p className="mt-1 text-xs leading-5 text-white/90">{row.detail}</p>
               </td>
               <td className="whitespace-nowrap px-4 py-4">
                 <PriorityBadge priority={row.priority} />
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700 tabular-nums">
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/90 tabular-nums">
                 {row.recurring ? (
                   <span>
                     Repeats
-                    <span className="block text-xs text-slate-500">{row.cron ?? "Custom"} {row.tz ? `(${row.tz})` : ""}</span>
+                    <span className="block text-xs text-white/90">{row.cron ?? "Custom"} {row.tz ? `(${row.tz})` : ""}</span>
                   </span>
                 ) : (
                   formatDateTime(row.dueAt)
                 )}
               </td>
-              <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600 tabular-nums">
+              <td className="whitespace-nowrap px-4 py-4 text-sm text-white/90 tabular-nums">
                 {formatDate(row.createdAt)}
               </td>
               <td className="px-4 py-4">
-                <p className="text-sm text-slate-700">{row.source}</p>
-                <p className="mt-1 text-xs text-slate-500">{row.status}</p>
+                <p className="text-sm text-white/90">{row.source}</p>
+                <p className="mt-1 text-xs text-white/90">{row.status}</p>
               </td>
               <td className="whitespace-nowrap px-4 py-4 text-right">
                 {row.sample ? (
@@ -759,7 +759,7 @@ function PriorityBadge({ priority }: { priority: ScheduleRow["priority"] }) {
   const classes = {
     High: "border-red-500/25 bg-red-500/10 text-red-300",
     Medium: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-    Low: "border-slate-200 bg-slate-100 text-slate-600",
+    Low: "border-white/15 bg-white/5 text-white/90",
   }[priority];
 
   return <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${classes}`}>{priority}</span>;
@@ -771,9 +771,9 @@ function TableSkeleton() {
     <div className="p-4">
       <div className="space-y-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="grid min-h-16 grid-cols-[120px_1fr_110px_150px_130px] gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
+          <div key={index} className="grid min-h-16 grid-cols-[120px_1fr_110px_150px_130px] gap-4 rounded-lg border border-[#2d2e31] bg-[#18191b] p-4">
             {Array.from({ length: 5 }).map((__, cellIndex) => (
-              <span key={cellIndex} className="h-4 animate-pulse rounded bg-slate-100" />
+              <span key={cellIndex} className="h-4 animate-pulse rounded bg-white/5" />
             ))}
           </div>
         ))}
@@ -793,7 +793,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 
 function SearchIcon() {
   return (
-    <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
       <path d="M13 13l-2.6-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
@@ -802,7 +802,7 @@ function SearchIcon() {
 
 function CalendarIcon() {
   return (
-    <svg className="h-5 w-5 text-slate-500" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <svg className="h-5 w-5 text-white/90" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.4" />
       <path d="M6.5 2.8v3.4M13.5 2.8v3.4M3.5 8h13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>

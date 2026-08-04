@@ -7,10 +7,10 @@ export const metadata = {
 };
 
 export default async function DashboardPage() {
-  await requireSession();
+  const session = await requireSession();
   return (
     <Suspense fallback={null}>
-      <ChatHome />
+      <ChatHome userName={session?.name} />
     </Suspense>
   );
 }

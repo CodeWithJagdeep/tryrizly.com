@@ -19,17 +19,12 @@ const visibleConnectorProviders = new Set(shownCatalog.map((c) => c.provider as 
 
 export function NewConnectorClient() {
   const router = useRouter();
-  // Where to send the principal after a manual connector saves successfully --
-  // set only when this page was opened from elsewhere (e.g. the automation
-  // builder's "Connect" link) wanting to come straight back, same as the
-  // OAuth apps' /api/connectors/[provider]/start?returnTo=... round-trip.
   const returnToRef = useRef<string | null>(null);
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("All");
   const [connectorQuery, setConnectorQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [setupConnector, setSetupConnector] = useState<ConnectorCatalogItem | null>(null);
   const [setupEditAccount, setSetupEditAccount] = useState<ConnectorSummary | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -66,17 +61,11 @@ export function NewConnectorClient() {
     void loadConnectors();
   }, []);
 
-  // Kicks off Discord's real connect flow directly -- mints a link token and
-  // sends the browser straight to Discord's server-picker OAuth consent, the
-  // same request /dashboard/discord's "Add to Discord" button makes, just
-  // without requiring a stop on that page first.
   async function startDiscordOAuth() {
     try {
       const res = await fetch("/api/onboarding/discord/token", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // Come back here, not the standalone /dashboard/discord chat page --
-        // this button was clicked from the connectors list.
         body: JSON.stringify({ returnTo: window.location.pathname }),
       });
       const data = (await res.json()) as { installUrl?: string | null };
@@ -90,7 +79,6 @@ export function NewConnectorClient() {
     }
   }
 
-  // Deep link from the main connectors page (e.g. onboarding's "setup" prompts).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnTo = params.get("returnTo");
@@ -117,10 +105,6 @@ export function NewConnectorClient() {
   const visibleConnectors = useMemo(
     () =>
       connectors
-        // The real Discord bot saves its connection under "discord_surface"
-        // (kept distinct so linking it can never clobber the legacy manual
-        // "discord" webhook connector's own row) -- remap it here so the
-        // "discord" card's connected-status check actually finds it.
         .map((connector) => (connector.provider === "discord_surface" ? { ...connector, provider: "discord" } : connector))
         .filter((connector) => visibleConnectorProviders.has(connector.provider)),
     [connectors],
@@ -130,6 +114,7 @@ export function NewConnectorClient() {
     () => new Map(visibleConnectors.map((connector) => [connector.provider, connector])),
     [visibleConnectors],
   );
+
   const connectedByProviderAll = useMemo(() => {
     const map = new Map<string, ConnectorSummary[]>();
     for (const c of visibleConnectors) {
@@ -242,136 +227,104 @@ export function NewConnectorClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f8f7] text-black">
-      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
-        <div className="flex items-center gap-1 text-base font-normal text-slate-900 md:text-lg">
+    <main className="min-h-screen bg-[#121214] text-white/90 font-sans antialiased">
+      {/* Top Bar */}
+      <div className="sticky top-0 z-20 flex h-14 w-full shrink-0 items-center justify-between border-b border-white/10 bg-[#121214]/85 px-4 backdrop-blur-md md:px-6">
+        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-white/90">
           <Link
             href="/dashboard/connectors"
-            className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-slate-500 transition hover:bg-slate-200/60 hover:text-slate-950"
+            className="flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-white/60 transition hover:bg-white/10 hover:text-white/90"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="m15 18-6-6 6-6" />
             </svg>
-            Connectors
+            Plugins
           </Link>
+          <span className="text-white/30">/</span>
+          <span>Browse</span>
         </div>
         <CreditsBadge />
       </div>
 
-      <section className="mx-auto flex w-full max-w-[1200px] flex-col px-4 py-8 sm:px-8">
-        <header className="shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">Integrations</p>
-          <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
-            Browse integrations
-          </h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-500">
-            Connect approved apps or encrypted business credentials. Connect as many as you need — nothing here is
-            limited to one.
+      <section className="mx-auto flex w-full max-w-[1240px] flex-col px-4 py-8 sm:px-8">
+        <header>
+          <h1 className="text-xl font-semibold tracking-tight text-white/90">Browse connectors</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Connect approved tools or encrypted business credentials. Add as many as you need.
           </p>
         </header>
 
-        {loadError ? (
-          <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        {loadError && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
             {loadError}
-          </p>
-        ) : null}
-        {actionError ? (
-          <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-            {actionError}
-          </p>
-        ) : null}
-
-        <div className="mt-6 flex items-center gap-2">
-          <div className="min-w-0 flex-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max gap-1.5">
-              {categories.map((category) => {
-                const active = activeCategory === category;
-                return (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => setActiveCategory(category)}
-                    className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
-                      active ? "bg-slate-950 text-white" : "text-black/70 hover:bg-slate-100 hover:text-black"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                );
-              })}
-            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchOpen((open) => {
-                if (open) setConnectorQuery("");
-                return !open;
-              });
-            }}
-            aria-label={searchOpen ? "Close search" : "Search integrations"}
-            aria-expanded={searchOpen}
-            className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
-              searchOpen
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-slate-200 bg-white text-black/70 hover:border-slate-300 hover:text-black"
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </button>
-        </div>
-
-        {searchOpen && (
-          <div className="mt-2.5 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#D9BEF4] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#D9BEF4]/10">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              value={connectorQuery}
-              onChange={(e) => setConnectorQuery(e.target.value)}
-              placeholder="Search integrations..."
-              className="h-full w-full bg-transparent text-sm text-black outline-none placeholder:text-slate-400"
-              aria-label="Search integrations"
-              autoComplete="off"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setConnectorQuery("");
-                setSearchOpen(false);
-              }}
-              aria-label="Close search"
-              className="text-black/40 transition-colors hover:text-black"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-              </svg>
-            </button>
+        )}
+        {actionError && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+            {actionError}
           </div>
         )}
 
+        {/* Search bar */}
+        <div className="relative mt-6">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            value={connectorQuery}
+            onChange={(e) => setConnectorQuery(e.target.value)}
+            placeholder="Search connectors, skills, data sources"
+            className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.03] pl-11 pr-9 text-sm text-white/90 placeholder-white/40 outline-none transition focus:border-white/20 focus:bg-white/[0.05]"
+          />
+          {connectorQuery && (
+            <button
+              type="button"
+              onClick={() => setConnectorQuery("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/90"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Category filter */}
+        <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {categories.map((cat) => {
+            const active = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                  active
+                    ? "bg-[#ffffff] text-black font-semibold"
+                    : "text-white/50 hover:bg-white/5 hover:text-white/80"
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mt-6">
           {filteredConnectors.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-500">
+            <p className="py-16 text-center text-sm text-white/50">
               No integrations match &quot;{connectorQuery}&quot;.
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredConnectors.map((connector) => (
                 <ConnectorRow
-                  connector={connector}
                   key={connector.id}
+                  connector={connector}
                   linkedConnector={connectedByProvider.get(connector.provider)}
                   linkedAccounts={connectedByProviderAll.get(connector.provider) ?? []}
                   onSetup={() => {
-                    // Discord's real connect is the server-picker OAuth install --
-                    // kick it off directly (no intermediate page/click) rather than
-                    // opening the legacy manual webhook form below.
                     if (connector.provider === "discord") {
                       void startDiscordOAuth();
                       return;
@@ -393,7 +346,7 @@ export function NewConnectorClient() {
         </div>
       </section>
 
-      {setupConnector ? (
+      {setupConnector && (
         <SetupDialog
           connector={setupConnector}
           editAccount={setupEditAccount}
@@ -406,7 +359,7 @@ export function NewConnectorClient() {
           onSubmit={(e, c) => void saveManualConnector(e, c, setupEditAccount)}
           submitting={setupSubmitting}
         />
-      ) : null}
+      )}
     </main>
   );
 }

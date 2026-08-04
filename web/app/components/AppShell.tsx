@@ -15,15 +15,22 @@ export function AppShell({
   session: Session | null;
 }) {
   const pathname = usePathname();
-  const isAuthPage =
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/forgot-password" ||
-    pathname === "/reset-password";
+  const isBareAuthPage =
+    pathname === "/forgot-password" || pathname === "/reset-password";
+  const isMinimalHeaderAuthPage = pathname === "/login" || pathname === "/signup";
   const isAppPage = pathname === "/onboarding" || pathname.startsWith("/dashboard");
 
-  if (isAuthPage || isAppPage) {
+  if (isAppPage || isBareAuthPage) {
     return <main className="flex flex-1 flex-col">{children}</main>;
+  }
+
+  if (isMinimalHeaderAuthPage) {
+    return (
+      <>
+        <Header session={session} variant="minimal" />
+        <main className="flex flex-1 flex-col">{children}</main>
+      </>
+    );
   }
 
   return (

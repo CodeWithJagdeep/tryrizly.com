@@ -824,6 +824,15 @@ export class GoogleService {
     return this.repository.find(userId, "google");
   }
 
+  /**
+   * Accounts whose refresh token Google definitively rejected (400/401 —
+   * revoked or invalid grant), mapped to when that happened. Within the
+   * cooldown every call short-circuits to "not connected" instead of paying
+   * for a doomed refresh + API round-trip on each Gmail/Calendar touch.
+   */
+  private readonly refreshRejections = new Map<string, number>();
+  private static readonly REFRESH_REJECTION_COOLDOWN_MS = 5 * 60_000;
+
   private async accessTokenFor(
     account: ConnectedAccount,
   ): Promise<string | null> {
@@ -836,10 +845,25 @@ export class GoogleService {
       return tokens.access_token;
     }
 
-    return (await this.refresh(account)) ?? tokens.access_token ?? null;
+    const refreshed = await this.refresh(account);
+    if (refreshed) return refreshed;
+    // Google rejected the refresh token outright — the stale access token is
+    // guaranteed dead too, so don't send a doomed request with it. The stale
+    // fallback stays only for accounts where no refresh was possible at all
+    // (legacy rows without a refresh_token or missing expiry metadata).
+    if (this.refreshRejections.has(account.id)) return null;
+    return tokens.access_token ?? null;
   }
 
   private async refresh(account: ConnectedAccount): Promise<string | null> {
+    const rejectedAt = this.refreshRejections.get(account.id);
+    if (
+      rejectedAt !== undefined &&
+      Date.now() - rejectedAt < GoogleService.REFRESH_REJECTION_COOLDOWN_MS
+    ) {
+      return null;
+    }
+
     const tokens = this.tokensOf(account);
     if (
       !tokens.refresh_token ||
@@ -862,8 +886,12 @@ export class GoogleService {
 
     if (!res.ok) {
       logger.error("google token refresh failed", { status: res.status });
+      if (res.status === 400 || res.status === 401) {
+        this.refreshRejections.set(account.id, Date.now());
+      }
       return null;
     }
+    this.refreshRejections.delete(account.id);
 
     const refreshed = (await res.json()) as GoogleTokens;
     const next: GoogleTokens = {

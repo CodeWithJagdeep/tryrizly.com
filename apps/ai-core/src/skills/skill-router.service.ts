@@ -53,12 +53,9 @@ const RULES: ReadonlyArray<{
       /\b(?:revenue|revue|mrr|arr|payment|payments|subscription|stripe|razorpay|paypal|m-?pesa|metric|sales|database|postgres|mongodb|mongo)\b/i,
     reason: "business intelligence language",
   },
-  {
-    id: "automations",
-    pattern:
-      /\b(?:automation|automate|workflow|flow builder|trigger|when .{0,80} then|every time|activate|pause flow)\b/i,
-    reason: "automation language",
-  },
+  // "automations" rule intentionally removed — the skill is hidden for the
+  // narrower V1 scope (see agent-skill-registry.service.ts's `hidden: true`).
+  // Re-add this rule to bring automation routing back.
   {
     id: "preferences",
     pattern:
@@ -69,6 +66,15 @@ const RULES: ReadonlyArray<{
 
 const AMBIGUOUS_REQUEST =
   /\b(?:do it|take care of|handle it|send it|book it|move it|that one|what about|check that|go ahead|help me|can you|could you|please)\b/i;
+
+// Plain small talk / acknowledgements ("cool thanks", "haha nice", "sounds
+// good", "no worries") carry no actionable intent. Without this short-circuit
+// they'd still pay for a full classifier LLM round-trip purely because a
+// conversation history exists (see shouldClassify below) — the exact
+// "why is small talk slow" complaint. Capped short so it never swallows a
+// real request that happens to start with a pleasantry.
+const TRIVIAL_CHATTER_RE =
+  /^(?:ok(?:ay)?|k|sure|yep|yup|yeah|nah|no|nope|cool|nice|great|awesome|perfect|got it|sounds good|thanks?(?:\s+(?:so\s+much|a\s+lot|you)?)?|thank you|ty|no worries|np|lol|haha+|hmm+|good|alright|fine|noted)[.!?\s]*$/i;
 
 @Injectable()
 export class SkillRouterService {
@@ -108,6 +114,7 @@ export class SkillRouterService {
     const shouldClassify =
       ids.length === 0 &&
       current.length > 2 &&
+      !TRIVIAL_CHATTER_RE.test(current) &&
       (AMBIGUOUS_REQUEST.test(current) || Boolean(input.history?.length));
     if (shouldClassify) {
       const classified = await this.classify(input).catch((error: unknown) => {
@@ -169,6 +176,7 @@ export class SkillRouterService {
       task: "agent",
       provider: "grok",
       model: "grok-3-mini",
+      reasoningEffort: "low",
       userId: input.userId,
     });
     const parsed = extractJson<ClassifierOutput>(raw ?? "");

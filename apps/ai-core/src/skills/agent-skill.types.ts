@@ -28,6 +28,10 @@ export type AgentSkill = {
   readonly instructions: string;
   readonly tools: readonly string[];
   readonly contextScopes: readonly AgentContextScope[];
+  /** Excluded from routing/classifier catalogs and the "general" fallback's
+   * tool grants, while staying registered for domain ownership (assertCompatible)
+   * and directly selectable by id — a soft, reversible disable for V1 scope cuts. */
+  readonly hidden?: boolean;
 };
 
 export type SkillSelection = {

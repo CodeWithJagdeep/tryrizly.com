@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { clearLocalChatData, getSessions } from "../lib/chat-store";
 
 const TIMEZONES: { label: string; value: string }[] = [
@@ -88,8 +89,26 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
-export function SettingsClient({ email, name }: { email: string; name?: string }) {
-  const [activeSection, setActiveSection] = useState<SectionId>("profile");
+const SECTION_IDS = SECTIONS.map((s) => s.id) as readonly string[];
+
+export function SettingsClient({
+  email,
+  name,
+  initialSection,
+  onClose,
+}: {
+  email: string;
+  name?: string;
+  /** Overrides the ?section= query param — used when rendered inside SettingsModal. */
+  initialSection?: string;
+  /** Renders a close (×) button and skips the full-page shell when set — used inside SettingsModal. */
+  onClose?: () => void;
+}) {
+  const searchParams = useSearchParams();
+  const requestedSection = initialSection ?? searchParams.get("section");
+  const [activeSection, setActiveSection] = useState<SectionId>(
+    requestedSection && SECTION_IDS.includes(requestedSection) ? (requestedSection as SectionId) : "profile",
+  );
 
   const [source, setSource] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -366,16 +385,30 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
     }
   }
 
+  const Container = onClose ? "div" : "main";
+
   return (
-    <main className="min-h-screen bg-white text-slate-900">
-      <header className="border-b border-slate-200 px-6 py-5">
+    <Container className={onClose ? "flex h-full min-h-0 flex-col bg-white text-slate-900" : "min-h-screen bg-white text-slate-900"}>
+      <header className="relative shrink-0 border-b border-slate-200 px-6 py-5">
         <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-slate-900">Settings</h1>
         <p className="mt-1 text-[15px] leading-6 text-slate-400">
           Account details, Riz behavior, billing, and workspace status.
         </p>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close settings"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </header>
 
-      <div className="grid min-h-[calc(100vh-89px)] w-full gap-0 bg-white lg:grid-cols-[260px_1fr]">
+      <div className={onClose ? "grid w-full min-h-0 flex-1 gap-0 overflow-y-auto bg-white lg:grid-cols-[260px_1fr]" : "grid min-h-[calc(100vh-89px)] w-full gap-0 bg-white lg:grid-cols-[260px_1fr]"}>
         <nav className="border-b border-slate-200 bg-white p-3 lg:border-b-0 lg:border-r">
           <p className="mb-1 px-2.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
             Account settings
@@ -736,7 +769,7 @@ export function SettingsClient({ email, name }: { email: string; name?: string }
           )}
         </div>
       </div>
-    </main>
+    </Container>
   );
 }
 

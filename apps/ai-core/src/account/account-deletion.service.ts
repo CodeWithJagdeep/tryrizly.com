@@ -10,6 +10,7 @@ import { VectorMemoryService } from "../memory/vector-memory.service";
 
 const USER_TABLES = [
   "notification_log",
+  "chat_messages",
   "source_receipts",
   "agent_plans",
   "tasks",

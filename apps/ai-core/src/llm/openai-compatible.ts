@@ -17,6 +17,7 @@ export async function chatComplete(opts: {
   messages: AgentMessage[];
   temperature?: number;
   maxTokens?: number;
+  reasoningEffort?: "low" | "high";
 }): Promise<LlmCompletionResult> {
   const response = await fetch(`${opts.baseUrl}/chat/completions`, {
     method: "POST",
@@ -28,6 +29,9 @@ export async function chatComplete(opts: {
       model: opts.model,
       temperature: opts.temperature ?? 0.2,
       ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+      ...(opts.reasoningEffort
+        ? { reasoning_effort: opts.reasoningEffort }
+        : {}),
       messages: opts.messages.map((m) => ({
         role: m.role,
         content: m.content,

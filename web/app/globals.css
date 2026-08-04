@@ -141,6 +141,8 @@
   --color-neutral-0: #ffffff;
   --color-neutral-100: #f7f6f4;
   --color-neutral-800: #262626;
+
+  --container-8xl: 90rem;
 }
 
 /* Mintlify-style 24-column page grid */
@@ -195,6 +197,56 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   line-height: 1.6;
+}
+
+/* Dashboard-only dark surface system. Individual dashboard tools retain their
+   layout and behavior, while their former light paper surfaces use the same
+   charcoal treatment as the chat home. */
+.dashboard-shell {
+  background: #1d1d1f;
+  color: #d1d0d3;
+}
+
+.dashboard-content > main:not(:has(> .sticky + *)) {
+  margin: 0.5rem 0.5rem 0.5rem 0;
+  min-height: 0;
+  border: 1px solid #2d2e31;
+  border-radius: 15px;
+  overflow: auto;
+}
+
+.dashboard-shell [class*="bg-white"],
+.dashboard-shell [class*="bg-slate-50"],
+.dashboard-shell [class*="bg-slate-100"],
+.dashboard-shell [class*="bg-[#f8f8f7]"] {
+  background-color: #202124 !important;
+}
+
+.dashboard-shell [class*="border-slate-"],
+.dashboard-shell [class*="border-black/"] {
+  border-color: #38393d !important;
+}
+
+.dashboard-shell [class*="text-slate-900"],
+.dashboard-shell [class*="text-slate-950"],
+.dashboard-shell [class*="text-black/80"] {
+  color: #e4e3e6 !important;
+}
+
+.dashboard-shell [class*="text-slate-800"],
+.dashboard-shell [class*="text-slate-700"],
+.dashboard-shell [class*="text-slate-600"] {
+  color: #c5c4c8 !important;
+}
+
+.dashboard-shell [class*="text-slate-500"],
+.dashboard-shell [class*="text-slate-400"] {
+  color: #8f8e94 !important;
+}
+
+.dashboard-shell [class*="hover:bg-slate-"]:hover,
+.dashboard-shell [class*="hover:bg-white"]:hover {
+  background-color: #292a2d !important;
 }
 
 ::selection {
@@ -317,8 +369,8 @@ body {
 .rizly-pixel-rail {
   opacity: 0.7;
   background:
-    linear-gradient(90deg, transparent, var(--rizly-ai)),
-    repeating-linear-gradient(90deg, transparent 0 5px, var(--rizly-ai) 5px 8px);
+    linear-gradient(90deg, transparent, #ffffff),
+    repeating-linear-gradient(90deg, transparent 0 5px, #ffffff 5px 8px);
   mask-image: linear-gradient(90deg, transparent, black);
 }
 

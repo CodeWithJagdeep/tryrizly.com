@@ -3,20 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpIcon, ChatIcon, LibraryIcon, PlugIcon } from "./icons";
-import { CreditsBadge } from "./CreditsBadge";
+import { ArrowUpIcon, CalendarIcon, ClockIcon, MailIcon, PlugIcon, UsersIcon, VideoIcon } from "./icons";
+import { SlackIcon, TelegramIcon } from "../../components/ConnectorIcons";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { TelegramBanner } from "./TelegramBanner";
-import {
-  CalendarIcon,
-  GitHubIcon,
-  GmailIcon,
-  NotionIcon,
-  PostgresIcon,
-  SlackIcon,
-  StripeIcon,
-  TelegramIcon,
-} from "../../components/ConnectorIcons";
+import { ChannelConnectModal } from "./ChannelConnectModal";
+import { ConnectorShowcase } from "./ConnectorShowcase";
+import { CreditsBadge } from "./CreditsBadge";
 import {
   type ChatSession,
   type PendingApproval,
@@ -24,59 +16,21 @@ import {
   deriveTitle,
   getSession,
   isContextPaused,
-  openChatSearch,
   saveSession,
 } from "../lib/chat-store";
 
-const suggestions = [
-  "What tasks were still incomplete the last time I worked?",
-  "Show me how my focus time changed over the past few weeks.",
-  "Summarize unread emails from this morning.",
-];
-
-// Starter prompts, not personalized recommendations — each one just fills
-// the composer via sendMessage, same as the suggestion chips above.
-const automationIdeas: { title: string; apps: { label: string; Icon: React.ComponentType<{ className?: string }> }[] }[] = [
-  {
-    title: "Draft replies for every unread email that needs a response",
-    apps: [{ label: "Gmail", Icon: GmailIcon }],
-  },
-  {
-    title: "Summarize today's calendar and flag any conflicts",
-    apps: [{ label: "Google Calendar", Icon: CalendarIcon }],
-  },
-  {
-    title: "Post a daily standup summary to Slack every morning",
-    apps: [{ label: "Slack", Icon: SlackIcon }],
-  },
-  {
-    title: "Notify me on Telegram whenever a PR needs my review",
-    apps: [{ label: "GitHub", Icon: GitHubIcon }, { label: "Telegram", Icon: TelegramIcon }],
-  },
-  {
-    title: "Log new Stripe payments into a Notion database",
-    apps: [{ label: "Stripe", Icon: StripeIcon }, { label: "Notion", Icon: NotionIcon }],
-  },
-  {
-    title: "Query new signups from Postgres and summarize the week",
-    apps: [{ label: "Postgres", Icon: PostgresIcon }],
-  },
+const starters = [
+  { label: "Connectors", desc: "Connect Gmail, Slack, Stripe & more", href: "/dashboard/connectors", icon: PlugIcon },
+  { label: "Emails", desc: "Inbox triage & approved replies", href: "/dashboard/emails", icon: MailIcon },
+  { label: "Calendar", desc: "Bookings & reminders", href: "/dashboard/calendar", icon: CalendarIcon },
+  { label: "Meetings", desc: "Notes & follow-ups", href: "/dashboard/meetings", icon: VideoIcon },
+  { label: "People", desc: "Contacts Riz keeps track of", href: "/dashboard/people", icon: UsersIcon },
+  { label: "Scheduled", desc: "Upcoming automated runs", href: "/dashboard/scheduled", icon: ClockIcon },
 ];
 
 type AccessState = "loading" | "active" | "blocked";
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}
-
-export function ChatHome() {
+export function ChatHome({ userName }: { userName?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session");
@@ -87,7 +41,7 @@ export function ChatHome() {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [accessState, setAccessState] = useState<AccessState>("loading");
-  const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
+  const [channelModal, setChannelModal] = useState<{ open: boolean; tab: "telegram" | "slack" }>({ open: false, tab: "telegram" });
 
   useEffect(() => {
     setError(null);
@@ -130,10 +84,6 @@ export function ChatHome() {
       })
       .then((billing) => setAccessState(billing.access?.active ? "active" : "blocked"))
       .catch(() => setAccessState("blocked"));
-    fetch("/api/chat/history")
-      .then((r) => r.json())
-      .then((d: { sessions?: ChatSession[] }) => setRecentSessions((d.sessions ?? []).slice(0, 4)))
-      .catch(() => null);
   }, []);
 
 
@@ -143,6 +93,7 @@ export function ChatHome() {
   }, [session?.messages.length, sending]);
 
   const hasMessages = (session?.messages.length ?? 0) > 0;
+  const firstName = userName?.trim().split(/\s+/)[0];
 
   async function runTurn(
     displayContent: string,
@@ -186,6 +137,7 @@ export function ChatHome() {
           history: isContextPaused()
             ? []
             : withUserTurn.messages.slice(0, -1).map((turn) => ({ role: turn.role, content: turn.content })),
+          sessionId: withUserTurn.id,
           ...apiOverrides,
         }),
       });
@@ -256,11 +208,8 @@ export function ChatHome() {
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-[#f8f8f7]">
-      <div className="sticky top-0 z-10 flex h-14 w-full shrink-0 items-center justify-between border-b border-transparent bg-[#f8f8f7] px-4 md:px-6">
-        <div className="flex h-8 items-center rounded-lg px-2 text-base font-medium text-slate-900 md:text-lg">
-          Agent v1
-        </div>
+    <main className="my-2 mr-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[15px] border border-[#2d2e31] bg-[#111315] text-[#d1d0d3] lg:h-[calc(100dvh-1rem)] lg:flex-none">
+      <div className="flex h-14 shrink-0 items-center justify-end border-b border-[#2d2e31] px-4 md:px-6">
         <CreditsBadge />
       </div>
       {hasMessages ? (
@@ -275,21 +224,21 @@ export function ChatHome() {
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${
                         turn.role === "user"
-                          ? "self-end bg-slate-900 text-white whitespace-pre-wrap"
-                          : "self-start border border-slate-200 bg-slate-50 text-slate-800"
+                          ? "self-end bg-[#2b2b2e] text-white whitespace-pre-wrap"
+                          : "self-start border border-[#39393d] bg-[#202124] text-[#e5e4e7]"
                       }`}
                     >
                       {turn.role === "user" ? turn.content : <MarkdownMessage content={turn.content} />}
                     </div>
                     {approval && !approval.resolved && isLast && (
-                      <div className="self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
-                        <p className="text-slate-600">{approval.preview}</p>
+                      <div className="self-start rounded-2xl border border-[#39393d] bg-[#202124] px-4 py-3 text-sm text-[#e5e4e7]">
+                        <p className="text-[#aaa9ad]">{approval.preview}</p>
                         <div className="mt-3 flex gap-2">
                           <button
                             type="button"
                             disabled={sending || accessState !== "active"}
                             onClick={() => void handleApprove(approval)}
-                            className="rounded-lg bg-[#FE7F2D] px-3 py-1.5 text-xs font-normal text-white transition hover:brightness-105 disabled:opacity-50"
+                            className="rounded-lg bg-[#D9BEF4] px-3 py-1.5 text-xs font-medium text-[#1a1a1c] transition hover:brightness-95 disabled:opacity-50"
                           >
                             Approve
                           </button>
@@ -297,7 +246,7 @@ export function ChatHome() {
                             type="button"
                             disabled={sending}
                             onClick={() => handleReject(approval)}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-normal text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
+                            className="rounded-lg border border-[#39393d] px-3 py-1.5 text-xs font-medium text-[#aaa9ad] transition hover:bg-white/5 disabled:opacity-50"
                           >
                             Reject
                           </button>
@@ -308,17 +257,17 @@ export function ChatHome() {
                 );
               })}
               {sending && (
-                <div className="self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-400">
+                <div className="self-start rounded-2xl border border-[#39393d] bg-[#202124] px-4 py-2.5 text-sm text-[#aaa9ad]">
                   Thinking…
                 </div>
               )}
             </div>
           </div>
 
-          <div className="sticky bottom-0 bg-[#f8f8f7] px-6 pb-24 pt-3 lg:pb-8">
+          <div className="sticky bottom-0 border-t border-[#212226] bg-[#111315] px-6 pb-24 pt-3 lg:pb-8">
             <div className="mx-auto w-full max-w-2xl">
-              <TelegramBanner />
-              {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+              <ChannelToggleRow onOpen={(tab) => setChannelModal({ open: true, tab })} />
+              {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
               <ChatInputForm
                 accessState={accessState}
                 message={message}
@@ -330,24 +279,18 @@ export function ChatHome() {
           </div>
         </>
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col items-center overflow-y-auto bg-[#f8f8f7] px-6 pb-24 lg:pb-16">
-          {/* Ambient dotted texture */}
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle,rgba(15,23,42,0.045)_1px,transparent_1px)] [background-size:18px_18px]" />
-
+        <div
+          className="relative flex min-h-0 flex-1 flex-col items-center overflow-y-auto bg-[#111315] px-6 pb-16"
+          style={{ backgroundImage: "radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "22px 22px" }}
+        >
           <div className="relative z-10 flex w-full flex-col items-center">
-            {/* Search section — 80vh tall, input bar centered */}
-            <div className="flex h-[80vh] w-full max-w-2xl flex-col items-center justify-center">
-              <p className="mb-2 text-center text-xs font-medium uppercase tracking-[0.14em] text-[#FE7F2D]">
-                Chat. Automate.
-              </p>
-              <h1 className="text-center text-[26px] font-normal tracking-tight text-slate-900 sm:text-[32px]">
-                What do you want to automate?
-              </h1>
-
-              {/* Copilot-style input card */}
-              <div className="mt-8 w-full">
-                <TelegramBanner />
-                {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+            <div className="flex w-full max-w-5xl flex-col items-center justify-end pb-0 pt-16">
+              <div className="mt-18 w-full max-w-2xl">
+                <h1 className="mb-8 text-center text-[30px] font-semibold tracking-tight text-white sm:text-[34px]">
+                  {firstName ? `What's on your list today, ${firstName}?` : "What can I help with?"}
+                </h1>
+                <ChannelToggleRow onOpen={(tab) => setChannelModal({ open: true, tab })} />
+                {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
                 <ChatInputForm
                   accessState={accessState}
                   message={message}
@@ -355,86 +298,65 @@ export function ChatHome() {
                   onMessageChange={setMessage}
                   onSubmit={sendMessage}
                 />
-                <p className="mt-2.5 text-center text-xs text-slate-400">
-                  Riz is AI and can make mistakes. Double-check important actions.
-                </p>
               </div>
 
-              {/* Question prompts — directly below the input */}
-              <div className="mt-5 flex w-full flex-wrap justify-center gap-2">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    disabled={accessState !== "active"}
-                    onClick={() => sendMessage(suggestion)}
-                    className="rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={openChatSearch}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 backdrop-blur-sm transition hover:border-slate-300 hover:bg-white"
-                >
-                  <LibraryIcon className="h-4 w-4 text-slate-400" />
-                  Chat library
-                </button>
-              </div>
-            </div>
+              <ConnectorShowcase />
 
-            {/* Ideas to automate — curated starter prompts, not personalized recommendations */}
-            <div className="mt-8 w-full max-w-6xl">
-              <p className="mb-3 text-base font-normal text-slate-900">Ideas to automate</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {automationIdeas.map((idea) => (
-                  <button
-                    key={idea.title}
-                    type="button"
-                    disabled={accessState !== "active"}
-                    onClick={() => sendMessage(idea.title)}
-                    className="flex flex-col items-start gap-3 rounded-lg border border-slate-200 bg-white/70 px-4 py-3 text-left backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <p className="text-sm font-normal text-slate-900">{idea.title}</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400">Works with:</span>
-                      {idea.apps.map(({ label, Icon }) => (
-                        <span key={label} title={label} className="flex h-5 w-5 items-center justify-center rounded bg-white ring-1 ring-slate-200">
-                          <Icon className="h-full w-full" />
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Jump back in — your own recent chats, not fake data */}
-            {recentSessions.length > 0 && (
-              <div className="mt-8 w-full max-w-6xl">
-                <p className="mb-3 text-base font-normal text-slate-900">Jump back in</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {recentSessions.map((s) => (
+              <p className="mt-8 mb-2 w-full text-left text-[15px] font-semibold text-white">Start from scratch</p>
+              <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+                {starters.map((starter) => {
+                  const Icon = starter.icon;
+                  return (
                     <Link
-                      key={s.id}
-                      href={`/dashboard?session=${s.id}`}
-                      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white/70 p-4 backdrop-blur-sm transition-all hover:border-slate-300 hover:bg-white hover:shadow-md"
+                      key={starter.label}
+                      href={starter.href}
+                      className="flex items-start gap-3 rounded-xl border border-[#2d2e31] bg-[#18191b] px-4 py-3.5 text-left transition hover:-translate-y-0.5 hover:border-[#D9BEF4]/60 hover:bg-[#1c1d20]"
                     >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#FE7F2D]/10 text-[#FE7F2D]">
-                        <ChatIcon className="h-4 w-4" />
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#2a223a] text-[#D9BEF4]">
+                        <Icon className="h-4 w-4" />
                       </span>
-                      <p className="truncate text-sm font-normal text-slate-900">{s.title}</p>
-                      <p className="text-xs text-slate-400">Edited {timeAgo(s.updatedAt)}</p>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-semibold text-white">{starter.label}</span>
+                        <span className="block truncate text-[12.5px] text-[#8a898f]">{starter.desc}</span>
+                      </span>
                     </Link>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
+      <ChannelConnectModal
+        open={channelModal.open}
+        initialTab={channelModal.tab}
+        onClose={() => setChannelModal((prev) => ({ ...prev, open: false }))}
+      />
     </main>
+  );
+}
+
+function ChannelToggleRow({ onOpen }: { onOpen: (tab: "telegram" | "slack") => void }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className="text-[13px] text-[#77767b]">Continue in</span>
+      <button
+        type="button"
+        onClick={() => onOpen("telegram")}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[#2d2e31] bg-[#18191b] px-3 py-1.5 text-[13px] font-medium text-[#c9c8cb] transition hover:border-[#D9BEF4]/60 hover:text-white"
+      >
+        <TelegramIcon className="h-4 w-4" />
+        Telegram
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpen("slack")}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[#2d2e31] bg-[#18191b] px-3 py-1.5 text-[13px] font-medium text-[#c9c8cb] transition hover:border-[#D9BEF4]/60 hover:text-white"
+      >
+        <SlackIcon className="h-4 w-4" />
+        Slack
+      </button>
+    </div>
   );
 }
 
@@ -453,12 +375,12 @@ function ChatInputForm({
 }) {
   if (accessState === "blocked") {
     return (
-      <div className="flex min-h-32 flex-col items-center justify-center rounded-[22px] border border-black/10 bg-white px-5 py-5 text-center shadow-[0px_12px_32px_0px_rgba(0,0,0,0.03)]">
-        <p className="text-sm font-normal text-slate-900">Your free trial has ended</p>
-        <p className="mt-1 text-sm text-slate-500">Choose a paid plan to continue using Riz.</p>
+      <div className="flex min-h-32 flex-col items-center justify-center rounded-[20px] border border-[#48484c] bg-[#202124] px-5 py-5 text-center">
+        <p className="text-sm font-medium text-white">Your free trial has ended</p>
+        <p className="mt-1 text-sm text-[#aaa9ad]">Choose a paid plan to continue using Riz.</p>
         <Link
           href="/dashboard/upgrade"
-          className="mt-4 rounded-full bg-[#FE7F2D] px-5 py-2 text-sm font-normal text-white transition hover:brightness-105"
+          className="mt-4 rounded-full bg-[#1683ff] px-5 py-2 text-sm font-medium text-white transition hover:brightness-105"
         >
           View plans
         </Link>
@@ -468,14 +390,20 @@ function ChatInputForm({
 
   const accessLoading = accessState === "loading";
 
+  const canSubmit = Boolean(message.trim()) && !sending && !accessLoading;
+
   return (
     <form
-      className="rounded-[22px] border border-black/10 bg-white py-3 shadow-[0px_12px_32px_0px_rgba(0,0,0,0.03)] transition focus-within:border-black/20"
+      className="overflow-hidden rounded-[20px] border border-[#39393d] bg-[#1a1b1d] shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)] transition focus-within:border-[#D9BEF4]/50 focus-within:shadow-[0_8px_30px_-10px_rgba(217,190,244,0.15)]"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(message);
       }}
     >
+      <div className="flex items-center gap-2 border-b border-[#2a2b2e] px-5 py-3">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2a223a] text-[13px] text-[#D9BEF4]">✦</span>
+        <span className="text-[13px] font-semibold uppercase tracking-wide text-[#c9c8cb]">Ask Riz</span>
+      </div>
       <textarea
         value={message}
         onChange={(event) => onMessageChange(event.target.value)}
@@ -485,24 +413,21 @@ function ChatInputForm({
             onSubmit(message);
           }
         }}
-        placeholder={accessLoading ? "Checking plan access…" : "Ask anything, or tell me what to handle…"}
+        placeholder={accessLoading ? "Checking plan access…" : 'Type "/" to invoke plugins and skills'}
         rows={1}
         disabled={sending || accessLoading}
-        className="min-h-[50px] max-h-[216px] w-full resize-none bg-transparent px-4 text-[15px] leading-6 text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+        className="min-h-[82px] max-h-[216px] w-full resize-none bg-transparent px-5 pt-3 text-[16px] leading-6 text-white placeholder:text-[#77767b] focus:outline-none disabled:opacity-60"
       />
-      <div className="mt-2 flex items-center justify-between gap-2 px-3">
-        <Link
-          href="/dashboard/connectors"
-          title="Connectors"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200 px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-        >
-          <PlugIcon className="h-4 w-4" />
-          Connectors
-        </Link>
+      <div className="flex items-center justify-between gap-2 border-t border-[#2a2b2e]/60 px-5 py-2.5">
+        <span className="text-[12px] text-[#5c5b60]">Shift + Enter for a new line</span>
         <button
           type="submit"
-          disabled={!message.trim() || sending || accessLoading}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-400"
+          disabled={!canSubmit}
+          className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+            canSubmit
+              ? "bg-[#D9BEF4] text-[#1a1a1c] hover:brightness-95"
+              : "bg-[#2d2e31] text-[#5c5b60]"
+          }`}
         >
           <ArrowUpIcon className="h-4 w-4" />
         </button>

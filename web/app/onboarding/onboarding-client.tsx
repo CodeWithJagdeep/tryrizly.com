@@ -1185,7 +1185,7 @@ function ProgressHeader({ step, onBack }: { step: number; onBack: () => void }) 
 
 function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-black/40">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-white/40">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
     </svg>
@@ -1265,7 +1265,7 @@ function TimezoneCombobox({
 
   return (
     <div ref={wrapRef} className="relative mt-6">
-      <div className="flex h-[52px] items-center gap-2 rounded-full border border-black/70 bg-white px-5 transition focus-within:border-[#D9BEF4]">
+      <div className="flex h-[52px] items-center gap-2 rounded-full border border-white/30 bg-white/[0.04] px-5 transition focus-within:border-[#D9BEF4]">
         <SearchIcon />
         <input
           value={open ? query : value}
@@ -1278,16 +1278,16 @@ function TimezoneCombobox({
             setOpen(true);
           }}
           placeholder={open ? `Search — current: ${value}` : "Search your timezone…"}
-          className="h-full w-full cursor-text bg-transparent text-base font-normal text-black outline-none placeholder:text-slate-400"
+          className="h-full w-full cursor-text bg-transparent text-base font-normal text-white outline-none placeholder:text-white/40"
           aria-label="Timezone"
           autoComplete="off"
         />
       </div>
 
       {open && (
-        <ul className="absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl border border-black/70 bg-white shadow-xl">
+        <ul className="absolute z-20 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl border border-white/30 bg-black shadow-xl">
           {filtered.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-slate-500">No timezone matches “{query}”.</li>
+            <li className="px-4 py-3 text-sm text-white/50">No timezone matches “{query}”.</li>
           ) : (
             filtered.map((tz) => {
               const selected = tz === value;
@@ -1297,7 +1297,7 @@ function TimezoneCombobox({
                     type="button"
                     onClick={() => pick(tz)}
                     className={`flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                      selected ? "bg-slate-950 text-white" : "text-black hover:bg-[#D9BEF4]/10"
+                      selected ? "bg-white text-black" : "text-white hover:bg-[#D9BEF4]/10"
                     }`}
                   >
                     <span>{tz.replace(/_/g, " ")}</span>
@@ -1339,6 +1339,7 @@ export function OnboardingClient() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSubmitting, setSetupSubmitting] = useState(false);
   const [skipLoading, setSkipLoading] = useState(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
   const [connectorQuery, setConnectorQuery] = useState("");
   const [connectorCategory, setConnectorCategory] = useState<"All" | (typeof CATEGORIES)[number]>("All");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1442,14 +1443,14 @@ export function OnboardingClient() {
     return (
       <article
         key={item.provider}
-        className={`group flex min-w-0 flex-col rounded-2xl border bg-white p-3.5 transition duration-200 sm:p-4 ${
+        className={`group flex min-w-0 flex-col rounded-2xl border bg-white/[0.04] p-3.5 transition duration-200 sm:p-4 ${
           connected
-            ? "border-emerald-200 bg-emerald-50/30"
-            : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_30px_-20px_rgba(15,23,42,0.45)]"
+            ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+            : "border-white/10 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_12px_30px_-20px_rgba(0,0,0,0.6)]"
         }`}
       >
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-white/10">
             <ConnectorLogo
               provider={item.provider}
               alt={item.title}
@@ -1459,28 +1460,28 @@ export function OnboardingClient() {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className="truncate text-base font-semibold leading-5 text-black">{item.title}</h3>
+              <h3 className="truncate text-base font-semibold leading-5 text-white">{item.title}</h3>
               {recommended && (
                 <span className="rounded-md bg-[#D9BEF4]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#C95618]">
                   Recommended
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs font-medium text-black/70">
+            <p className="mt-1 text-xs font-medium text-white/70">
               {item.category} · {accessType}
             </p>
           </div>
         </div>
 
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-black/70 sm:min-h-12">
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/70 sm:min-h-12">
           {item.description}
         </p>
 
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
           {connected ? (
             <>
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-emerald-700">
-                <span className="flex size-4 items-center justify-center rounded-full bg-emerald-600 text-white">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-emerald-400">
+                <span className="flex size-4 items-center justify-center rounded-full bg-emerald-500 text-black">
                   <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="m2.5 6 2.2 2.2 4.8-4.8" />
                   </svg>
@@ -1490,14 +1491,14 @@ export function OnboardingClient() {
               <button
                 type="button"
                 onClick={() => void unlinkConnector(item.provider)}
-                className="cursor-pointer rounded-full px-3 py-1 text-[13px] font-normal text-black/70 transition hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
+                className="cursor-pointer rounded-full px-3 py-1 text-[13px] font-normal text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
               >
                 Disconnect
               </button>
             </>
           ) : (
             <>
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-black/70">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/70">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
@@ -1509,7 +1510,7 @@ export function OnboardingClient() {
                   setActiveConnector(item);
                   setSetupError(null);
                 }}
-                className="inline-flex h-10 min-w-24 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50"
+                className="inline-flex h-10 min-w-24 cursor-pointer items-center justify-center rounded-full bg-white px-5 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/50"
               >
                 {item.authType === "oauth" ? "Connect" : "Set up"}
               </button>
@@ -1696,19 +1697,21 @@ export function OnboardingClient() {
   }
 
   async function skipTelegram() {
+    setSkipError(null);
     setSkipLoading(true);
     try {
-      await fetch("/api/onboarding/progress", {
+      const res = await fetch("/api/onboarding/progress", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ completedAt: new Date().toISOString() }),
       });
+      if (!res.ok) throw new Error("save_failed");
+      router.push("/dashboard");
     } catch {
-      // best-effort — don't block navigation if the call fails
+      setSkipError("Something went wrong finishing setup. Please try again.");
     } finally {
       setSkipLoading(false);
     }
-    router.push("/dashboard");
   }
 
   async function submitTimezone() {
@@ -1722,7 +1725,7 @@ export function OnboardingClient() {
 
   return (
     <main
-      className={`relative flex justify-center bg-white text-black ${
+      className={`relative flex justify-center bg-black text-white ${
         step === 4
           ? "min-h-[100dvh] items-start overflow-x-clip px-4 pb-24 pt-14 sm:px-6 sm:pb-28 sm:pt-16"
           : "min-h-screen items-start px-6 pb-10 pt-16"
@@ -1739,7 +1742,7 @@ export function OnboardingClient() {
           alt="rizly"
           width={112}
           height={26}
-          className="h-8 w-auto object-contain"
+          className="h-8 w-auto object-contain brightness-0 invert"
           priority
         />
       </Link>
@@ -1757,12 +1760,12 @@ export function OnboardingClient() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
               {STEP_META[0].eyebrow}
             </p>
-            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-white text-balance">
               Tell us about you
             </h1>
 
             <div className="mt-7">
-              <label className="block text-base font-normal text-slate-900">Full name</label>
+              <label className="block text-base font-normal text-white/90">Full name</label>
               <input
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
@@ -1771,20 +1774,20 @@ export function OnboardingClient() {
                 autoComplete="name"
                 autoFocus
                 required
-                className="mt-2 h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4]"
+                className="mt-2 h-[52px] w-full rounded-full border border-white/30 bg-white/[0.04] px-5 text-base font-normal text-white outline-none transition placeholder:text-white/40 focus:border-[#D9BEF4]"
               />
             </div>
 
             <div className="mt-5">
-              <label className="block text-base font-normal text-slate-900">
-                Phone <span className="text-slate-400">(optional)</span>
+              <label className="block text-base font-normal text-white/90">
+                Phone <span className="text-white/40">(optional)</span>
               </label>
               <div className="mt-2 flex gap-2">
                 <select
                   value={phoneCountry}
                   onChange={(e) => setPhoneCountry(e.target.value)}
                   aria-label="Country code"
-                  className="h-[52px] shrink-0 rounded-full border border-black/70 bg-white px-3 text-base font-normal text-slate-950 outline-none transition focus:border-[#D9BEF4]"
+                  className="h-[52px] shrink-0 rounded-full border border-white/30 bg-white/[0.04] px-3 text-base font-normal text-white outline-none transition focus:border-[#D9BEF4]"
                 >
                   {PHONE_COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -1799,7 +1802,7 @@ export function OnboardingClient() {
                   type="tel"
                   autoComplete="tel-national"
                   inputMode="tel"
-                  className="h-[52px] w-full rounded-full border border-black/70 bg-white px-5 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#D9BEF4]"
+                  className="h-[52px] w-full rounded-full border border-white/30 bg-white/[0.04] px-5 text-base font-normal text-white outline-none transition placeholder:text-white/40 focus:border-[#D9BEF4]"
                 />
               </div>
             </div>
@@ -1810,7 +1813,7 @@ export function OnboardingClient() {
               type="button"
               disabled={!profileName.trim() || profileLoading}
               onClick={() => void submitProfile()}
-              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-white text-base font-normal text-black transition hover:bg-white/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {profileLoading ? "Saving…" : "Continue"}
             </button>
@@ -1823,10 +1826,10 @@ export function OnboardingClient() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
               {STEP_META[1].eyebrow}
             </p>
-            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-white text-balance">
               Where did you hear about rizly?
             </h1>
-            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-white/50">
               A quick one — it helps us understand who rizly works best for.
             </p>
             <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1837,10 +1840,10 @@ export function OnboardingClient() {
                     key={option}
                     type="button"
                     onClick={() => setSource(option)}
-                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 px-5 py-3.5 text-left text-base font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-full border border-white/30 px-5 py-3.5 text-left text-base font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                       selected
-                        ? "bg-slate-950 text-white"
-                        : "bg-white text-slate-950 hover:border-black hover:bg-slate-50"
+                        ? "bg-white text-black"
+                        : "bg-white/[0.04] text-white hover:border-white hover:bg-white/10"
                     }`}
                   >
                     {option}
@@ -1856,7 +1859,7 @@ export function OnboardingClient() {
               type="button"
               disabled={!source || sourceLoading}
               onClick={() => void submitSource()}
-              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-white text-base font-normal text-black transition hover:bg-white/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sourceLoading ? "Saving…" : "Continue"}
             </button>
@@ -1869,18 +1872,18 @@ export function OnboardingClient() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
               {STEP_META[2].eyebrow}
             </p>
-            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-white text-balance">
               What&rsquo;s your timezone?
             </h1>
-            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-white/50">
               rizly uses this for reminders and meeting times. We&rsquo;ve guessed yours from your
               browser — change it if it&rsquo;s wrong.
             </p>
             <TimezoneCombobox value={timezone} options={timezoneOptions} onChange={setTimezone} />
-            <p className="mt-3 text-sm text-slate-500">
-              Selected: <span className="font-semibold text-black">{timezone.replace(/_/g, " ")}</span>
+            <p className="mt-3 text-sm text-white/50">
+              Selected: <span className="font-semibold text-white">{timezone.replace(/_/g, " ")}</span>
               {" — it's "}
-              <span className="font-semibold text-black">
+              <span className="font-semibold text-white">
                 {new Date().toLocaleTimeString("en-US", {
                   timeZone: timezone,
                   hour: "numeric",
@@ -1893,7 +1896,7 @@ export function OnboardingClient() {
             <button
               type="button"
               onClick={() => void submitTimezone()}
-              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+              className="mt-8 inline-flex h-[52px] w-full cursor-pointer items-center justify-center rounded-full bg-white text-base font-normal text-black transition hover:bg-white/90 active:scale-[0.99]"
             >
               Continue
             </button>
@@ -1903,30 +1906,30 @@ export function OnboardingClient() {
         {/* Step 4 — connectors */}
         {step === 4 && (
           <section className="flex flex-col">
-            <header className="shrink-0 bg-white">
+            <header className="shrink-0 bg-black">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
                     {STEP_META[3].eyebrow}
                   </p>
-                  <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-black text-balance">
+                  <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-white text-balance">
                     Connect your workspace
                   </h1>
-                  <p className="mt-3 max-w-2xl text-[15px] leading-6 text-black/70">
+                  <p className="mt-3 max-w-2xl text-[15px] leading-6 text-white/70">
                     Start with the tools you use most. You can add or remove integrations anytime.
                   </p>
                 </div>
                 <span className={`mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold tabular-nums ${
-                  anyConnected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-black/70"
+                  anyConnected ? "bg-emerald-500/15 text-emerald-400" : "bg-white/10 text-white/70"
                 }`}>
-                  <span className={`size-1.5 rounded-full ${anyConnected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                  <span className={`size-1.5 rounded-full ${anyConnected ? "bg-emerald-500" : "bg-white/25"}`} />
                   {connectedProviders.size}
                   <span className="hidden sm:inline">connected</span>
                 </span>
               </div>
             </header>
 
-            <div className="sticky top-14 z-20 -mx-4 mt-4 border-y border-slate-200 bg-white/95 px-4 py-2 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.6)] backdrop-blur-md sm:top-16 sm:mx-0 sm:rounded-xl sm:border sm:px-3">
+            <div className="sticky top-14 z-20 -mx-4 mt-4 border-y border-white/10 bg-black/95 px-4 py-2 shadow-[0_10px_24px_-24px_rgba(0,0,0,0.6)] backdrop-blur-md sm:top-16 sm:mx-0 sm:rounded-xl sm:border sm:px-3">
               <div className="flex min-w-0 items-center gap-2">
                 <nav aria-label="Integration categories" className="min-w-0 flex-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <div className="flex w-max gap-1.5">
@@ -1939,8 +1942,8 @@ export function OnboardingClient() {
                           onClick={() => setConnectorCategory(cat)}
                           className={`cursor-pointer rounded-full px-4 py-2 text-[13px] font-normal whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                             active
-                              ? "bg-slate-950 text-white"
-                              : "text-black/70 hover:bg-slate-100 hover:text-black"
+                              ? "bg-white text-black"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
                           }`}
                         >
                           {cat}
@@ -1961,8 +1964,8 @@ export function OnboardingClient() {
                   aria-expanded={searchOpen}
                   className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40 ${
                     searchOpen
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-white text-black/70 hover:border-slate-300 hover:text-black"
+                      ? "border-white bg-white text-black"
+                      : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:text-white"
                   }`}
                 >
                   {searchOpen ? (
@@ -1976,13 +1979,13 @@ export function OnboardingClient() {
               </div>
 
               {searchOpen && (
-                <div className="mt-2 flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 transition focus-within:border-[#D9BEF4] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#D9BEF4]/10">
+                <div className="mt-2 flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 transition focus-within:border-[#D9BEF4] focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#D9BEF4]/10">
                   <SearchIcon />
                   <input
                     value={connectorQuery}
                     onChange={(e) => setConnectorQuery(e.target.value)}
                     placeholder="Search Gmail, Stripe, Postgres…"
-                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none placeholder:text-black/70"
+                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/70"
                     aria-label="Search integrations"
                     autoComplete="off"
                     autoFocus
@@ -1992,7 +1995,7 @@ export function OnboardingClient() {
                       type="button"
                       onClick={() => setConnectorQuery("")}
                       aria-label="Clear integration search"
-                      className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-black/70 transition hover:bg-slate-200/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
+                      className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-white/70 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
                         <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -2005,12 +2008,12 @@ export function OnboardingClient() {
 
             <div className="-mx-1 mt-3 px-1 pb-5 pt-1">
               {visibleConnectors.length === 0 ? (
-                <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 px-6 text-center">
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-black/70">
+                <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-white/10 text-white/70">
                     <SearchIcon />
                   </span>
-                  <p className="mt-3 text-sm font-semibold text-black">No integrations found</p>
-                  <p className="mt-1 text-xs leading-5 text-black/70">
+                  <p className="mt-3 text-sm font-semibold text-white">No integrations found</p>
+                  <p className="mt-1 text-xs leading-5 text-white/70">
                     Try another search or choose a different category.
                   </p>
                   <button
@@ -2030,12 +2033,12 @@ export function OnboardingClient() {
                     <section aria-labelledby="recommended-connectors-title">
                       <div className="mb-3 flex items-end justify-between gap-4">
                         <div>
-                          <h2 id="recommended-connectors-title" className="text-base font-semibold text-black">
+                          <h2 id="recommended-connectors-title" className="text-base font-semibold text-white">
                             Recommended for you
                           </h2>
-                          <p className="mt-1 text-[13px] text-black/70">The best place to start with Rizly.</p>
+                          <p className="mt-1 text-[13px] text-white/70">The best place to start with Rizly.</p>
                         </div>
-                        <span className="text-[11px] font-medium text-black/70">{recommendedConnectors.length} tools</span>
+                        <span className="text-[11px] font-medium text-white/70">{recommendedConnectors.length} tools</span>
                       </div>
                       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                         {recommendedConnectors.map((item) => renderConnectorCard(item, true))}
@@ -2044,18 +2047,18 @@ export function OnboardingClient() {
                   )}
 
                   <section aria-labelledby="all-connectors-title">
-                    <div className="mb-3 flex items-end justify-between gap-4 border-t border-slate-200 pt-5">
+                    <div className="mb-3 flex items-end justify-between gap-4 border-t border-white/10 pt-5">
                       <div>
-                        <h2 id="all-connectors-title" className="text-base font-semibold text-black">
+                        <h2 id="all-connectors-title" className="text-base font-semibold text-white">
                           {showConnectorGroups ? "More integrations" : "Integrations"}
                         </h2>
-                        <p className="mt-1 text-[13px] text-black/70">
+                        <p className="mt-1 text-[13px] text-white/70">
                           {showConnectorGroups
                             ? "Connect revenue, scheduling, databases, and team tools."
                             : `${moreConnectors.length} matching ${moreConnectors.length === 1 ? "tool" : "tools"}.`}
                         </p>
                       </div>
-                      {showConnectorGroups && <span className="text-[11px] font-medium text-black/70">{moreConnectors.length} tools</span>}
+                      {showConnectorGroups && <span className="text-[11px] font-medium text-white/70">{moreConnectors.length} tools</span>}
                     </div>
                     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                       {moreConnectors.map((item) => renderConnectorCard(item))}
@@ -2074,37 +2077,37 @@ export function OnboardingClient() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D96420]">
               {STEP_META[4].eyebrow}
             </p>
-            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-slate-950 text-balance">
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-white text-balance">
               Where should Riz live?
             </h1>
-            <p className="mt-3 max-w-md text-[15px] leading-6 text-slate-500">
+            <p className="mt-3 max-w-md text-[15px] leading-6 text-white/50">
               Riz sends your morning brief, drafts, and approvals wherever you already are. Pick a
               channel — you can add the other one later from the dashboard.
             </p>
 
             <div className="mt-7 flex flex-col gap-3">
               {/* Slack row */}
-              <div className="rounded-2xl border border-black/70 bg-white p-4">
+              <div className="rounded-2xl border border-white/30 bg-white p-4">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white">
                     <SlackIcon className="size-5" />
                   </span>
                   <div>
-                    <span className="block text-sm font-semibold text-black">Slack</span>
-                    <span className="mt-0.5 block text-sm leading-6 text-slate-500">
+                    <span className="block text-sm font-semibold text-white">Slack</span>
+                    <span className="mt-0.5 block text-sm leading-6 text-white/50">
                       Riz DMs you inside your workspace — briefs, drafts, and one-click approve
                       buttons where your work already happens.
                     </span>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-3 border-t border-slate-200 pt-4">
+                <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-4">
                   {slack ? (
                     slack.installUrl ? (
                       <>
                         <a
                           href={slack.installUrl}
                           onClick={() => setSurface("slack")}
-                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.99]"
                         >
                           <SlackIcon className="size-4" />
                           Add to Slack
@@ -2112,7 +2115,7 @@ export function OnboardingClient() {
                         <button
                           type="button"
                           onClick={() => setSlackLinkDialogOpen(true)}
-                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-black/70 bg-white px-5 text-sm font-normal text-black transition hover:border-black hover:bg-slate-50"
+                          className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-white/30 bg-white/[0.04] px-5 text-sm font-normal text-white transition hover:border-white hover:bg-white/10"
                         >
                           Already have the app?
                         </button>
@@ -2124,15 +2127,15 @@ export function OnboardingClient() {
                           setSurface("slack");
                           setSlackLinkDialogOpen(true);
                         }}
-                        className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                        className="inline-flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.99]"
                       >
                         <SlackIcon className="size-4" />
                         Link Slack
                       </button>
                     )
                   ) : (
-                    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                      <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
+                    <p className="inline-flex items-center gap-2 text-sm text-white/50">
+                      <span className="size-4 animate-spin rounded-full border-2 border-white/20 border-t-black" />
                       Generating your secure link…
                     </p>
                   )}
@@ -2140,20 +2143,20 @@ export function OnboardingClient() {
               </div>
 
               {/* Telegram row */}
-              <div className="rounded-2xl border border-black/70 bg-white p-4">
+              <div className="rounded-2xl border border-white/30 bg-white p-4">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white">
                     <TelegramIcon className="size-5" />
                   </span>
                   <div>
-                    <span className="block text-sm font-semibold text-black">Telegram</span>
-                    <span className="mt-0.5 block text-sm leading-6 text-slate-500">
+                    <span className="block text-sm font-semibold text-white">Telegram</span>
+                    <span className="mt-0.5 block text-sm leading-6 text-white/50">
                       Riz texts you on your phone — scan a QR once and every brief, reminder, and
                       approval lands in one chat.
                     </span>
                   </div>
                 </div>
-                <div className="mt-4 border-t border-slate-200 pt-4">
+                <div className="mt-4 border-t border-white/10 pt-4">
                   {telegram ? (
                     <button
                       type="button"
@@ -2161,25 +2164,25 @@ export function OnboardingClient() {
                         setSurface("telegram");
                         setTelegramDialogOpen(true);
                       }}
-                      className="inline-flex h-[44px] cursor-pointer items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+                      className="inline-flex h-[44px] cursor-pointer items-center justify-center rounded-full bg-white px-6 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.99]"
                     >
                       Connect Telegram
                     </button>
                   ) : telegramError ? (
                     <div>
-                      <p className="text-sm leading-6 text-slate-500">{telegramError}</p>
+                      <p className="text-sm leading-6 text-white/50">{telegramError}</p>
                       <button
                         type="button"
                         onClick={() => void loadTelegramLink()}
                         disabled={telegramLoading}
-                        className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full bg-white px-5 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {telegramLoading ? "Retrying…" : "Try again"}
                       </button>
                     </div>
                   ) : (
-                    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                      <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-black" />
+                    <p className="inline-flex items-center gap-2 text-sm text-white/50">
+                      <span className="size-4 animate-spin rounded-full border-2 border-white/20 border-t-black" />
                       Generating your link…
                     </p>
                   )}
@@ -2187,14 +2190,14 @@ export function OnboardingClient() {
               </div>
 
               {/* Dashboard-only row */}
-              <div className="rounded-2xl border border-black/70 bg-white p-4 transition-all hover:border-black">
+              <div className="rounded-2xl border border-white/30 bg-white/[0.04] p-4 transition-all hover:border-white">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-black/70 bg-white">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white">
                     <ChatBubbleIcon />
                   </span>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-black">Just the dashboard</p>
-                    <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                    <p className="text-sm font-semibold text-white">Just the dashboard</p>
+                    <p className="mt-0.5 text-sm leading-6 text-white/50">
                       Use Riz from the web only. Briefs and approvals wait for you here — you can
                       connect Slack or Telegram anytime.
                     </p>
@@ -2202,17 +2205,20 @@ export function OnboardingClient() {
                       type="button"
                       disabled={skipLoading}
                       onClick={() => void skipTelegram()}
-                      className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full border border-black/70 bg-white px-5 text-sm font-normal text-black transition hover:border-black hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-full border border-white/30 bg-white/[0.04] px-5 text-sm font-normal text-white transition hover:border-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {skipLoading ? "Saving…" : "Continue to dashboard"}
                     </button>
+                    {skipError && (
+                      <p className="mt-2 text-sm text-red-400">{skipError}</p>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
             {surface !== null && (
-              <p className="mt-6 inline-flex items-center gap-2 text-sm text-slate-500">
+              <p className="mt-6 inline-flex items-center gap-2 text-sm text-white/50">
                 <span className="relative flex size-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#D9BEF4] opacity-60" />
                   <span className="relative inline-flex size-2 rounded-full bg-[#D9BEF4]" />
@@ -2225,12 +2231,12 @@ export function OnboardingClient() {
         </div>
 
         {step === 4 && (
-          <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_32px_-24px_rgba(15,23,42,0.45)] backdrop-blur-md sm:px-6 sm:pb-4">
+          <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_32px_-24px_rgba(0,0,0,0.6)] backdrop-blur-md sm:px-6 sm:pb-4">
             <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4">
               <button
                 type="button"
                 onClick={() => setStep(5)}
-                className="shrink-0 cursor-pointer rounded-full px-3 py-2 text-sm font-normal text-black/70 transition hover:bg-slate-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
+                className="shrink-0 cursor-pointer rounded-full px-3 py-2 text-sm font-normal text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D9BEF4]/40"
               >
                 Skip for now
               </button>
@@ -2238,7 +2244,7 @@ export function OnboardingClient() {
                 type="button"
                 disabled={!anyConnected}
                 onClick={() => setStep(5)}
-                className="inline-flex h-[52px] min-w-36 cursor-pointer items-center justify-center gap-2 rounded-full bg-slate-950 px-8 text-base font-normal text-white transition hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-black/70"
+                className="inline-flex h-[52px] min-w-36 cursor-pointer items-center justify-center gap-2 rounded-full bg-white px-8 text-base font-normal text-black transition hover:bg-white/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/70"
               >
                 Continue
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2252,7 +2258,7 @@ export function OnboardingClient() {
         {/* Step 3 fills the viewport with its own pinned footer, so the trust line
             would overflow the page there — show it on the shorter steps only. */}
         {step !== 4 && (
-          <p className="mt-14 flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
+          <p className="mt-14 flex items-center justify-center gap-1.5 text-center text-xs text-white/40">
             <LockIcon />
             Encrypted end to end. Nothing sends without your approval.
           </p>
@@ -2275,9 +2281,9 @@ export function OnboardingClient() {
             <img
               src={telegram.qrCode}
               alt="Telegram link QR code"
-              className="h-[200px] w-[200px] rounded-2xl border border-black/70 bg-white p-2"
+              className="h-[200px] w-[200px] rounded-2xl border border-white/30 bg-white p-2"
             />
-            <p className="text-sm leading-6 text-slate-600">
+            <p className="text-sm leading-6 text-white/60">
               Scan from your phone, or tap the button to open the bot. Start the bot to
               complete the link.
             </p>
@@ -2285,7 +2291,7 @@ export function OnboardingClient() {
               href={telegram.deepLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-[44px] w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-normal text-white transition hover:bg-slate-800 active:scale-[0.99]"
+              className="inline-flex h-[44px] w-full cursor-pointer items-center justify-center rounded-full bg-white px-6 text-sm font-normal text-black transition hover:bg-white/90 active:scale-[0.99]"
             >
               Open Telegram bot
             </a>
@@ -2298,7 +2304,7 @@ export function OnboardingClient() {
           title={slack.installUrl ? "Already have the Rizly app?" : "Link Slack"}
           onClose={() => setSlackLinkDialogOpen(false)}
         >
-          <p className="text-sm leading-6 text-slate-500">
+          <p className="text-sm leading-6 text-white/50">
             DM the Rizly app in Slack this command to link your account:
           </p>
           <button
@@ -2309,10 +2315,10 @@ export function OnboardingClient() {
                 setTimeout(() => setSlackCopied(false), 2000);
               });
             }}
-            className="mt-3 flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-black/70 bg-slate-50 px-4 py-2 text-left font-mono text-xs text-slate-700 transition hover:border-black"
+            className="mt-3 flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-white/30 bg-white/5 px-4 py-2 text-left font-mono text-xs text-white/70 transition hover:border-white"
           >
             <span className="truncate">{slack.linkCommand}</span>
-            <span className="shrink-0 font-sans text-[11px] font-semibold text-slate-500">
+            <span className="shrink-0 font-sans text-[11px] font-semibold text-white/50">
               {slackCopied ? "Copied ✓" : "Copy"}
             </span>
           </button>

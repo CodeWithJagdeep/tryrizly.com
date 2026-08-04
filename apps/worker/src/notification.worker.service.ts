@@ -12,6 +12,7 @@ import { captureException } from "@heyriz/shared/sentry";
 import { approvalKeyboard, sendTelegramMessage } from "@heyriz/shared/telegram";
 import { appendProactiveMessage } from "@heyriz/shared/queue/pending-actions";
 import { sendEmail } from "@heyriz/shared/email";
+import { sendSlackSurfaceMessage } from "@heyriz/shared/slack-surface";
 import webpush from "web-push";
 
 async function resolveChatId(userId: string): Promise<string | undefined> {
@@ -86,6 +87,35 @@ async function sendWebPushFallback(userId: string, message: string): Promise<boo
   return delivered;
 }
 
+// Slack fallback: delivers to the user's linked Slack DM when Telegram isn't
+// linked. Mirrors resolveChatId, but via the Slack-specific resolve endpoint
+// (gateway.controller.ts's resolveSlackTarget) since a Slack DM needs both a
+// channel id and the workspace-specific bot token, not just one id.
+async function sendSlackFallback(userId: string, message: string): Promise<boolean> {
+  const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+  const secret = env.AUTH_INTERNAL_SECRET;
+  if (!gatewayUrl) return false;
+
+  try {
+    const headers: Record<string, string> = {};
+    if (secret) headers["x-heyriz-internal-secret"] = secret;
+    const res = await fetch(
+      `${gatewayUrl}/api/slack/resolve?userId=${encodeURIComponent(userId)}`,
+      { headers },
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as { channel?: string | null; botToken?: string | null };
+    if (!data.channel) return false;
+    return await sendSlackSurfaceMessage({
+      channel: data.channel,
+      text: message,
+      botToken: data.botToken ?? undefined,
+    });
+  } catch {
+    return false;
+  }
+}
+
 // userIds are normalized email addresses (see web require-user), so an unlinked
 // user can still be reached by email — but validate before trusting that.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,8 +139,23 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Time-sensitive reminders (meeting nudges) carry an expiresAt; delivering a
+// "starts in 5 minutes" after the meeting ended is worse than silence.
+export function isExpiredNotification(
+  metadata: Record<string, string | number | boolean | null> | undefined,
+  now = Date.now(),
+): boolean {
+  const expiresAt = metadata?.expiresAt;
+  if (typeof expiresAt !== "string") return false;
+  const expiresMs = Date.parse(expiresAt);
+  return !Number.isNaN(expiresMs) && expiresMs < now;
+}
+
 // Maps the job source to a connector provider name used for notification gating.
 // "manual" = user-created reminder, always deliver. "gateway"/"ai-core" = system, always deliver.
+// "morning_brief" is intentionally its own source (not "calendar"): it's a daily
+// digest, not a calendar meeting nudge, so muting Calendar notifications must not
+// silently swallow it too.
 const SOURCE_TO_PROVIDER: Record<string, string | null> = {
   calendar: "calendar",
   calcom: "calcom",
@@ -118,6 +163,7 @@ const SOURCE_TO_PROVIDER: Record<string, string | null> = {
   gateway: null,
   "ai-core": null,
   manual: null,
+  morning_brief: null,
 };
 
 async function isNotificationAllowed(userId: string, source: string): Promise<boolean> {
@@ -174,6 +220,15 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
           userId: job.data.userId,
         });
 
+        if (isExpiredNotification(job.data.metadata)) {
+          logger.info("notification job skipped — expired before delivery", {
+            jobId: job.id,
+            userId: job.data.userId,
+            expiresAt: job.data.metadata?.expiresAt,
+          });
+          return;
+        }
+
         const [chatId, allowed] = await Promise.all([
           resolveChatId(job.data.userId),
           isNotificationAllowed(job.data.userId, job.data.source ?? "manual"),
@@ -181,7 +236,13 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
 
         if (!chatId) {
           if (allowed) {
-            // Telegram not linked: browser push first, then email.
+            // Telegram not linked: browser push, then Slack DM — both are
+            // instant, in-app-equivalent channels. Email is deliberately last
+            // resort and opt-in only (job.data.emailFallback === true) — a
+            // reminder that silently redirects to the inbox defeats the point
+            // of using Rizly instead of just checking email. Billing notices
+            // (trial ending, renewal) explicitly opt in since those need to
+            // land reliably regardless of chat-channel status.
             const pushed = await sendWebPushFallback(job.data.userId, job.data.message);
             if (pushed) {
               void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
@@ -191,8 +252,18 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
               });
               return;
             }
+
+            const slacked = await sendSlackFallback(job.data.userId, job.data.message);
+            if (slacked) {
+              void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
+              logger.info("notification delivered by Slack — no Telegram linked", {
+                jobId: job.id,
+                userId: job.data.userId,
+              });
+              return;
+            }
           }
-          if (allowed && job.data.emailFallback !== false) {
+          if (allowed && job.data.emailFallback === true) {
             const emailed = await sendEmailFallback(job.data.userId, job.data.message);
             if (emailed) {
               void logNotificationSent(job.data.userId, job.data.message, job.data.source ?? "reminder");
@@ -203,7 +274,7 @@ export class NotificationWorkerService implements OnModuleInit, OnModuleDestroy 
               return;
             }
           }
-          logger.warn("notification job skipped — no chatId resolved", {
+          logger.warn("notification job skipped — no chatId, web push, Slack, or email delivered", {
             jobId: job.id,
             userId: job.data.userId,
           });

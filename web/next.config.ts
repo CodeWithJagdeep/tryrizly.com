@@ -22,27 +22,12 @@ const productionFrontend = {
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(webDir, ".."),
-  // Fallbacks for deploys where env vars aren't configured. Real env vars
-  // always take precedence. WARNING: this includes secrets baked into a
-  // private repo at the owner's request. If the repo ever goes public,
-  // rotate AUTH_*, RESEND_API_KEY, and TELEGRAM_BOT_TOKEN. AUTH_* values
-  // must match the gateway env on the production VM.
+  // Never put secrets here: this block is inlined into the client bundle.
   env: {
     NEXT_PUBLIC_SITE_URL:
       isProductionBuild
         ? productionFrontend.siteUrl
         : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-    AUTH_INTERNAL_SECRET:
-      process.env.AUTH_INTERNAL_SECRET ??
-      "REDACTED",
-    AUTH_JWT_SECRET:
-      process.env.AUTH_JWT_SECRET ??
-      "REDACTED",
-    RESEND_API_KEY:
-      process.env.RESEND_API_KEY ?? "REDACTED",
-    TELEGRAM_BOT_TOKEN:
-      process.env.TELEGRAM_BOT_TOKEN ??
-      "REDACTED",
     RESEND_FROM: process.env.RESEND_FROM ?? "Rizly <noreply@getrizly.com>",
     TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME ?? "tryrizlybot",
     GOOGLE_CLIENT_ID:
